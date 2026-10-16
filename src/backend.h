@@ -87,7 +87,6 @@ private:
         int score = 0;
         double cooldown = 0;
         double respawn = 0;
-        double rapidUntil = -1;
         double shieldUntil = -1;
         double speedUntil = -1;
     };
@@ -121,7 +120,7 @@ private:
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
-    enum PickupKind { Rapid = 0, Shield = 1, Speed = 2, Fortify = 3, Life = 4 };
+    enum PickupKind { Speed = 0, Shield = 1, Fortify = 2, Life = 3 };
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();

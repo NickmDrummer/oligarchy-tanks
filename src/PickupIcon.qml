@@ -8,19 +8,28 @@ Item {
     property int kind: 0
     property real side: 40
 
-    property var shield: ["XXXXX", "XXXXX", "XXXXX", ".XXX.", "..X..", "..X.."]
     property var bolt: ["...XX", "..XX.", "..XX.", ".XX..", ".XX..", "XX...", "XX..."]
+    property var shield: ["XXXXX", "XXXXX", "XXXXX", ".XXX.", "..X..", "..X.."]
     property var wall: ["BBBBBBB", "BBDBBDB", "BBBBBBB", "BDBBDBB", "BBBBBBB"]
 
-    // 0 STAR: rapid fire.
-    Text {
+    // 0 SPEED: yellow lightning bolt, +35% move speed for 20s.
+    Grid {
         visible: root.kind === 0
         anchors.centerIn: parent
-        text: "★"
-        font.pixelSize: root.side * 0.8
-        color: "#edc400"
+        columns: 5
+        Repeater {
+            model: 35
+            Rectangle {
+                property int r: Math.floor(index / 5)
+                property int c: index % 5
+                property string ch: root.bolt[r][c]
+                width: root.side / 7
+                height: root.side / 7
+                color: ch === "X" ? "#edc400" : "transparent"
+            }
+        }
     }
-    // 1 SHIELD: pixel badge, blocks one hit wave for 10s.
+    // 1 SHIELD: plain gray badge, blocks shots for 10s.
     Grid {
         visible: root.kind === 1
         anchors.centerIn: parent
@@ -33,30 +42,13 @@ Item {
                 property string ch: root.shield[r][c]
                 width: root.side / 6
                 height: root.side / 6
-                color: ch === "X" ? "#57c8d8" : "transparent"
+                color: ch === "X" ? "#8d8d94" : "transparent"
             }
         }
     }
-    // 2 SPEED: lightning bolt, +35% speed for 20s.
+    // 2 WALL: brick courses, steel base guard for 25s.
     Grid {
         visible: root.kind === 2
-        anchors.centerIn: parent
-        columns: 5
-        Repeater {
-            model: 35
-            Rectangle {
-                property int r: Math.floor(index / 5)
-                property int c: index % 5
-                property string ch: root.bolt[r][c]
-                width: root.side / 7
-                height: root.side / 7
-                color: ch === "X" ? "#5da24a" : "transparent"
-            }
-        }
-    }
-    // 3 WALL: brick courses, steel base guard for 25s.
-    Grid {
-        visible: root.kind === 3
         anchors.centerIn: parent
         columns: 7
         Repeater {
@@ -71,16 +63,16 @@ Item {
             }
         }
     }
-    // 4 LIFE: mini red tank, one extra life.
+    // 3 LIFE: pale gray tank, one extra life.
     TankSprite {
-        visible: root.kind === 4
+        visible: root.kind === 3
         anchors.centerIn: parent
         width: root.side
         height: root.side
         dir: 0
         frame: 0
-        body: "#b03a2e"
-        dark: "#5e1f18"
-        light: "#e8a49c"
+        body: "#c9ced6"
+        dark: "#6a6e76"
+        light: "#f2f4f8"
     }
 }

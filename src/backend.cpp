@@ -5,11 +5,10 @@
 
 namespace {
 constexpr double TANK_SIZE = 0.8;
-constexpr double PLAYER_SPEED = 3.15;
-constexpr double ENEMY_SPEED = 1.8;
+constexpr double PLAYER_SPEED = 3.62;
+constexpr double ENEMY_SPEED = 2.07;
 constexpr double BULLET_SPEED = 8.0;
 constexpr double FIRE_GAP = 0.35;
-constexpr double RAPID_GAP = 0.15;
 }
 
 Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) {
@@ -47,7 +46,7 @@ QVariantList Backend::players() const {
         out.append(QVariantMap{
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"rapid", m_time < t.rapidUntil}, {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil},
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil},
         });
     }
     return out;
@@ -76,7 +75,7 @@ QVariantMap Backend::playerAt(int i, int tick) const {
     const Tank &t = m_p[i];
     return {{"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"rapid", m_time < t.rapidUntil}, {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}};
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}};
 }
 
 QVariantMap Backend::enemyAt(int i, int tick) const {
@@ -154,14 +153,14 @@ void Backend::setP2Move(int dx, int dy, bool pressed) {
 void Backend::fireP1() {
     if (m_state != "playing" || !m_p[0].alive || m_p[0].cooldown > 0)
         return;
-    m_p[0].cooldown = (m_time < m_p[0].rapidUntil) ? RAPID_GAP : FIRE_GAP;
+    m_p[0].cooldown = FIRE_GAP;
     fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
 }
 
 void Backend::fireP2() {
     if (m_state != "playing" || !m_p[1].alive || m_p[1].cooldown > 0)
         return;
-    m_p[1].cooldown = (m_time < m_p[1].rapidUntil) ? RAPID_GAP : FIRE_GAP;
+    m_p[1].cooldown = FIRE_GAP;
     fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1, BULLET_SPEED);
 }
 
@@ -713,7 +712,7 @@ std::vector<int> Backend::baseGuard() const {
 void Backend::spawnPickup() {
     std::uniform_int_distribution<int> cell(0, COLS - 1);
     std::uniform_int_distribution<int> row(0, ROWS - 1);
-    std::uniform_int_distribution<int> kind(0, 4);
+    std::uniform_int_distribution<int> kind(0, 3);
     for (int attempt = 0; attempt < 40; ++attempt) {
         const int x = cell(m_rng), y = row(m_rng);
         const int tile = m_grid[y * COLS + x];
@@ -727,9 +726,8 @@ void Backend::spawnPickup() {
 void Backend::applyPickup(int player) {
     Tank &t = m_p[player];
     switch (m_pickup.kind) {
-    case Rapid: t.rapidUntil = m_time + 20; break;
-    case Shield: t.shieldUntil = m_time + 10; break;
     case Speed: t.speedUntil = m_time + 20; break;
+    case Shield: t.shieldUntil = m_time + 10; break;
     case Fortify:
         m_fortified.clear();
         for (int i : baseGuard())

@@ -35,6 +35,26 @@ ApplicationWindow {
     SoundEffect { id: sndHit; source: "qrc:/sounds/hit.wav"; volume: 0.5 }
     SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 0.7 }
     SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
+    // 8-bit engine putter, loops only while a player tank is rolling.
+    // Note: SoundEffect.playing is read-only, so a timer drives play/stop.
+    SoundEffect {
+        id: sndEngine
+        source: "qrc:/sounds/engine.wav"
+        loops: SoundEffect.Infinite
+        volume: 0.22
+    }
+    Timer {
+        interval: 150
+        running: true
+        repeat: true
+        onTriggered: {
+            var on = backend.state === "playing" && ((backend.players.length > 0 && backend.players[0].moving) || (backend.players.length > 1 && backend.players[1].moving))
+            if (on && !sndEngine.playing)
+                sndEngine.play()
+            else if (!on && sndEngine.playing)
+                sndEngine.stop()
+        }
+    }
 
     Connections {
         target: backend
@@ -145,7 +165,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 0 ? ((backend.players[0].rapid ? "RAPID " : "") + (backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED" : "")) : ""
+                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED" : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -171,7 +191,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 1 ? ((backend.players[1].rapid ? "RAPID " : "") + (backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED" : "")) : ""
+                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED" : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -431,7 +451,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             anchors.margins: -4
                             color: "transparent"
-                            border.color: win.treadFrame === 0 ? "#ffffff" : "#57c8d8"
+                            border.color: win.treadFrame === 0 ? "#ffffff" : "#8d8d94"
                             border.width: 3
                         }
                     }
@@ -466,8 +486,8 @@ ApplicationWindow {
                     property var k: backend.pickupAt(backend.frameTick)
                     visible: k.active
                     property real s: win.cell * 1.1
-                    property var cols: ["#edc400", "#57c8d8", "#5da24a", "#8d8d94", "#b03a2e"]
-                    property var labels: ["RAPID", "SHIELD", "SPEED", "WALL", "1UP"]
+                    property var cols: ["#edc400", "#c9ced6", "#8d8d94", "#e8e8e8"]
+                    property var labels: ["SPEED", "SHIELD", "WALL", "1UP"]
                     x: k.x * win.cell - s / 2
                     y: k.y * win.cell - (s + 18) / 2
                     width: s; height: s + 18
@@ -686,7 +706,7 @@ ApplicationWindow {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 18
                     Repeater {
-                        model: [["RAPID", "#edc400"], ["SHIELD", "#57c8d8"], ["SPEED", "#5da24a"], ["WALL", "#8d8d94"], ["1UP", "#b03a2e"]]
+                        model: [["SPEED", "#edc400"], ["SHIELD", "#c9ced6"], ["WALL", "#8d8d94"], ["1UP", "#e8e8e8"]]
                         Column {
                             spacing: 2
                             PickupIcon {
