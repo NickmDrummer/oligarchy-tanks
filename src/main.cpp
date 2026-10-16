@@ -2,6 +2,7 @@
 
 #include <QGuiApplication>
 #include <QIcon>
+#include <QLoggingCategory>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -11,6 +12,9 @@
 #include "theme.h"
 
 int main(int argc, char *argv[]) {
+    // The FFmpeg version note from QtMultimedia is benign startup info.
+    QLoggingCategory::setFilterRules(QStringLiteral("qt.multimedia.ffmpeg.info=false"));
+
     QGuiApplication app(argc, argv);
     app.setApplicationName("tanks");
     app.setApplicationVersion("0.1.0");

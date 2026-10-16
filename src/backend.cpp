@@ -512,7 +512,7 @@ void Backend::updateBullets(double dt) {
         for (auto &e : m_foes) {
             if (e.alive && hitsTank(nx, ny, e.x, e.y)) {
                 if (b.owner < 2) {
-                    e.hp -= b.big ? 99 : 1;
+                    e.hp = std::max(0, e.hp - (b.big ? 99 : 1));
                     if (e.hp <= 0) {
                         e.alive = false;
                         const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;

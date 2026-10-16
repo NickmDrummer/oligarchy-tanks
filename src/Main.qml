@@ -437,7 +437,7 @@ ApplicationWindow {
                             anchors.horizontalCenter: parent.horizontalCenter
                             spacing: 2
                             Repeater {
-                                model: e.hp
+                                model: Math.max(0, e.hp)
                                 Rectangle { width: 6; height: 6; color: "#ffffff"; border.color: "black"; border.width: 1 }
                             }
                         }
@@ -597,15 +597,19 @@ ApplicationWindow {
                                         if (dist > 2.5) {
                                             if (h > 50)
                                                 return "transparent"
-                                            return h < 50 ? "#2f6630" : "#4e8a42"
+                                            if (h < 22)
+                                                return "#664e8a42"
+                                            return h < 70 ? "#2f6630" : "#4e8a42"
                                         }
                                         if (h < 6)
                                             return "transparent"
-                                        if (h < 42)
+                                        if (h < 16)
+                                            return "#734e8a42"
+                                        if (h < 45)
                                             return "#2f6630"
                                         if (h < 80)
                                             return "#1d3d1a"
-                                        if (h < 95)
+                                        if (h < 94)
                                             return "#4e8a42"
                                         return "#6aa84f"
                                     }
