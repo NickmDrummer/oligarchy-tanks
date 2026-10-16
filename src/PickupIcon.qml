@@ -8,27 +8,28 @@ Item {
     property int kind: 0
     property real side: 40
 
-    property var bolt: ["..KKK..", "..KYYK.", "..KYYK.", ".KYYYYK", ".KYYYYK", "..KYYOK", "..KYYOK", ".KYYOK.", ".KYOK.."]
+    property var bolt: ["...KKKK...", "...KYYYK..", "...KWYYK..", "...KYYYK..", ".KKYYYOOOK", ".KYYYYYOOK.", "..KYYYOOOK", "..KYYOOOK.", "...KYOOOK.", "...KYOOK..", "....KOK...."]
     property var shield: [".XXXXX.", "XXXXXXX", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."]
     property var wall: [".CCCCC.", ".Cc.Cc.", ".CcOCc.", ".Cc.Cc.", ".cC.cC.", ".Cc.Cc.", ".Cc.Cc."]
     property var grenade: ["..FFFF.", ".BBBBB.", "BXBXBXB", "BBBBBBB", "BXBXBXB", "BBBBBBB", ".BBBBB."]
-    property var cannon: [".....KKK.", "....KCCCK", "...KCCCDK", "..KCLCDDK", "..KCLDDK.", ".KCLDDDK.", ".KCLDDK..", "KLLDDK...", "KLLK....."]
+    property var cannon: ["..KKK..", ".KKBBK.", ".KWBBBK", ".KWBBBK", ".KBBBBK", ".KBBDBK", ".KBBDBK", ".KBBDBK", "..KKK.."]
     property var snow: ["..X.X..", "X..X..X", ".XXXXX.", "XXXXXXX", ".XXXXX.", "X..X..X", "..X.X.."]
 
-    // 0 SPEED: chunky bolt, black outline, yellow body, orange shade.
+    // 0 SPEED: chunky bolt per reference, black outline, yellow body,
+    // orange shade, white notch.
     Grid {
         visible: root.kind === 0
         anchors.centerIn: parent
-        columns: 7
+        columns: 11
         Repeater {
-            model: 63
+            model: 121
             Rectangle {
-                property int r: Math.floor(index / 7)
-                property int c: index % 7
+                property int r: Math.floor(index / 11)
+                property int c: index % 11
                 property string ch: root.bolt[r][c]
-                width: root.side / 7
-                height: root.side / 7
-                color: ch === "K" ? "#1a1a22" : ch === "Y" ? "#ffe14d" : ch === "O" ? "#f5a623" : "transparent"
+                width: root.side / 11
+                height: root.side / 11
+                color: ch === "K" ? "#1a1a22" : ch === "Y" ? "#ffdf3d" : ch === "O" ? "#f5a623" : ch === "W" ? "#ffffff" : "transparent"
             }
         }
     }
@@ -95,21 +96,21 @@ Item {
             }
         }
     }
-    // 5 CANNON: brass slug with black outline, cracks any armor in one
-    // hit for 20s.
+    // 5 CANNON: bronze shell, black outline, white shine. Cracks any
+    // armor in one hit for 20s.
     Grid {
         visible: root.kind === 5
         anchors.centerIn: parent
-        columns: 9
+        columns: 7
         Repeater {
-            model: 81
+            model: 63
             Rectangle {
-                property int r: Math.floor(index / 9)
-                property int c: index % 9
+                property int r: Math.floor(index / 7)
+                property int c: index % 7
                 property string ch: root.cannon[r][c]
                 width: root.side / 9
                 height: root.side / 9
-                color: ch === "K" ? "#14141a" : ch === "C" ? "#c8862e" : ch === "D" ? "#7a4d1a" : ch === "L" ? "#ffd94d" : "transparent"
+                color: ch === "K" ? "#14141a" : ch === "B" ? "#c8862e" : ch === "D" ? "#7a4d1a" : ch === "W" ? "#ffffff" : "transparent"
             }
         }
     }

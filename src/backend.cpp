@@ -81,7 +81,7 @@ QVariantMap Backend::playerAt(int i, int tick) const {
 QVariantMap Backend::enemyAt(int i, int tick) const {
     Q_UNUSED(tick);
     if (i < 0 || i >= int(m_foes.size()))
-        return {{"alive", false}};
+        return {{"x", 0.0}, {"y", 0.0}, {"dir", 2}, {"kind", 0}, {"hp", 0}, {"moving", false}, {"alive", false}};
     const Enemy &e = m_foes[i];
     return {{"x", e.x}, {"y", e.y}, {"dir", e.dir}, {"kind", e.kind},
             {"hp", e.hp}, {"moving", e.moving}, {"alive", e.alive}};
@@ -90,7 +90,7 @@ QVariantMap Backend::enemyAt(int i, int tick) const {
 QVariantMap Backend::bulletAt(int i, int tick) const {
     Q_UNUSED(tick);
     if (i < 0 || i >= int(m_bullets.size()))
-        return {{"active", false}};
+        return {{"x", 0.0}, {"y", 0.0}, {"dir", 0}, {"owner", 2}, {"active", false}, {"big", false}};
     const Bullet &b = m_bullets[i];
     return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}};
 }
@@ -98,7 +98,7 @@ QVariantMap Backend::bulletAt(int i, int tick) const {
 QVariantMap Backend::floaterAt(int i, int tick) const {
     Q_UNUSED(tick);
     if (i < 0 || i >= int(m_floaters.size()))
-        return {{"active", false}};
+        return {{"x", 0.0}, {"y", 0.0}, {"text", QString()}, {"age", 0.0}, {"active", false}};
     const Floater &f = m_floaters[i];
     return {{"x", f.x}, {"y", f.y}, {"text", QString("+%1").arg(f.score)}, {"age", f.age}, {"active", true}};
 }
@@ -106,7 +106,7 @@ QVariantMap Backend::floaterAt(int i, int tick) const {
 QVariantMap Backend::pickupAt(int tick) const {
     Q_UNUSED(tick);
     if (!m_pickup.active)
-        return {{"active", false}};
+        return {{"x", 0.0}, {"y", 0.0}, {"kind", 0}, {"age", 0.0}, {"active", false}};
     return {{"x", m_pickup.x}, {"y", m_pickup.y}, {"kind", m_pickup.kind}, {"age", m_pickup.age}, {"active", true}};
 }
 
@@ -241,17 +241,17 @@ void Backend::generateMap() {
                 m_grid[idx(x, y)] = Steel;
         }
     }
-    // Forest blobs: cover that hides tanks, never solid.
+    // Forest copses: cover that hides tanks, never solid.
     std::uniform_int_distribution<int> cell(0, COLS - 1);
     std::uniform_int_distribution<int> row(0, ROWS - 1);
-    for (int blob = 0; blob < 7; ++blob) {
+    for (int blob = 0; blob < 5; ++blob) {
         const int fx = cell(m_rng), fy = row(m_rng);
         for (int dy = -1; dy <= 1; ++dy)
             for (int dx = -1; dx <= 1; ++dx) {
                 const int x = fx + dx, y = fy + dy;
                 if (x < 0 || y < 0 || x >= COLS || y >= ROWS)
                     continue;
-                if (roll(m_rng) < 0.65)
+                if (roll(m_rng) < 0.5)
                     m_grid[idx(x, y)] = Forest;
             }
     }

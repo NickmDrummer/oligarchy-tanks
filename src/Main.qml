@@ -548,7 +548,7 @@ ApplicationWindow {
                 }
 
                 // Forest canopy above everything: hides tanks like the original.
-                // Mottled 6x6 leaf blotches with airy gaps, tile-seeded.
+                // One fixed leaf sprite per tile, mirrored on odd seeds.
                 Repeater {
                     model: backend.cols * backend.rows
                     Item {
@@ -557,6 +557,7 @@ ApplicationWindow {
                         property int cy: Math.floor(index / backend.cols)
                         property string t: backend.board.length > index ? backend.board[index] : "."
                         property int seed: index
+                        property var leaf: ["..MM..", ".MMLMM", "MMLMLM", "MLMMHM", ".MMLMM", "..MM.."]
                         visible: t === "F"
                         x: cx * win.cell
                         y: cy * win.cell
@@ -572,10 +573,10 @@ ApplicationWindow {
                                 Rectangle {
                                     property int r: Math.floor(index / 6)
                                     property int c: index % 6
-                                    property int blotch: (forestTile.seed * 7 + (r >> 1) * 13 + (c >> 1) * 29) % 100
-                                    property int fleck: (forestTile.seed * 3 + r * 11 + c * 17) % 100
+                                    property int cc: (forestTile.seed % 2 === 0) ? c : 5 - c
+                                    property string ch: forestTile.leaf[r][cc]
                                     width: win.cell / 6; height: win.cell / 6
-                                    color: blotch < 18 ? "transparent" : fleck < 40 ? "#285c27" : fleck < 78 ? "#3d7a37" : fleck > 93 ? "#6aa84f" : "#4e8a42"
+                                    color: ch === "M" ? "#356b2f" : ch === "L" ? "#4e8a42" : ch === "H" ? "#6aa84f" : "transparent"
                                 }
                             }
                         }
@@ -671,6 +672,19 @@ ApplicationWindow {
                                 font.family: "Monospace"; font.bold: true
                                 font.pixelSize: 12; font.letterSpacing: 1
                                 color: "#8d8d94"
+                            }
+                            // Bonus preview so the pickups are known before playing.
+                            Row {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: 10
+                                Repeater {
+                                    model: 7
+                                    PickupIcon {
+                                        width: 26; height: 26
+                                        kind: index
+                                        side: 24
+                                    }
+                                }
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
