@@ -10,5 +10,6 @@
         <file alias="sounds/explode.wav">sounds/explode.wav</file>
         <file alias="sounds/power.wav">sounds/power.wav</file>
         <file alias="sounds/engine.wav">sounds/engine.wav</file>
+        <file alias="sounds/nuke.wav">sounds/nuke.wav</file>
     </qresource>
 </RCC>

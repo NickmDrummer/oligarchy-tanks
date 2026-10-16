@@ -760,7 +760,7 @@ void Backend::applyPickup(int player) {
         if (m_floaters.size() > 8)
             m_floaters.erase(m_floaters.begin(), m_floaters.begin() + (m_floaters.size() - 8));
         if (m_soundEnabled)
-            emit playSound("explode");
+            emit playSound("nuke");
         break;
     }
     case Cannon: t.cannonUntil = m_time + 20; break;

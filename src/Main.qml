@@ -35,6 +35,7 @@ ApplicationWindow {
     SoundEffect { id: sndHit; source: "qrc:/sounds/hit.wav"; volume: 0.5 }
     SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 0.7 }
     SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
+    SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 0.6 }
     // 8-bit engine putter, loops only while a player tank is rolling.
     // Note: SoundEffect.playing is read-only, so a timer drives play/stop.
     SoundEffect {
@@ -71,6 +72,8 @@ ApplicationWindow {
                 sndBoom.play()
             else if (name === "power")
                 sndPower.play()
+            else if (name === "nuke")
+                sndNuke.play()
         }
         function onStateChanged() { keys.forceActiveFocus() }
     }
@@ -545,12 +548,15 @@ ApplicationWindow {
                 }
 
                 // Forest canopy above everything: hides tanks like the original.
+                // Mottled 6x6 leaf blotches with airy gaps, tile-seeded.
                 Repeater {
                     model: backend.cols * backend.rows
                     Item {
+                        id: forestTile
                         property int cx: index % backend.cols
                         property int cy: Math.floor(index / backend.cols)
                         property string t: backend.board.length > index ? backend.board[index] : "."
+                        property int seed: index
                         visible: t === "F"
                         x: cx * win.cell
                         y: cy * win.cell
@@ -559,14 +565,17 @@ ApplicationWindow {
                         z: 8
                         Grid {
                             anchors.fill: parent
-                            columns: 4
-                            rows: 4
+                            columns: 6
+                            rows: 6
                             Repeater {
-                                model: 16
+                                model: 36
                                 Rectangle {
-                                    property int seed: (index * 31 + Math.floor(index / 4) * 17 + (index % 4) * 7) % 10
-                                    width: win.cell / 4; height: win.cell / 4
-                                    color: seed < 4 ? "#356b2f" : seed < 7 ? "#4e8a42" : "#00000000"
+                                    property int r: Math.floor(index / 6)
+                                    property int c: index % 6
+                                    property int blotch: (forestTile.seed * 7 + (r >> 1) * 13 + (c >> 1) * 29) % 100
+                                    property int fleck: (forestTile.seed * 3 + r * 11 + c * 17) % 100
+                                    width: win.cell / 6; height: win.cell / 6
+                                    color: blotch < 18 ? "transparent" : fleck < 40 ? "#285c27" : fleck < 78 ? "#3d7a37" : fleck > 93 ? "#6aa84f" : "#4e8a42"
                                 }
                             }
                         }
