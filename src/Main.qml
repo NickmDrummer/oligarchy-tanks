@@ -738,7 +738,7 @@ ApplicationWindow {
         Text {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: "P PAUSE - R RESTART - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - GREEN DROPS BONUS"
+            text: "P PAUSE - R RESTART - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - GREEN DROPS BONUS - BUILD " + buildId
             font.family: "Monospace"; font.bold: true
             font.pixelSize: 12; font.letterSpacing: 1
             color: "#5a5e68"

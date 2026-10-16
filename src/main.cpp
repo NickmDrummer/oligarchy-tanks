@@ -14,6 +14,8 @@
 int main(int argc, char *argv[]) {
     // The FFmpeg version note from QtMultimedia is benign startup info.
     QLoggingCategory::setFilterRules(QStringLiteral("qt.multimedia.ffmpeg.info=false"));
+    // Never serve stale compiled QML from the disk cache during development.
+    qputenv("QML_DISABLE_DISK_CACHE", QByteArrayLiteral("1"));
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("tanks");
@@ -32,6 +34,7 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("backend", &backend);
+    engine.rootContext()->setContextProperty("buildId", QStringLiteral(__DATE__ " " __TIME__));
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;

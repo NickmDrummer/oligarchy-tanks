@@ -10,7 +10,7 @@ Item {
 
     property var bolt: ["..KKKK...", "..KYYYK..", "..KYYK...", ".KYYYK...", ".KYYYYKKK", ".KYYYYYKK", "..KYYYYK.", "..KYYOOK.", "...KYOOK.", "...KYOK..", "....KK..."]
     property var shield: [".XXXXX.", "XXXXXXX", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."]
-    property var pick: ["PPPH...", ".PPPH..", "..PPH..", "...PH..", "....HH.", ".....H.", "......H"]
+    property var pick: [".PPPPP.", "PPPPPPP", "P..H..P", "P..H..P", "...H...", "...H...", "...H..."]
     property var grenade: ["..FFFF.", ".BBBBB.", "BXBXBXB", "BBBBBBB", "BXBXBXB", "BBBBBBB", ".BBBBB."]
     property var cannon: ["..KK....", ".KBBBK..", "KWBBBBBK.", "KWBBBDDBK", ".KBBBK..", "..KK...."]
     property var snow: ["..X.X..", "X..X..X", ".XXXXX.", "XXXXXXX", ".XXXXX.", "X..X..X", "..X.X.."]
