@@ -60,6 +60,7 @@ private:
         double x = 0, y = 0;
         int dir = 0; // 0 up, 1 right, 2 down, 3 left
         bool alive = true;
+        bool moving = false;
         int lives = 3;
         int score = 0;
         double cooldown = 0;
@@ -69,9 +70,10 @@ private:
         double x = 0, y = 0;
         int dir = 2;
         bool alive = false;
+        bool moving = false;
         double cooldown = 0;
         double think = 0;
-        int kind = 0; // 0 green weak, 1 yellow fast, 2 gray armored
+        int kind = 0; // 0 gray basic, 1 green fast, 2 steel armored
         int hp = 1;
     };
     struct Bullet {

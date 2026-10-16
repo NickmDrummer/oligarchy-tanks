@@ -41,7 +41,7 @@ QVariantList Backend::players() const {
         const Tank &t = m_p[i];
         out.append(QVariantMap{
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
-            {"lives", t.lives}, {"score", t.score},
+            {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
         });
     }
     return out;
@@ -51,7 +51,7 @@ QVariantList Backend::enemies() const {
     QVariantList out;
     for (const auto &e : m_foes)
         if (e.alive)
-            out.append(QVariantMap{{"x", e.x}, {"y", e.y}, {"dir", e.dir}, {"kind", e.kind}, {"hp", e.hp}});
+            out.append(QVariantMap{{"x", e.x}, {"y", e.y}, {"dir", e.dir}, {"kind", e.kind}, {"hp", e.hp}, {"moving", e.moving}});
     return out;
 }
 
@@ -221,8 +221,10 @@ void Backend::tick() {
 }
 
 void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, double dt, double speed) {
-    if (!t.alive)
+    if (!t.alive) {
+        t.moving = false;
         return;
+    }
     // Keep going the current way while its key is held, so diagonal
     // presses do not flip the tank back and forth.
     int dir = t.dir;
@@ -235,8 +237,10 @@ void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, dou
         if (left) dir = 3;
         if (down) dir = 2;
         if (right) dir = 1;
-        if (dir < 0)
+        if (dir < 0) {
+            t.moving = false;
             return;
+        }
     }
     t.dir = dir;
     // Lane assist: drift toward the nearest cell center on the cross axis,
@@ -261,6 +265,9 @@ void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, dou
     if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &t, false)) {
         t.x = nx;
         t.y = ny;
+        t.moving = true;
+    } else {
+        t.moving = false;
     }
 }
 
@@ -272,8 +279,10 @@ void Backend::updateEnemies(double dt) {
         m_spawnTimer = 2.0;
     }
     for (auto &e : m_foes) {
-        if (!e.alive)
+        if (!e.alive) {
+            e.moving = false;
             continue;
+        }
         if (e.cooldown > 0)
             e.cooldown -= dt;
         e.think -= dt;
@@ -286,7 +295,9 @@ void Backend::updateEnemies(double dt) {
         if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &e, true)) {
             e.x = nx;
             e.y = ny;
+            e.moving = true;
         } else {
+            e.moving = false;
             e.dir = int(roll(m_rng) * 4);
             e.think = 0;
         }

@@ -15,13 +15,14 @@ ApplicationWindow {
 
     property bool helpVisible: false
     property int cell: Math.max(30, Math.floor(Math.min(boardArea.width / backend.cols, boardArea.height / backend.rows)))
-    // Retro palette.
-    property color p1body: "#4a90ff"
-    property color p1dark: "#1c3f94"
-    property color p1light: "#bcd2ff"
-    property color p2body: "#e5484d"
-    property color p2dark: "#7a1f22"
-    property color p2light: "#ffc9cb"
+    property int treadFrame: 0
+    // Muted Battle City palette. Players are told apart by color only.
+    property color p1body: "#c8a028"
+    property color p1dark: "#6e5410"
+    property color p1light: "#f0d878"
+    property color p2body: "#b03a2e"
+    property color p2dark: "#5e1f18"
+    property color p2light: "#e8a49c"
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
@@ -98,6 +99,14 @@ ApplicationWindow {
         onTriggered: blinkDot.visible = !blinkDot.visible
     }
 
+    // Tread animation clock. Sprites advance a chevron only while moving.
+    Timer {
+        interval: 140
+        running: true
+        repeat: true
+        onTriggered: win.treadFrame = (win.treadFrame + 1) % 2
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 14
@@ -129,7 +138,7 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "P1 BLUE"
+                        text: "P1 YELLOW"
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
                         color: win.p1body
                     }
@@ -204,7 +213,8 @@ ApplicationWindow {
                 border.width: 4
                 clip: true
 
-                // Pixel tiles.
+                // Brick wall, Battle City style: dark mortar courses with
+                // offset bricks, muted clay colors, highlight on top edge.
                 Repeater {
                     model: backend.cols * backend.rows
                     Item {
@@ -215,44 +225,102 @@ ApplicationWindow {
                         y: cy * win.cell
                         width: win.cell
                         height: win.cell
-                        // Brick: stepped two-tone pixel courses.
-                        Grid {
+                        Rectangle {
+                            visible: t === "B"
+                            anchors.fill: parent
+                            color: "#2e1a10"
+                        }
+                        Column {
                             visible: t === "B"
                             anchors.fill: parent
                             anchors.margins: 1
-                            columns: 4
-                            rows: 4
+                            spacing: 2
                             Repeater {
-                                model: 16
-                                Rectangle {
-                                    property int r: Math.floor(index / 4)
-                                    width: win.cell / 4; height: win.cell / 4
-                                    color: (r % 2 === 0) ? (index % 2 === 0 ? "#c05a1e" : "#7a3512") : (index % 2 === 0 ? "#7a3512" : "#c05a1e")
-                                    border.color: "#3d1c08"; border.width: 1
+                                model: 4
+                                Item {
+                                    property bool odd: index % 2 === 1
+                                    width: win.cell - 2
+                                    height: (win.cell - 2 - 6) / 4
+                                    // Even course: two whole bricks.
+                                    Row {
+                                        visible: !odd
+                                        anchors.fill: parent
+                                        spacing: 2
+                                        Repeater {
+                                            model: 2
+                                            Rectangle {
+                                                width: (win.cell - 2 - 2) / 2
+                                                height: parent.height
+                                                color: "#9e5230"
+                                                Rectangle {
+                                                    width: parent.width; height: 2
+                                                    color: "#b96a3e"
+                                                }
+                                                Rectangle {
+                                                    y: parent.height - 2
+                                                    width: parent.width; height: 2
+                                                    color: "#5e2f18"
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Odd course: half + whole + half, offset joints.
+                                    Row {
+                                        visible: odd
+                                        anchors.fill: parent
+                                        spacing: 2
+                                        Rectangle {
+                                            width: (win.cell - 2 - 4) / 4
+                                            height: parent.height
+                                            color: "#9e5230"
+                                            Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                            Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
+                                        }
+                                        Rectangle {
+                                            width: (win.cell - 2 - 4) / 2
+                                            height: parent.height
+                                            color: "#9e5230"
+                                            Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                            Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
+                                        }
+                                        Rectangle {
+                                            width: (win.cell - 2 - 4) / 4
+                                            height: parent.height
+                                            color: "#9e5230"
+                                            Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                            Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
+                                        }
+                                    }
                                 }
                             }
                         }
-                        // Steel: plate with corner rivets.
+                        // Concrete pavers: gray blocks with dark grout joints.
                         Rectangle {
                             visible: t === "S"
                             anchors.fill: parent
-                            anchors.margins: 1
-                            color: "#6e747e"
-                            border.color: "#2c2f36"; border.width: 2
+                            color: "#3a3a3a"
                         }
                         Grid {
                             visible: t === "S"
                             anchors.fill: parent
-                            anchors.margins: 4
+                            anchors.margins: 2
                             columns: 2
                             rows: 2
+                            spacing: 2
                             Repeater {
                                 model: 4
-                                Item {
-                                    width: (win.cell - 8) / 2; height: (win.cell - 8) / 2
+                                Rectangle {
+                                    width: (win.cell - 4 - 2) / 2
+                                    height: (win.cell - 4 - 2) / 2
+                                    color: "#8d8d8d"
                                     Rectangle {
-                                        x: 1; y: 1; width: 5; height: 5
-                                        color: "#c9ced6"
+                                        width: parent.width; height: 2
+                                        color: "#b5b5b5"
+                                    }
+                                    Rectangle {
+                                        x: parent.width - 8; y: parent.height - 8
+                                        width: 6; height: 6
+                                        color: "#6a6a6a"
                                     }
                                 }
                             }
@@ -276,7 +344,7 @@ ApplicationWindow {
                     }
                 }
 
-                // Enemies by tier: 0 green weak, 1 yellow fast, 2 gray armored.
+                // Enemies: 0 gray basic, 1 green fast, 2 steel armored.
                 Repeater {
                     model: backend.enemies
                     Item {
@@ -288,10 +356,10 @@ ApplicationWindow {
                         TankSprite {
                             anchors.fill: parent
                             dir: e.dir
-                            body: e.kind === 2 ? "#9aa0a8" : e.kind === 1 ? "#edc400" : "#57d977"
-                            dark: e.kind === 2 ? "#4a4e55" : e.kind === 1 ? "#7a5c00" : "#1f7a33"
-                            light: e.kind === 2 ? "#d5d9de" : e.kind === 1 ? "#ffef9e" : "#c9f2d4"
-                            muzzle: "#ffffff"
+                            frame: e.moving ? win.treadFrame : 0
+                            body: e.kind === 2 ? "#6a6e76" : e.kind === 1 ? "#5da24a" : "#8d8d94"
+                            dark: e.kind === 2 ? "#2c2e34" : e.kind === 1 ? "#2e5b26" : "#4a4d55"
+                            light: e.kind === 2 ? "#c9ced6" : e.kind === 1 ? "#bfe3b4" : "#d5d9de"
                         }
                         // Armor pips for gray tanks.
                         Row {
@@ -307,7 +375,7 @@ ApplicationWindow {
                     }
                 }
 
-                // Players: P1 blue, P2 red.
+                // Players told apart by color only: P1 yellow, P2 red.
                 Repeater {
                     model: backend.players
                     Item {
@@ -320,20 +388,10 @@ ApplicationWindow {
                         TankSprite {
                             anchors.fill: parent
                             dir: p.dir
+                            frame: p.moving ? win.treadFrame : 0
                             body: index === 0 ? win.p1body : win.p2body
                             dark: index === 0 ? win.p1dark : win.p2dark
                             light: index === 0 ? win.p1light : win.p2light
-                            muzzle: "#ffffff"
-                        }
-                        Text {
-                            anchors.centerIn: parent
-                            y: win.cell * 0.12
-                            text: index === 0 ? "1" : "2"
-                            font.family: "Monospace"; font.bold: true
-                            font.pixelSize: Math.max(11, win.cell * 0.3)
-                            color: "white"
-                            style: Text.Outline
-                            styleColor: "black"
                         }
                     }
                 }
@@ -444,10 +502,10 @@ ApplicationWindow {
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: "GREEN 100 - YELLOW 200 - GRAY 300"
+                                text: "GRAY 100 - GREEN 200 - STEEL 300"
                                 font.family: "Monospace"; font.bold: true
                                 font.pixelSize: 12; font.letterSpacing: 1
-                                color: "#57d977"
+                                color: "#8d8d94"
                             }
                         }
                     }
@@ -484,7 +542,7 @@ ApplicationWindow {
                 Text { text: "P1 MOVE: W A S D - FIRE: SPACE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P2 MOVE: ARROWS - FIRE: ENTER"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P PAUSE - R RESTART - M SOUND - Q QUIT"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "GREEN WEAK - YELLOW FAST - GRAY 2 HITS"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#57d977" }
+                Text { text: "GRAY BASIC - GREEN FAST - STEEL 2 HITS"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8d8d94" }
                 Text { text: "DEFEND THE STAR. 8 ENEMIES PER SECTOR."; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
             }
