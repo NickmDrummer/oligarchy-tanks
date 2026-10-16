@@ -137,6 +137,10 @@ void Backend::generateMap() {
     std::uniform_real_distribution<double> roll(0.0, 1.0);
     m_grid.assign(COLS * ROWS, Empty);
     auto idx = [](int x, int y) { return y * COLS + x; };
+    auto clear = [&](int x, int y) {
+        if (x >= 0 && y >= 0 && x < COLS && y < ROWS)
+            m_grid[idx(x, y)] = Empty;
+    };
     for (int y = 0; y < ROWS; ++y) {
         for (int x = 0; x < COLS; ++x) {
             // Keep spawn row and base area clear before scattering.
@@ -159,16 +163,28 @@ void Backend::generateMap() {
     m_grid[idx(bx - 1, by - 1)] = Brick;
     m_grid[idx(bx, by - 1)] = Brick;
     m_grid[idx(bx + 1, by - 1)] = Brick;
+    // Guarantee free spawn pads for both players (3x2 cells each).
+    for (int dx = -1; dx <= 1; ++dx)
+        for (int dy = -1; dy <= 0; ++dy) {
+            clear(3 + dx, ROWS - 2 + dy);
+            clear(COLS - 4 + dx, ROWS - 2 + dy);
+        }
+    // Guarantee free enemy entry pads at the top row.
+    for (int sx : {0, COLS / 2, COLS - 1})
+        for (int dx = -1; dx <= 1; ++dx)
+            for (int dy = 0; dy <= 1; ++dy)
+                clear(sx + dx, dy);
 }
 
 void Backend::resetTanks() {
     m_p[0] = Tank{};
     m_p[1] = Tank{};
-    m_p[0].x = 3.0;
-    m_p[0].y = ROWS - 2.0;
+    // Cell centers, so tanks never start straddling two tiles.
+    m_p[0].x = 3.5;
+    m_p[0].y = ROWS - 1.5;
     m_p[0].dir = 0;
-    m_p[1].x = COLS - 4.0;
-    m_p[1].y = ROWS - 2.0;
+    m_p[1].x = COLS - 3.5;
+    m_p[1].y = ROWS - 1.5;
     m_p[1].dir = 0;
 }
 
@@ -191,8 +207,8 @@ void Backend::tick() {
             t.respawn -= dt;
             if (t.respawn <= 0) {
                 t.alive = true;
-                t.x = (i == 0 ? 3.0 : COLS - 4.0);
-                t.y = ROWS - 2.0;
+                t.x = (i == 0 ? 3.5 : COLS - 3.5);
+                t.y = ROWS - 1.5;
                 t.dir = 0;
             }
         }
@@ -207,21 +223,42 @@ void Backend::tick() {
 void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, double dt, double speed) {
     if (!t.alive)
         return;
-    int dir = -1;
-    // Last-pressed priority is approximated by fixed order: up, down, left, right.
-    if (up) dir = 0;
-    if (down) dir = 2;
-    if (left) dir = 3;
-    if (right) dir = 1;
-    if (dir < 0)
-        return;
+    // Keep going the current way while its key is held, so diagonal
+    // presses do not flip the tank back and forth.
+    int dir = t.dir;
+    auto held = [&](int d) {
+        return (d == 0 && up) || (d == 2 && down) || (d == 3 && left) || (d == 1 && right);
+    };
+    if (!held(dir)) {
+        dir = -1;
+        if (up) dir = 0;
+        if (left) dir = 3;
+        if (down) dir = 2;
+        if (right) dir = 1;
+        if (dir < 0)
+            return;
+    }
     t.dir = dir;
+    // Lane assist: drift toward the nearest cell center on the cross axis,
+    // so tanks slide through 1-wide gaps instead of snagging on corners.
+    const double laneRate = 6.0 * dt;
+    if (dir == 0 || dir == 2) {
+        const double lane = std::floor(t.x) + 0.5;
+        const double d = lane - t.x;
+        if (std::abs(d) < 0.3)
+            t.x += std::clamp(d, -laneRate, laneRate);
+    } else {
+        const double lane = std::floor(t.y) + 0.5;
+        const double d = lane - t.y;
+        if (std::abs(d) < 0.3)
+            t.y += std::clamp(d, -laneRate, laneRate);
+    }
     double nx = t.x, ny = t.y;
     if (dir == 0) ny -= speed * dt;
     if (dir == 2) ny += speed * dt;
     if (dir == 3) nx -= speed * dt;
     if (dir == 1) nx += speed * dt;
-    if (!solidAt(nx, ny, TANK_SIZE)) {
+    if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &t, false)) {
         t.x = nx;
         t.y = ny;
     }
@@ -245,7 +282,7 @@ void Backend::updateEnemies(double dt) {
         if (e.dir == 2) ny += ENEMY_SPEED * dt;
         if (e.dir == 3) nx -= ENEMY_SPEED * dt;
         if (e.dir == 1) nx += ENEMY_SPEED * dt;
-        if (!solidAt(nx, ny, TANK_SIZE)) {
+        if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &e, true)) {
             e.x = nx;
             e.y = ny;
         } else {
@@ -357,8 +394,8 @@ void Backend::spawnEnemy() {
         if (e.alive)
             continue;
         e.alive = true;
-        e.x = double(spots[m_spawned % 3]);
-        e.y = 0.0;
+        e.x = double(spots[m_spawned % 3]) + 0.5;
+        e.y = 0.5;
         e.dir = 2;
         e.cooldown = 1.0;
         e.think = 1.0;
@@ -374,17 +411,27 @@ void Backend::fireBullet(double x, double y, int dir, int owner) {
             ++live;
     if (live >= 2)
         return;
+    double bx = x, by = y;
+    // Start at the barrel tip so shots do not collide with the shooter.
+    if (dir == 0) by -= 0.6;
+    if (dir == 2) by += 0.6;
+    if (dir == 3) bx -= 0.6;
+    if (dir == 1) bx += 0.6;
+    // Never spawn outside the arena or inside a wall; pull back to center.
+    if (bx < 0.15 || by < 0.15 || bx >= COLS - 0.15 || by >= ROWS - 0.15) {
+        bx = x;
+        by = y;
+    }
+    if (solidAt(bx, by, 0.25)) {
+        bx = x;
+        by = y;
+    }
     Bullet b;
-    b.x = x;
-    b.y = y;
+    b.x = bx;
+    b.y = by;
     b.dir = dir;
     b.owner = owner;
     b.active = true;
-    // Start at the barrel tip so shots do not collide with the shooter.
-    if (dir == 0) b.y -= 0.6;
-    if (dir == 2) b.y += 0.6;
-    if (dir == 3) b.x -= 0.6;
-    if (dir == 1) b.x += 0.6;
     m_bullets.push_back(b);
     if (m_soundEnabled)
         emit playSound(owner == 2 ? "eshoot" : "shoot");
@@ -407,6 +454,37 @@ bool Backend::solidAt(double x, double y, double size) const {
 bool Backend::hitsTank(double bx, double by, double tx, double ty) const {
     const double dx = bx - tx, dy = by - ty;
     return dx * dx + dy * dy < 0.32;
+}
+
+// Tanks block each other, so allies and enemies can no longer drive
+// or phase through one another.
+bool Backend::blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const {
+    const double minDist = size * 0.9;
+    auto blocks = [&](double tx, double ty, const void *other) {
+        if (other == self)
+            return false;
+        return std::abs(tx - x) < minDist && std::abs(ty - y) < minDist;
+    };
+    for (int i = 0; i < 2; ++i) {
+        if (m_p[i].alive && blocks(m_p[i].x, m_p[i].y, &m_p[i]))
+            return true;
+    }
+    for (const auto &e : m_foes) {
+        if (!e.alive)
+            continue;
+        const void *other = &e;
+        if (other == self)
+            continue;
+        if (isEnemy) {
+            // Enemies also collide with each other.
+            if (std::abs(e.x - x) < minDist && std::abs(e.y - y) < minDist)
+                return true;
+        } else if (blocks(e.x, e.y, other)) {
+            return true;
+        }
+    }
+    (void)isEnemy;
+    return false;
 }
 
 int Backend::tileAt(int cx, int cy) const {

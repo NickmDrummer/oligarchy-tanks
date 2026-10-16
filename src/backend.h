@@ -92,6 +92,7 @@ private:
     void fireBullet(double x, double y, int dir, int owner);
     bool solidAt(double x, double y, double size) const;
     bool hitsTank(double bx, double by, double tx, double ty) const;
+    bool blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const;
     int tileAt(int cx, int cy) const;
     void damageTile(int cx, int cy);
     void killPlayer(int idx);
