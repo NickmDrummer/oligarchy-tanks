@@ -5,9 +5,9 @@
 
 namespace {
 constexpr double TANK_SIZE = 0.8;
-constexpr double PLAYER_SPEED = 5.25;
-constexpr double ENEMY_SPEED = 3.0;
-constexpr double BULLET_SPEED = 10.0;
+constexpr double PLAYER_SPEED = 4.2;
+constexpr double ENEMY_SPEED = 2.4;
+constexpr double BULLET_SPEED = 8.0;
 constexpr double FIRE_GAP = 0.35;
 constexpr double RAPID_GAP = 0.15;
 }

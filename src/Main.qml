@@ -326,21 +326,61 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        // Base star.
-                        Rectangle {
+                        // Base: pixel Omarchy "O" from the wordmark, on a dark plate.
+                        // Defend it. A cracked rubble O marks a destroyed base.
+                        Item {
+                            id: baseTile
                             visible: t === "X" || t === "x"
                             anchors.fill: parent
-                            anchors.margins: 1
-                            color: t === "X" ? "#edc400" : "#3d1010"
-                            border.color: t === "X" ? "#7a5c00" : "#7a241b"
-                            border.width: 2
-                        }
-                        Text {
-                            visible: t === "X" || t === "x"
-                            anchors.centerIn: parent
-                            text: "★"
-                            font.pixelSize: win.cell * 0.62
-                            color: t === "X" ? "#1a1400" : "#ff705a"
+                            property bool dead: t === "x"
+                            property var oRows: dead ? [
+                                "XXXXXXXXX",
+                                "XXXXXXXXX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XXX...XXX",
+                                "X.......X",
+                                "X..X..X..",
+                                "..X...X..",
+                                "...X.X...",
+                                "....X....",
+                            ] : [
+                                "XXXXXXXXX",
+                                "XXXXXXXXX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XX.....XX",
+                                "XXXXXXXXX",
+                                "XXXXXXXXX",
+                            ]
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                color: baseTile.dead ? "#3d1010" : "#0d0d12"
+                                border.color: baseTile.dead ? "#7a241b" : theme.accent
+                                border.width: 2
+                            }
+                            Grid {
+                                anchors.centerIn: parent
+                                columns: 9
+                                rows: 11
+                                Repeater {
+                                    model: 99
+                                    Rectangle {
+                                        property int r: Math.floor(index / 9)
+                                        property int c: index % 9
+                                        property string ch: baseTile.oRows[r][c]
+                                        width: (win.cell - 8) / 9
+                                        height: (win.cell - 8) / 11
+                                        color: ch === "X" ? (baseTile.dead ? "#7a3535" : theme.accent) : "transparent"
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -431,28 +471,41 @@ ApplicationWindow {
                 }
 
                 // Bonus pickups: one at a time, drive over to collect.
+                // Pixel icon plus a word label, so each bonus reads at a glance.
                 Item {
+                    id: pickupBox
                     property var k: backend.pickupAt(backend.frameTick)
                     visible: k.active
-                    property real s: win.cell * 0.9
-                    property var glyphs: ["★", "S", "»", "#", "1UP"]
+                    property real s: win.cell * 1.1
                     property var cols: ["#edc400", "#57c8d8", "#5da24a", "#8d8d94", "#b03a2e"]
+                    property var labels: ["RAPID", "SHIELD", "SPEED", "WALL", "1UP"]
                     x: k.x * win.cell - s / 2
-                    y: k.y * win.cell - s / 2
-                    width: s; height: s
+                    y: k.y * win.cell - (s + 18) / 2
+                    width: s; height: s + 18
                     opacity: (k.age > 12 && win.treadFrame === 0) ? 0.35 : 1
                     Rectangle {
-                        anchors.fill: parent
+                        width: parent.width; height: parent.s
                         color: "#0d0d12"
                         border.color: parent.cols[parent.k.kind]
                         border.width: 3
                     }
+                    PickupIcon {
+                        y: 4
+                        width: parent.width
+                        height: parent.s - 8
+                        kind: parent.k.kind
+                        side: Math.min(parent.width - 10, parent.s - 12)
+                    }
                     Text {
-                        anchors.centerIn: parent
-                        text: parent.glyphs[parent.k.kind]
+                        y: parent.s + 2
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        text: parent.labels[parent.k.kind]
                         font.family: "Monospace"; font.bold: true
-                        font.pixelSize: parent.k.kind === 4 ? Math.max(11, win.cell * 0.3) : Math.max(16, win.cell * 0.5)
+                        font.pixelSize: 11; font.letterSpacing: 1
                         color: parent.cols[parent.k.kind]
+                        style: Text.Outline
+                        styleColor: "black"
                     }
                 }
 
@@ -563,7 +616,7 @@ ApplicationWindow {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 visible: backend.state === "menu"
-                                text: "2P CO-OP VS AI - DEFEND THE STAR"
+                                text: "2P CO-OP VS AI - DEFEND THE BASE"
                                 font.family: "Monospace"; font.bold: true
                                 font.pixelSize: 14; font.letterSpacing: 1
                                 color: "#f2f4f8"
@@ -639,9 +692,30 @@ ApplicationWindow {
                 Text { text: "P2 MOVE: ARROWS - FIRE: ENTER"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P PAUSE - R RESTART - M SOUND - Q QUIT"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "GRAY BASIC - GREEN FAST - STEEL 2 HITS"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8d8d94" }
-                Text { text: "BONUS: STAR RAPID - S SHIELD - » SPEED"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
-                Text { text: "# FORTIFY BASE - 1UP EXTRA LIFE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
-                Text { text: "DEFEND THE STAR. 8 ENEMIES PER SECTOR."; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
+                Text { text: "BONUS EVERY 500 PTS - ONE AT A TIME"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 18
+                    Repeater {
+                        model: [["RAPID", "#edc400"], ["SHIELD", "#57c8d8"], ["SPEED", "#5da24a"], ["WALL", "#8d8d94"], ["1UP", "#b03a2e"]]
+                        Column {
+                            spacing: 2
+                            PickupIcon {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 40; height: 40
+                                kind: index
+                                side: 36
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: modelData[0]
+                                font.family: "Monospace"; font.bold: true; font.pixelSize: 11
+                                color: modelData[1]
+                            }
+                        }
+                    }
+                }
+                Text { text: "DEFEND THE BASE. 8 ENEMIES PER SECTOR."; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
             }
         }
