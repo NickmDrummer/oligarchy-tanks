@@ -51,7 +51,7 @@ QVariantList Backend::enemies() const {
     QVariantList out;
     for (const auto &e : m_foes)
         if (e.alive)
-            out.append(QVariantMap{{"x", e.x}, {"y", e.y}, {"dir", e.dir}});
+            out.append(QVariantMap{{"x", e.x}, {"y", e.y}, {"dir", e.dir}, {"kind", e.kind}, {"hp", e.hp}});
     return out;
 }
 
@@ -277,11 +277,12 @@ void Backend::updateEnemies(double dt) {
         if (e.cooldown > 0)
             e.cooldown -= dt;
         e.think -= dt;
+        const double speed = (e.kind == 1) ? ENEMY_SPEED * 1.35 : ENEMY_SPEED;
         double nx = e.x, ny = e.y;
-        if (e.dir == 0) ny -= ENEMY_SPEED * dt;
-        if (e.dir == 2) ny += ENEMY_SPEED * dt;
-        if (e.dir == 3) nx -= ENEMY_SPEED * dt;
-        if (e.dir == 1) nx += ENEMY_SPEED * dt;
+        if (e.dir == 0) ny -= speed * dt;
+        if (e.dir == 2) ny += speed * dt;
+        if (e.dir == 3) nx -= speed * dt;
+        if (e.dir == 1) nx += speed * dt;
         if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &e, true)) {
             e.x = nx;
             e.y = ny;
@@ -300,7 +301,7 @@ void Backend::updateEnemies(double dt) {
             e.think = 0.8 + roll(m_rng) * 1.5;
         }
         if (e.cooldown <= 0 && roll(m_rng) < 0.02) {
-            e.cooldown = 1.1;
+            e.cooldown = (e.kind == 1) ? 0.8 : 1.1;
             fireBullet(e.x, e.y, e.dir, 2);
         }
     }
@@ -351,14 +352,19 @@ void Backend::updateBullets(double dt) {
             b.active = false;
             continue;
         }
-        // Hit enemies.
+        // Hit enemies. Gray armor takes 2 hits.
         for (auto &e : m_foes) {
             if (e.alive && hitsTank(nx, ny, e.x, e.y)) {
                 if (b.owner < 2) {
-                    e.alive = false;
-                    m_p[b.owner].score += 100;
-                    if (m_soundEnabled)
-                        emit playSound("explode");
+                    e.hp -= 1;
+                    if (e.hp <= 0) {
+                        e.alive = false;
+                        m_p[b.owner].score += (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
+                        if (m_soundEnabled)
+                            emit playSound("explode");
+                    } else if (m_soundEnabled) {
+                        emit playSound("hit");
+                    }
                     b.active = false;
                     consumed = true;
                     break;
@@ -389,6 +395,8 @@ void Backend::updateBullets(double dt) {
 }
 
 void Backend::spawnEnemy() {
+    // Sector roster: green weaklings first, yellow runners mid, gray armor last.
+    static constexpr int roster[TOTAL_ENEMIES] = {0, 0, 1, 0, 1, 2, 1, 2};
     const int spots[3] = {0, COLS / 2, COLS - 1};
     for (auto &e : m_foes) {
         if (e.alive)
@@ -399,6 +407,8 @@ void Backend::spawnEnemy() {
         e.dir = 2;
         e.cooldown = 1.0;
         e.think = 1.0;
+        e.kind = roster[m_spawned % TOTAL_ENEMIES];
+        e.hp = (e.kind == 2) ? 2 : 1;
         ++m_spawned;
         return;
     }

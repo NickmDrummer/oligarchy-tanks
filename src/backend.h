@@ -71,6 +71,8 @@ private:
         bool alive = false;
         double cooldown = 0;
         double think = 0;
+        int kind = 0; // 0 green weak, 1 yellow fast, 2 gray armored
+        int hp = 1;
     };
     struct Bullet {
         double x = 0, y = 0;
