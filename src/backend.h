@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
 #include <QVariantList>
@@ -23,6 +24,7 @@ class Backend : public QObject {
     Q_PROPERTY(QVariantList floaters READ floaters NOTIFY frameChanged)
     Q_PROPERTY(QVariantList pickups READ pickups NOTIFY frameChanged)
     Q_PROPERTY(int nextBonus READ nextBonus NOTIFY frameChanged)
+    Q_PROPERTY(int frameTick READ frameTick NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
 
 public:
@@ -44,6 +46,16 @@ public:
     QVariantList pickups() const;
     int enemiesLeft() const;
     int nextBonus() const { return m_nextBonus; }
+    int frameTick() const { return m_frameTick; }
+
+    // Stable per-slot getters for QML. Delegates are created once with a
+    // fixed count and only update properties, so the scene graph is never
+    // rebuilt mid-game. Pass frameTick (ignored) to refresh each frame.
+    Q_INVOKABLE QVariantMap playerAt(int i, int tick) const;
+    Q_INVOKABLE QVariantMap enemyAt(int i, int tick) const;
+    Q_INVOKABLE QVariantMap bulletAt(int i, int tick) const;
+    Q_INVOKABLE QVariantMap floaterAt(int i, int tick) const;
+    Q_INVOKABLE QVariantMap pickupAt(int tick) const;
     bool soundEnabled() const { return m_soundEnabled; }
     void setSoundEnabled(bool v);
 
@@ -142,6 +154,8 @@ private:
     double m_fortifyUntil = -1;
     double m_time = 0;
     int m_nextBonus = 500;
+    int m_frameTick = 0;
+    QElapsedTimer m_clock;
     bool m_p1Up = false, m_p1Down = false, m_p1Left = false, m_p1Right = false;
     bool m_p2Up = false, m_p2Down = false, m_p2Left = false, m_p2Right = false;
     int m_spawned = 0;

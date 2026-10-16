@@ -346,10 +346,12 @@ ApplicationWindow {
                 }
 
                 // Enemies: 0 gray basic, 1 green fast, 2 steel armored.
+                // Fixed model: delegates persist, only properties update.
                 Repeater {
-                    model: backend.enemies
+                    model: 4
                     Item {
-                        property var e: backend.enemies[index]
+                        property var e: backend.enemyAt(index, backend.frameTick)
+                        visible: e.alive
                         x: e.x * win.cell - width / 2
                         y: e.y * win.cell - height / 2
                         width: win.cell * 0.94
@@ -378,9 +380,9 @@ ApplicationWindow {
 
                 // Players told apart by color only: P1 yellow, P2 red.
                 Repeater {
-                    model: backend.players
+                    model: 2
                     Item {
-                        property var p: backend.players[index]
+                        property var p: backend.playerAt(index, backend.frameTick)
                         visible: p.alive
                         x: p.x * win.cell - width / 2
                         y: p.y * win.cell - height / 2
@@ -408,9 +410,10 @@ ApplicationWindow {
 
                 // Pixel bullets: glow block + white core, no rounded corners.
                 Repeater {
-                    model: backend.bullets
+                    model: 16
                     Item {
-                        property var b: backend.bullets[index]
+                        property var b: backend.bulletAt(index, backend.frameTick)
+                        visible: b.active
                         property real s: Math.max(8, win.cell * 0.24)
                         x: b.x * win.cell - s / 2
                         y: b.y * win.cell - s / 2
@@ -428,38 +431,37 @@ ApplicationWindow {
                 }
 
                 // Bonus pickups: one at a time, drive over to collect.
-                Repeater {
-                    model: backend.pickups
-                    Item {
-                        property var k: backend.pickups[index]
-                        property real s: win.cell * 0.9
-                        property var glyphs: ["★", "S", "»", "#", "1UP"]
-                        property var cols: ["#edc400", "#57c8d8", "#5da24a", "#8d8d94", "#b03a2e"]
-                        x: k.x * win.cell - s / 2
-                        y: k.y * win.cell - s / 2
-                        width: s; height: s
-                        opacity: (k.age > 12 && win.treadFrame === 0) ? 0.35 : 1
-                        Rectangle {
-                            anchors.fill: parent
-                            color: "#0d0d12"
-                            border.color: cols[k.kind]
-                            border.width: 3
-                        }
-                        Text {
-                            anchors.centerIn: parent
-                            text: glyphs[k.kind]
-                            font.family: "Monospace"; font.bold: true
-                            font.pixelSize: k.kind === 4 ? Math.max(11, win.cell * 0.3) : Math.max(16, win.cell * 0.5)
-                            color: cols[k.kind]
-                        }
+                Item {
+                    property var k: backend.pickupAt(backend.frameTick)
+                    visible: k.active
+                    property real s: win.cell * 0.9
+                    property var glyphs: ["★", "S", "»", "#", "1UP"]
+                    property var cols: ["#edc400", "#57c8d8", "#5da24a", "#8d8d94", "#b03a2e"]
+                    x: k.x * win.cell - s / 2
+                    y: k.y * win.cell - s / 2
+                    width: s; height: s
+                    opacity: (k.age > 12 && win.treadFrame === 0) ? 0.35 : 1
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "#0d0d12"
+                        border.color: parent.cols[parent.k.kind]
+                        border.width: 3
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        text: parent.glyphs[parent.k.kind]
+                        font.family: "Monospace"; font.bold: true
+                        font.pixelSize: parent.k.kind === 4 ? Math.max(11, win.cell * 0.3) : Math.max(16, win.cell * 0.5)
+                        color: parent.cols[parent.k.kind]
                     }
                 }
 
                 // Floating kill scores in pixel type.
                 Repeater {
-                    model: backend.floaters
+                    model: 8
                     Text {
-                        property var f: backend.floaters[index]
+                        property var f: backend.floaterAt(index, backend.frameTick)
+                        visible: f.active
                         x: f.x * win.cell - 24
                         y: f.y * win.cell - 12 - f.age * 34
                         width: 72

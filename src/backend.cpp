@@ -19,7 +19,9 @@ Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) 
     resetTanks();
     connect(&m_timer, &QTimer::timeout, this, &Backend::tick);
     m_timer.setInterval(16);
+    m_timer.setTimerType(Qt::PreciseTimer);
     m_timer.start();
+    m_clock.start();
 }
 
 QString Backend::board() const {
@@ -65,6 +67,48 @@ QVariantList Backend::bullets() const {
         if (b.active)
             out.append(QVariantMap{{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}});
     return out;
+}
+
+QVariantMap Backend::playerAt(int i, int tick) const {
+    Q_UNUSED(tick);
+    if (i < 0 || i > 1)
+        return {};
+    const Tank &t = m_p[i];
+    return {{"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
+            {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
+            {"rapid", m_time < t.rapidUntil}, {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}};
+}
+
+QVariantMap Backend::enemyAt(int i, int tick) const {
+    Q_UNUSED(tick);
+    if (i < 0 || i >= int(m_foes.size()))
+        return {{"alive", false}};
+    const Enemy &e = m_foes[i];
+    return {{"x", e.x}, {"y", e.y}, {"dir", e.dir}, {"kind", e.kind},
+            {"hp", e.hp}, {"moving", e.moving}, {"alive", e.alive}};
+}
+
+QVariantMap Backend::bulletAt(int i, int tick) const {
+    Q_UNUSED(tick);
+    if (i < 0 || i >= int(m_bullets.size()))
+        return {{"active", false}};
+    const Bullet &b = m_bullets[i];
+    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}};
+}
+
+QVariantMap Backend::floaterAt(int i, int tick) const {
+    Q_UNUSED(tick);
+    if (i < 0 || i >= int(m_floaters.size()))
+        return {{"active", false}};
+    const Floater &f = m_floaters[i];
+    return {{"x", f.x}, {"y", f.y}, {"text", QString("+%1").arg(f.score)}, {"age", f.age}, {"active", true}};
+}
+
+QVariantMap Backend::pickupAt(int tick) const {
+    Q_UNUSED(tick);
+    if (!m_pickup.active)
+        return {{"active", false}};
+    return {{"x", m_pickup.x}, {"y", m_pickup.y}, {"kind", m_pickup.kind}, {"age", m_pickup.age}, {"active", true}};
 }
 
 QVariantList Backend::floaters() const {
@@ -229,8 +273,15 @@ void Backend::resetTanks() {
 void Backend::tick() {
     if (m_state != "playing")
         return;
-    constexpr double dt = 0.016;
+    // Real elapsed time, so the game runs at the same speed even when the
+    // machine cannot sustain 60 frames per second. Clamped to avoid jumps.
+    double dt = m_clock.restart() / 1000.0;
+    if (dt <= 0)
+        dt = 0.016;
+    if (dt > 0.05)
+        dt = 0.05;
     m_time += dt;
+    ++m_frameTick;
 
     for (auto &t : m_p)
         if (t.cooldown > 0)
@@ -432,6 +483,8 @@ void Backend::updateBullets(double dt) {
                         const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
                         m_p[b.owner].score += pts;
                         m_floaters.push_back(Floater{e.x, e.y, pts, 0});
+                        if (m_floaters.size() > 8)
+                            m_floaters.erase(m_floaters.begin());
                         if (m_soundEnabled)
                             emit playSound("explode");
                     } else if (m_soundEnabled) {
