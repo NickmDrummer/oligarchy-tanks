@@ -8,7 +8,7 @@ Item {
     property int kind: 0
     property real side: 40
 
-    property var bolt: ["..KKKK...", "..KWYYK..", "..KYYK...", ".KYYYK...", ".KYYYYKK.", ".KYYYYYKK", "..KYYYYK.", "..KYYOOK.", "...KYOOK.", "...KYOK..", "....KK..."]
+    property var bolt: ["..KKKK...", "..KYYYK..", "..KYYK...", ".KYYYK...", ".KYYYYKKK", ".KYYYYYKK", "..KYYYYK.", "..KYYOOK.", "...KYOOK.", "...KYOK..", "....KK..."]
     property var shield: [".XXXXX.", "XXXXXXX", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."]
     property var pick: ["PPPH...", ".PPPH..", "..PPH..", "...PH..", "....HH.", ".....H.", "......H"]
     property var grenade: ["..FFFF.", ".BBBBB.", "BXBXBXB", "BBBBBBB", "BXBXBXB", "BBBBBBB", ".BBBBB."]
@@ -27,8 +27,8 @@ Item {
                 property int r: Math.floor(index / 9)
                 property int c: index % 9
                 property string ch: root.bolt[r][c]
-                width: root.side / 11
-                height: root.side / 11
+                width: Math.max(1, Math.floor(root.side / 11))
+                height: Math.max(1, Math.floor(root.side / 11))
                 color: ch === "K" ? "#1a1a22" : ch === "Y" ? "#ffdf3d" : ch === "O" ? "#f5a623" : ch === "W" ? "#ffffff" : "transparent"
             }
         }
@@ -44,8 +44,8 @@ Item {
                 property int r: Math.floor(index / 7)
                 property int c: index % 7
                 property string ch: root.shield[r][c]
-                width: root.side / 7
-                height: root.side / 7
+                width: Math.max(1, Math.floor(root.side / 7))
+                height: Math.max(1, Math.floor(root.side / 7))
                 color: ch === "X" ? "#8d8d94" : "transparent"
             }
         }
@@ -61,8 +61,8 @@ Item {
                 property int r: Math.floor(index / 7)
                 property int c: index % 7
                 property string ch: root.pick[r][c]
-                width: root.side / 7
-                height: root.side / 7
+                width: Math.max(1, Math.floor(root.side / 7))
+                height: Math.max(1, Math.floor(root.side / 7))
                 color: ch === "P" ? "#c9ced6" : ch === "H" ? "#7a5230" : "transparent"
             }
         }
@@ -90,8 +90,8 @@ Item {
                 property int r: Math.floor(index / 7)
                 property int c: index % 7
                 property string ch: root.grenade[r][c]
-                width: root.side / 7
-                height: root.side / 7
+                width: Math.max(1, Math.floor(root.side / 7))
+                height: Math.max(1, Math.floor(root.side / 7))
                 color: ch === "B" ? "#2e6b28" : ch === "X" ? "#1d3d1a" : ch === "F" ? "#8d8d94" : "transparent"
             }
         }
@@ -108,8 +108,8 @@ Item {
                 property int r: Math.floor(index / 7)
                 property int c: index % 7
                 property string ch: root.cannon[r][c]
-                width: root.side / 9
-                height: root.side / 9
+                width: Math.max(1, Math.floor(root.side / 9))
+                height: Math.max(1, Math.floor(root.side / 9))
                 color: ch === "K" ? "#14141a" : ch === "B" ? "#c8862e" : ch === "D" ? "#7a4d1a" : ch === "W" ? "#ffffff" : "transparent"
             }
         }
@@ -125,8 +125,8 @@ Item {
                 property int r: Math.floor(index / 7)
                 property int c: index % 7
                 property string ch: root.snow[r][c]
-                width: root.side / 7
-                height: root.side / 7
+                width: Math.max(1, Math.floor(root.side / 7))
+                height: Math.max(1, Math.floor(root.side / 7))
                 color: ch === "X" ? "#bfe8ff" : "transparent"
             }
         }

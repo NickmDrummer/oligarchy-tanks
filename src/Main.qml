@@ -716,9 +716,9 @@ ApplicationWindow {
                                 Repeater {
                                     model: 7
                                     PickupIcon {
-                                        width: 26; height: 26
+                                        width: 30; height: 30
                                         kind: index
-                                        side: 24
+                                        side: 28
                                     }
                                 }
                             }
