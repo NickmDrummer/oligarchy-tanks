@@ -14,8 +14,22 @@ ApplicationWindow {
     color: "#0b0b10"
 
     property bool helpVisible: false
+    property bool helpPausedGame: false
     property int cell: Math.max(30, Math.floor(Math.min(boardArea.width / backend.cols, boardArea.height / backend.rows)))
     property int treadFrame: 0
+
+    // Opening the manual pauses the game; closing it resumes only if the
+    // manual caused the pause.
+    onHelpVisibleChanged: {
+        if (helpVisible && backend.state === "playing") {
+            backend.togglePause()
+            helpPausedGame = true
+        } else if (!helpVisible && helpPausedGame) {
+            helpPausedGame = false
+            if (backend.state === "paused")
+                backend.togglePause()
+        }
+    }
     // Muted Battle City palette. Players are told apart by color only.
     property color p1body: "#c8a028"
     property color p1dark: "#6e5410"
@@ -548,7 +562,8 @@ ApplicationWindow {
                 }
 
                 // Forest canopy above everything: hides tanks like the original.
-                // One fixed leaf sprite per tile, mirrored on odd seeds.
+                // Each tile stamps a round leafy blob spilling past its edges,
+                // so neighbours merge into one ragged canopy with holes.
                 Repeater {
                     model: backend.cols * backend.rows
                     Item {
@@ -557,7 +572,6 @@ ApplicationWindow {
                         property int cy: Math.floor(index / backend.cols)
                         property string t: backend.board.length > index ? backend.board[index] : "."
                         property int seed: index
-                        property var leaf: ["..MM..", ".MMLMM", "MMLMLM", "MLMMHM", ".MMLMM", "..MM.."]
                         visible: t === "F"
                         x: cx * win.cell
                         y: cy * win.cell
@@ -565,18 +579,36 @@ ApplicationWindow {
                         height: win.cell
                         z: 8
                         Grid {
-                            anchors.fill: parent
-                            columns: 6
-                            rows: 6
+                            x: -0.3 * win.cell
+                            y: -0.3 * win.cell
+                            columns: 8
+                            rows: 8
                             Repeater {
-                                model: 36
+                                model: 64
                                 Rectangle {
-                                    property int r: Math.floor(index / 6)
-                                    property int c: index % 6
-                                    property int cc: (forestTile.seed % 2 === 0) ? c : 5 - c
-                                    property string ch: forestTile.leaf[r][cc]
-                                    width: win.cell / 6; height: win.cell / 6
-                                    color: ch === "M" ? "#356b2f" : ch === "L" ? "#4e8a42" : ch === "H" ? "#6aa84f" : "transparent"
+                                    property int r: Math.floor(index / 8)
+                                    property int c: index % 8
+                                    property real dist: Math.max(Math.abs(c - 3.5), Math.abs(r - 3.5))
+                                    property int h: (forestTile.seed * 13 + r * 7 + c * 17) % 100
+                                    width: win.cell * 0.2; height: win.cell * 0.2
+                                    color: {
+                                        if (dist > 3.5)
+                                            return "transparent"
+                                        if (dist > 2.5) {
+                                            if (h > 50)
+                                                return "transparent"
+                                            return h < 50 ? "#2f6630" : "#4e8a42"
+                                        }
+                                        if (h < 6)
+                                            return "transparent"
+                                        if (h < 42)
+                                            return "#2f6630"
+                                        if (h < 80)
+                                            return "#1d3d1a"
+                                        if (h < 95)
+                                            return "#4e8a42"
+                                        return "#6aa84f"
+                                    }
                                 }
                             }
                         }

@@ -8,24 +8,24 @@ Item {
     property int kind: 0
     property real side: 40
 
-    property var bolt: ["...KKKK...", "...KYYYK..", "...KWYYK..", "...KYYYK..", ".KKYYYOOOK", ".KYYYYYOOK.", "..KYYYOOOK", "..KYYOOOK.", "...KYOOOK.", "...KYOOK..", "....KOK...."]
+    property var bolt: ["..KKKK...", "..KWYYK..", "..KYYK...", ".KYYYK...", ".KYYYYKK.", ".KYYYYYKK", "..KYYYYK.", "..KYYOOK.", "...KYOOK.", "...KYOK..", "....KK..."]
     property var shield: [".XXXXX.", "XXXXXXX", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."]
     property var wall: [".CCCCC.", ".Cc.Cc.", ".CcOCc.", ".Cc.Cc.", ".cC.cC.", ".Cc.Cc.", ".Cc.Cc."]
     property var grenade: ["..FFFF.", ".BBBBB.", "BXBXBXB", "BBBBBBB", "BXBXBXB", "BBBBBBB", ".BBBBB."]
     property var cannon: ["..KKK..", ".KKBBK.", ".KWBBBK", ".KWBBBK", ".KBBBBK", ".KBBDBK", ".KBBDBK", ".KBBDBK", "..KKK.."]
     property var snow: ["..X.X..", "X..X..X", ".XXXXX.", "XXXXXXX", ".XXXXX.", "X..X..X", "..X.X.."]
 
-    // 0 SPEED: chunky bolt per reference, black outline, yellow body,
-    // orange shade, white notch.
+    // 0 SPEED: iconic bolt, strong middle arm, black outline, yellow
+    // body, orange shade, white notch.
     Grid {
         visible: root.kind === 0
         anchors.centerIn: parent
-        columns: 11
+        columns: 9
         Repeater {
-            model: 121
+            model: 99
             Rectangle {
-                property int r: Math.floor(index / 11)
-                property int c: index % 11
+                property int r: Math.floor(index / 9)
+                property int c: index % 9
                 property string ch: root.bolt[r][c]
                 width: root.side / 11
                 height: root.side / 11
