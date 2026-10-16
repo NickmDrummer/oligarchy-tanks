@@ -30,27 +30,23 @@ Item {
         "TTTT........TTTT",
     ]
 
-    // Tread base and chevron stay graphite on every tank, like the original.
-    property color treadBase: "#2c2c30"
-    property color treadLight: "#6a6e76"
-
+    // Monochrome like the original: treads and cannon are darker and
+    // lighter shades of the hull color, never graphite black.
     function colorFor(ch, r) {
         if (ch === ".")
             return "transparent"
         if (ch === "B")
             return body
-        if (ch === "H")
+        if (ch === "H" || ch === "c")
             return light
         if (ch === "S" || ch === "G" || ch === "C")
             return dark
-        if (ch === "c")
-            return light
         if (ch === "M")
-            return "#d8d8d8"
+            return light
         if (ch === "T")
-            return treadBase
+            return Qt.darker(dark, 1.3)
         if (ch === "t")
-            return ((r + frame) % 2 === 0) ? treadLight : treadBase
+            return ((r + frame) % 2 === 0) ? body : Qt.darker(dark, 1.3)
         return "transparent"
     }
 

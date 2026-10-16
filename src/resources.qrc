@@ -7,5 +7,6 @@
         <file alias="sounds/eshoot.wav">sounds/eshoot.wav</file>
         <file alias="sounds/hit.wav">sounds/hit.wav</file>
         <file alias="sounds/explode.wav">sounds/explode.wav</file>
+        <file alias="sounds/power.wav">sounds/power.wav</file>
     </qresource>
 </RCC>

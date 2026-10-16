@@ -1,13 +1,15 @@
 #include "backend.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 constexpr double TANK_SIZE = 0.8;
-constexpr double PLAYER_SPEED = 4.2;
-constexpr double ENEMY_SPEED = 2.4;
-constexpr double BULLET_SPEED = 8.0;
+constexpr double PLAYER_SPEED = 5.25;
+constexpr double ENEMY_SPEED = 3.0;
+constexpr double BULLET_SPEED = 10.0;
 constexpr double FIRE_GAP = 0.35;
+constexpr double RAPID_GAP = 0.15;
 }
 
 Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) {
@@ -29,6 +31,7 @@ QString Backend::board() const {
         case Steel: s += 'S'; break;
         case Base: s += 'X'; break;
         case BaseDead: s += 'x'; break;
+        case Forest: s += 'F'; break;
         default: s += '.'; break;
         }
     }
@@ -42,6 +45,7 @@ QVariantList Backend::players() const {
         out.append(QVariantMap{
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
+            {"rapid", m_time < t.rapidUntil}, {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil},
         });
     }
     return out;
@@ -60,6 +64,20 @@ QVariantList Backend::bullets() const {
     for (const auto &b : m_bullets)
         if (b.active)
             out.append(QVariantMap{{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}});
+    return out;
+}
+
+QVariantList Backend::floaters() const {
+    QVariantList out;
+    for (const auto &f : m_floaters)
+        out.append(QVariantMap{{"x", f.x}, {"y", f.y}, {"text", QString("+%1").arg(f.score)}, {"age", f.age}});
+    return out;
+}
+
+QVariantList Backend::pickups() const {
+    QVariantList out;
+    if (m_pickup.active)
+        out.append(QVariantMap{{"x", m_pickup.x}, {"y", m_pickup.y}, {"kind", m_pickup.kind}, {"age", m_pickup.age}});
     return out;
 }
 
@@ -92,14 +110,14 @@ void Backend::setP2Move(int dx, int dy, bool pressed) {
 void Backend::fireP1() {
     if (m_state != "playing" || !m_p[0].alive || m_p[0].cooldown > 0)
         return;
-    m_p[0].cooldown = FIRE_GAP;
+    m_p[0].cooldown = (m_time < m_p[0].rapidUntil) ? RAPID_GAP : FIRE_GAP;
     fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0);
 }
 
 void Backend::fireP2() {
     if (m_state != "playing" || !m_p[1].alive || m_p[1].cooldown > 0)
         return;
-    m_p[1].cooldown = FIRE_GAP;
+    m_p[1].cooldown = (m_time < m_p[1].rapidUntil) ? RAPID_GAP : FIRE_GAP;
     fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1);
 }
 
@@ -107,6 +125,12 @@ void Backend::startGame() {
     generateMap();
     resetTanks();
     m_bullets.clear();
+    m_floaters.clear();
+    m_pickup = Pickup{};
+    m_fortified.clear();
+    m_fortifyUntil = -1;
+    m_time = 0;
+    m_nextBonus = 500;
     for (auto &e : m_foes)
         e.alive = false;
     m_spawned = 0;
@@ -155,6 +179,20 @@ void Backend::generateMap() {
                 m_grid[idx(x, y)] = Steel;
         }
     }
+    // Forest blobs: cover that hides tanks, never solid.
+    std::uniform_int_distribution<int> cell(0, COLS - 1);
+    std::uniform_int_distribution<int> row(0, ROWS - 1);
+    for (int blob = 0; blob < 7; ++blob) {
+        const int fx = cell(m_rng), fy = row(m_rng);
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) {
+                const int x = fx + dx, y = fy + dy;
+                if (x < 0 || y < 0 || x >= COLS || y >= ROWS)
+                    continue;
+                if (roll(m_rng) < 0.65)
+                    m_grid[idx(x, y)] = Forest;
+            }
+    }
     // Base with brick guard, players beside it.
     const int bx = COLS / 2, by = ROWS - 1;
     m_grid[idx(bx, by)] = Base;
@@ -192,13 +230,19 @@ void Backend::tick() {
     if (m_state != "playing")
         return;
     constexpr double dt = 0.016;
+    m_time += dt;
 
     for (auto &t : m_p)
         if (t.cooldown > 0)
             t.cooldown -= dt;
 
-    updateTank(m_p[0], m_p1Up, m_p1Down, m_p1Left, m_p1Right, dt, PLAYER_SPEED);
-    updateTank(m_p[1], m_p2Up, m_p2Down, m_p2Left, m_p2Right, dt, PLAYER_SPEED);
+    for (int i = 0; i < 2; ++i) {
+        const double boost = (m_time < m_p[i].speedUntil) ? 1.35 : 1.0;
+        if (i == 0)
+            updateTank(m_p[0], m_p1Up, m_p1Down, m_p1Left, m_p1Right, dt, PLAYER_SPEED * boost);
+        else
+            updateTank(m_p[1], m_p2Up, m_p2Down, m_p2Left, m_p2Right, dt, PLAYER_SPEED * boost);
+    }
 
     // Respawn dead players that still have lives.
     for (int i = 0; i < 2; ++i) {
@@ -216,6 +260,16 @@ void Backend::tick() {
 
     updateEnemies(dt);
     updateBullets(dt);
+    updatePickups(dt);
+    updateFloaters(dt);
+    // Fortified base guard crumbles back to brick when the timer runs out.
+    if (m_fortifyUntil > 0 && m_time > m_fortifyUntil) {
+        for (int i : m_fortified)
+            if (m_grid[i] == Steel)
+                m_grid[i] = Brick;
+        m_fortified.clear();
+        m_fortifyUntil = -1;
+    }
     checkEnd();
     emit frameChanged();
 }
@@ -348,11 +402,16 @@ void Backend::updateBullets(double dt) {
             b.active = false;
             continue;
         }
-        // Hit players.
+        // Hit players. A shield blocks the shot with no damage.
         bool consumed = false;
         for (int i = 0; i < 2; ++i) {
             if (m_p[i].alive && hitsTank(nx, ny, m_p[i].x, m_p[i].y)) {
                 if (b.owner == 2) {
+                    if (m_time < m_p[i].shieldUntil) {
+                        b.active = false;
+                        consumed = true;
+                        break;
+                    }
                     killPlayer(i);
                     consumed = true;
                     break;
@@ -370,7 +429,9 @@ void Backend::updateBullets(double dt) {
                     e.hp -= 1;
                     if (e.hp <= 0) {
                         e.alive = false;
-                        m_p[b.owner].score += (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
+                        const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
+                        m_p[b.owner].score += pts;
+                        m_floaters.push_back(Floater{e.x, e.y, pts, 0});
                         if (m_soundEnabled)
                             emit playSound("explode");
                     } else if (m_soundEnabled) {
@@ -554,4 +615,81 @@ int Backend::aliveEnemies() const {
         if (e.alive)
             ++n;
     return n;
+}
+
+int Backend::totalScore() const {
+    return m_p[0].score + m_p[1].score;
+}
+
+std::vector<int> Backend::baseGuard() const {
+    const int bx = COLS / 2, by = ROWS - 1;
+    return {by * COLS + bx - 1, by * COLS + bx + 1, (by - 1) * COLS + bx - 1,
+            (by - 1) * COLS + bx, (by - 1) * COLS + bx + 1};
+}
+
+void Backend::spawnPickup() {
+    std::uniform_int_distribution<int> cell(0, COLS - 1);
+    std::uniform_int_distribution<int> row(0, ROWS - 1);
+    std::uniform_int_distribution<int> kind(0, 4);
+    for (int attempt = 0; attempt < 40; ++attempt) {
+        const int x = cell(m_rng), y = row(m_rng);
+        const int tile = m_grid[y * COLS + x];
+        if (tile != Empty && tile != Forest)
+            continue;
+        m_pickup = Pickup{double(x) + 0.5, double(y) + 0.5, kind(m_rng), 0, true};
+        return;
+    }
+}
+
+void Backend::applyPickup(int player) {
+    Tank &t = m_p[player];
+    switch (m_pickup.kind) {
+    case Rapid: t.rapidUntil = m_time + 20; break;
+    case Shield: t.shieldUntil = m_time + 10; break;
+    case Speed: t.speedUntil = m_time + 20; break;
+    case Fortify:
+        m_fortified.clear();
+        for (int i : baseGuard())
+            if (m_grid[i] == Brick) {
+                m_grid[i] = Steel;
+                m_fortified.push_back(i);
+            }
+        m_fortifyUntil = m_time + 25;
+        break;
+    case Life: t.lives = std::min(t.lives + 1, 5); break;
+    }
+    if (m_soundEnabled)
+        emit playSound("power");
+}
+
+void Backend::updatePickups(double dt) {
+    // One bonus on the field at a time, every 500 combined points.
+    if (!m_pickup.active && totalScore() >= m_nextBonus) {
+        spawnPickup();
+        m_nextBonus += 500;
+    }
+    if (!m_pickup.active)
+        return;
+    m_pickup.age += dt;
+    if (m_pickup.age > 15) {
+        m_pickup.active = false;
+        return;
+    }
+    for (int i = 0; i < 2; ++i) {
+        if (!m_p[i].alive)
+            continue;
+        if (std::abs(m_p[i].x - m_pickup.x) < 0.7 && std::abs(m_p[i].y - m_pickup.y) < 0.7) {
+            applyPickup(i);
+            m_pickup.active = false;
+            return;
+        }
+    }
+}
+
+void Backend::updateFloaters(double dt) {
+    for (auto &f : m_floaters)
+        f.age += dt;
+    m_floaters.erase(std::remove_if(m_floaters.begin(), m_floaters.end(),
+                                    [](const Floater &f) { return f.age > 1.2; }),
+                     m_floaters.end());
 }

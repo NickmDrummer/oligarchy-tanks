@@ -20,6 +20,9 @@ class Backend : public QObject {
     Q_PROPERTY(QVariantList enemies READ enemies NOTIFY frameChanged)
     Q_PROPERTY(QVariantList bullets READ bullets NOTIFY frameChanged)
     Q_PROPERTY(int enemiesLeft READ enemiesLeft NOTIFY frameChanged)
+    Q_PROPERTY(QVariantList floaters READ floaters NOTIFY frameChanged)
+    Q_PROPERTY(QVariantList pickups READ pickups NOTIFY frameChanged)
+    Q_PROPERTY(int nextBonus READ nextBonus NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
 
 public:
@@ -37,7 +40,10 @@ public:
     QVariantList players() const;
     QVariantList enemies() const;
     QVariantList bullets() const;
+    QVariantList floaters() const;
+    QVariantList pickups() const;
     int enemiesLeft() const;
+    int nextBonus() const { return m_nextBonus; }
     bool soundEnabled() const { return m_soundEnabled; }
     void setSoundEnabled(bool v);
 
@@ -65,6 +71,9 @@ private:
         int score = 0;
         double cooldown = 0;
         double respawn = 0;
+        double rapidUntil = -1;
+        double shieldUntil = -1;
+        double speedUntil = -1;
     };
     struct Enemy {
         double x = 0, y = 0;
@@ -76,6 +85,17 @@ private:
         int kind = 0; // 0 gray basic, 1 green fast, 2 steel armored
         int hp = 1;
     };
+    struct Pickup {
+        double x = 0, y = 0;
+        int kind = 0;
+        double age = 0;
+        bool active = false;
+    };
+    struct Floater {
+        double x = 0, y = 0;
+        int score = 0;
+        double age = 0;
+    };
     struct Bullet {
         double x = 0, y = 0;
         int dir = 0;
@@ -83,7 +103,8 @@ private:
         bool active = false;
     };
 
-    enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4 };
+    enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
+    enum PickupKind { Rapid = 0, Shield = 1, Speed = 2, Fortify = 3, Life = 4 };
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
@@ -102,6 +123,12 @@ private:
     void killPlayer(int idx);
     void checkEnd();
     int aliveEnemies() const;
+    int totalScore() const;
+    std::vector<int> baseGuard() const;
+    void spawnPickup();
+    void applyPickup(int player);
+    void updatePickups(double dt);
+    void updateFloaters(double dt);
 
     QString m_state = "menu";
     QString m_message;
@@ -109,6 +136,12 @@ private:
     Tank m_p[2];
     std::vector<Enemy> m_foes;
     std::vector<Bullet> m_bullets;
+    Pickup m_pickup;
+    std::vector<Floater> m_floaters;
+    std::vector<int> m_fortified;
+    double m_fortifyUntil = -1;
+    double m_time = 0;
+    int m_nextBonus = 500;
     bool m_p1Up = false, m_p1Down = false, m_p1Left = false, m_p1Right = false;
     bool m_p2Up = false, m_p2Down = false, m_p2Left = false, m_p2Right = false;
     int m_spawned = 0;

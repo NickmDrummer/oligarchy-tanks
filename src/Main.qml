@@ -34,6 +34,7 @@ ApplicationWindow {
     SoundEffect { id: sndEShoot; source: "qrc:/sounds/eshoot.wav"; volume: 0.4 }
     SoundEffect { id: sndHit; source: "qrc:/sounds/hit.wav"; volume: 0.5 }
     SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 0.7 }
+    SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
 
     Connections {
         target: backend
@@ -48,6 +49,8 @@ ApplicationWindow {
                 sndHit.play()
             else if (name === "explode")
                 sndBoom.play()
+            else if (name === "power")
+                sndPower.play()
         }
         function onStateChanged() { keys.forceActiveFocus() }
     }
@@ -91,14 +94,6 @@ ApplicationWindow {
         }
     }
 
-    Timer {
-        id: blink
-        interval: 530
-        running: true
-        repeat: true
-        onTriggered: blinkDot.visible = !blinkDot.visible
-    }
-
     // Tread animation clock. Sprites advance a chevron only while moving.
     Timer {
         interval: 140
@@ -132,7 +127,7 @@ ApplicationWindow {
             }
             // P1 panel.
             Rectangle {
-                width: 220; height: 56
+                width: 220; height: 70
                 color: "#101014"; border.color: win.p1body; border.width: 2
                 Column {
                     anchors.centerIn: parent
@@ -148,11 +143,17 @@ ApplicationWindow {
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 15; font.letterSpacing: 1
                         color: "#f2f4f8"
                     }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: backend.players.length > 0 ? ((backend.players[0].rapid ? "RAPID " : "") + (backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED" : "")) : ""
+                        font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
+                        color: "#ffd60a"
+                    }
                 }
             }
             // P2 panel.
             Rectangle {
-                width: 220; height: 56
+                width: 220; height: 70
                 color: "#101014"; border.color: win.p2body; border.width: 2
                 Column {
                     anchors.centerIn: parent
@@ -168,17 +169,17 @@ ApplicationWindow {
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 15; font.letterSpacing: 1
                         color: "#f2f4f8"
                     }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: backend.players.length > 1 ? ((backend.players[1].rapid ? "RAPID " : "") + (backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED" : "")) : ""
+                        font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
+                        color: "#ffd60a"
+                    }
                 }
             }
             Item { Layout.fillWidth: true }
-            Text {
-                id: blinkDot
-                text: "● REC"
-                font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
-                color: "#ff705a"
-            }
             Rectangle {
-                width: 150; height: 56
+                width: 150; height: 70
                 color: "#101014"; border.color: "#edc400"; border.width: 2
                 Column {
                     anchors.centerIn: parent
@@ -393,6 +394,15 @@ ApplicationWindow {
                             dark: index === 0 ? win.p1dark : win.p2dark
                             light: index === 0 ? win.p1light : win.p2light
                         }
+                        // Shield bubble while protected.
+                        Rectangle {
+                            visible: p.shield
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            color: "transparent"
+                            border.color: win.treadFrame === 0 ? "#ffffff" : "#57c8d8"
+                            border.width: 3
+                        }
                     }
                 }
 
@@ -413,6 +423,83 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             width: parent.width / 2; height: parent.height / 2
                             color: "#ffffff"
+                        }
+                    }
+                }
+
+                // Bonus pickups: one at a time, drive over to collect.
+                Repeater {
+                    model: backend.pickups
+                    Item {
+                        property var k: backend.pickups[index]
+                        property real s: win.cell * 0.9
+                        property var glyphs: ["★", "S", "»", "#", "1UP"]
+                        property var cols: ["#edc400", "#57c8d8", "#5da24a", "#8d8d94", "#b03a2e"]
+                        x: k.x * win.cell - s / 2
+                        y: k.y * win.cell - s / 2
+                        width: s; height: s
+                        opacity: (k.age > 12 && win.treadFrame === 0) ? 0.35 : 1
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#0d0d12"
+                            border.color: cols[k.kind]
+                            border.width: 3
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text: glyphs[k.kind]
+                            font.family: "Monospace"; font.bold: true
+                            font.pixelSize: k.kind === 4 ? Math.max(11, win.cell * 0.3) : Math.max(16, win.cell * 0.5)
+                            color: cols[k.kind]
+                        }
+                    }
+                }
+
+                // Floating kill scores in pixel type.
+                Repeater {
+                    model: backend.floaters
+                    Text {
+                        property var f: backend.floaters[index]
+                        x: f.x * win.cell - 24
+                        y: f.y * win.cell - 12 - f.age * 34
+                        width: 72
+                        horizontalAlignment: Text.AlignHCenter
+                        text: f.text
+                        font.family: "Monospace"; font.bold: true
+                        font.pixelSize: 19
+                        color: "#ffd60a"
+                        style: Text.Outline
+                        styleColor: "black"
+                        opacity: Math.max(0, 1 - f.age / 1.2)
+                        z: 9
+                    }
+                }
+
+                // Forest canopy above everything: hides tanks like the original.
+                Repeater {
+                    model: backend.cols * backend.rows
+                    Item {
+                        property int cx: index % backend.cols
+                        property int cy: Math.floor(index / backend.cols)
+                        property string t: backend.board.length > index ? backend.board[index] : "."
+                        visible: t === "F"
+                        x: cx * win.cell
+                        y: cy * win.cell
+                        width: win.cell
+                        height: win.cell
+                        z: 8
+                        Grid {
+                            anchors.fill: parent
+                            columns: 4
+                            rows: 4
+                            Repeater {
+                                model: 16
+                                Rectangle {
+                                    property int seed: (index * 31 + Math.floor(index / 4) * 17 + (index % 4) * 7) % 10
+                                    width: win.cell / 4; height: win.cell / 4
+                                    color: seed < 4 ? "#356b2f" : seed < 7 ? "#4e8a42" : "#00000000"
+                                }
+                            }
                         }
                     }
                 }
@@ -507,6 +594,13 @@ ApplicationWindow {
                                 font.pixelSize: 12; font.letterSpacing: 1
                                 color: "#8d8d94"
                             }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: "BONUS EVERY 500 PTS - FOREST HIDES TANKS"
+                                font.family: "Monospace"; font.bold: true
+                                font.pixelSize: 12; font.letterSpacing: 1
+                                color: "#4e8a42"
+                            }
                         }
                     }
                 }
@@ -516,7 +610,7 @@ ApplicationWindow {
         Text {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: "P PAUSE - R RESTART - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT"
+            text: "P PAUSE - R RESTART - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - BONUS @" + backend.nextBonus
             font.family: "Monospace"; font.bold: true
             font.pixelSize: 12; font.letterSpacing: 1
             color: "#5a5e68"
@@ -543,6 +637,8 @@ ApplicationWindow {
                 Text { text: "P2 MOVE: ARROWS - FIRE: ENTER"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P PAUSE - R RESTART - M SOUND - Q QUIT"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "GRAY BASIC - GREEN FAST - STEEL 2 HITS"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8d8d94" }
+                Text { text: "BONUS: STAR RAPID - S SHIELD - » SPEED"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
+                Text { text: "# FORTIFY BASE - 1UP EXTRA LIFE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
                 Text { text: "DEFEND THE STAR. 8 ENEMIES PER SECTOR."; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
             }
