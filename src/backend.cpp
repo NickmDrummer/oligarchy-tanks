@@ -46,7 +46,7 @@ QVariantList Backend::players() const {
         out.append(QVariantMap{
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}, {"pick", m_time < t.pickUntil},
         });
     }
     return out;
@@ -75,7 +75,7 @@ QVariantMap Backend::playerAt(int i, int tick) const {
     const Tank &t = m_p[i];
     return {{"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}};
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}, {"pick", m_time < t.pickUntil}};
 }
 
 QVariantMap Backend::enemyAt(int i, int tick) const {
@@ -92,7 +92,7 @@ QVariantMap Backend::bulletAt(int i, int tick) const {
     if (i < 0 || i >= int(m_bullets.size()))
         return {{"x", 0.0}, {"y", 0.0}, {"dir", 0}, {"owner", 2}, {"active", false}, {"big", false}};
     const Bullet &b = m_bullets[i];
-    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}};
+    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}, {"pick", b.pick}};
 }
 
 QVariantMap Backend::floaterAt(int i, int tick) const {
@@ -172,8 +172,6 @@ void Backend::startGame() {
     m_bullets.clear();
     m_floaters.clear();
     m_pickup = Pickup{};
-    m_fortified.clear();
-    m_fortifyUntil = -1;
     m_freezeUntil = -1;
     m_time = 0;
     for (auto &e : m_foes)
@@ -194,8 +192,6 @@ void Backend::nextLevel() {
     m_bullets.clear();
     m_floaters.clear();
     m_pickup = Pickup{};
-    m_fortified.clear();
-    m_fortifyUntil = -1;
     m_spawned = 0;
     m_spawnTimer = 1.0;
     m_p1Up = m_p1Down = m_p1Left = m_p1Right = false;
@@ -339,14 +335,6 @@ void Backend::tick() {
     updateBullets(dt);
     updatePickups(dt);
     updateFloaters(dt);
-    // Fortified base guard crumbles back to brick when the timer runs out.
-    if (m_fortifyUntil > 0 && m_time > m_fortifyUntil) {
-        for (int i : m_fortified)
-            if (m_grid[i] == Steel)
-                m_grid[i] = Brick;
-        m_fortified.clear();
-        m_fortifyUntil = -1;
-    }
     checkEnd();
     emit frameChanged();
 }
@@ -478,11 +466,13 @@ void Backend::updateBullets(double dt) {
         if (tile == Brick || tile == Steel || tile == Base || tile == BaseDead) {
             if (tile == Brick)
                 damageTile(cx, cy);
+            else if (tile == Steel && b.pick)
+                damageTile(cx, cy);
             if (tile == Base) {
                 m_grid[cy * COLS + cx] = BaseDead;
                 if (m_soundEnabled)
                     emit playSound("explode");
-            } else if (m_soundEnabled && tile == Brick) {
+            } else if (m_soundEnabled && (tile == Brick || (tile == Steel && b.pick))) {
                 emit playSound("hit");
             }
             b.active = false;
@@ -607,6 +597,7 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     b.active = true;
     b.speed = speed;
     b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
+    b.pick = (owner < 2 && m_time < m_p[owner].pickUntil);
     m_bullets.push_back(b);
     if (m_soundEnabled)
         emit playSound(owner == 2 ? "eshoot" : "shoot");
@@ -710,12 +701,6 @@ int Backend::aliveEnemies() const {
     return n;
 }
 
-std::vector<int> Backend::baseGuard() const {
-    const int bx = COLS / 2, by = ROWS - 1;
-    return {by * COLS + bx - 1, by * COLS + bx + 1, (by - 1) * COLS + bx - 1,
-            (by - 1) * COLS + bx, (by - 1) * COLS + bx + 1};
-}
-
 // Bonuses only drop from green runners, at the spot where they die.
 void Backend::spawnPickupAt(double x, double y) {
     std::uniform_int_distribution<int> kind(0, 6);
@@ -738,15 +723,7 @@ void Backend::applyPickup(int player) {
     switch (m_pickup.kind) {
     case Speed: t.speedUntil = m_time + 20; break;
     case Shield: t.shieldUntil = m_time + 10; break;
-    case Fortify:
-        m_fortified.clear();
-        for (int i : baseGuard())
-            if (m_grid[i] == Brick) {
-                m_grid[i] = Steel;
-                m_fortified.push_back(i);
-            }
-        m_fortifyUntil = m_time + 25;
-        break;
+    case Pick: t.pickUntil = m_time + 20; break;
     case Life: t.lives = std::min(t.lives + 1, 5); break;
     case Grenade: {
         for (auto &e : m_foes) {

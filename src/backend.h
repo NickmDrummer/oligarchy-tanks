@@ -90,6 +90,7 @@ private:
         double shieldUntil = -1;
         double speedUntil = -1;
         double cannonUntil = -1;
+        double pickUntil = -1;
     };
     struct Enemy {
         double x = 0, y = 0;
@@ -119,10 +120,11 @@ private:
         bool active = false;
         double speed = 0;
         bool big = false;
+        bool pick = false;
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
-    enum PickupKind { Speed = 0, Shield = 1, Fortify = 2, Life = 3, Grenade = 4, Cannon = 5, Freeze = 6 };
+    enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Grenade = 4, Cannon = 5, Freeze = 6 };
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
@@ -142,7 +144,6 @@ private:
     void killPlayer(int idx);
     void checkEnd();
     int aliveEnemies() const;
-    std::vector<int> baseGuard() const;
     void spawnPickupAt(double x, double y);
     void applyPickup(int player);
     void updatePickups(double dt);
@@ -156,8 +157,6 @@ private:
     std::vector<Bullet> m_bullets;
     Pickup m_pickup;
     std::vector<Floater> m_floaters;
-    std::vector<int> m_fortified;
-    double m_fortifyUntil = -1;
     double m_freezeUntil = -1;
     double m_time = 0;
     int m_frameTick = 0;

@@ -182,7 +182,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED " : "") + (backend.players[0].cannon ? "CANNON" : "")) : ""
+                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED " : "") + (backend.players[0].cannon ? "CANNON " : "") + (backend.players[0].pick ? "PICK" : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -208,7 +208,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED " : "") + (backend.players[1].cannon ? "CANNON" : "")) : ""
+                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED " : "") + (backend.players[1].cannon ? "CANNON " : "") + (backend.players[1].pick ? "PICK" : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -503,8 +503,8 @@ ApplicationWindow {
                     property var k: backend.pickupAt(backend.frameTick)
                     visible: k.active
                     property real s: win.cell * 1.1
-                    property var cols: ["#edc400", "#c9ced6", "#8d8d94", "#e8e8e8", "#4e8a42", "#c8963c", "#9fd8ff"]
-                    property var labels: ["SPEED", "SHIELD", "WALL", "1UP", "GRENADE", "CANNON", "FREEZE"]
+                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#4e8a42", "#c8963c", "#9fd8ff"]
+                    property var labels: ["SPEED", "SHIELD", "PICK", "1UP", "GRENADE", "CANNON", "FREEZE"]
                     x: k.x * win.cell - s / 2
                     y: k.y * win.cell - (s + 18) / 2
                     width: s; height: s + 18
@@ -772,7 +772,7 @@ ApplicationWindow {
                     columnSpacing: 16
                     rowSpacing: 8
                     Repeater {
-                        model: [["SPEED", "#edc400"], ["SHIELD", "#c9ced6"], ["WALL", "#8d8d94"], ["1UP", "#e8e8e8"], ["GRENADE", "#4e8a42"], ["CANNON", "#c8963c"], ["FREEZE", "#9fd8ff"]]
+                        model: [["SPEED", "#edc400"], ["SHIELD", "#c9ced6"], ["PICK", "#b9c0c9"], ["1UP", "#e8e8e8"], ["GRENADE", "#4e8a42"], ["CANNON", "#c8963c"], ["FREEZE", "#9fd8ff"]]
                         Column {
                             spacing: 2
                             PickupIcon {
