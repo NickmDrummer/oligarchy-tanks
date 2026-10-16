@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="Main.qml">Main.qml</file>
+        <file alias="sounds/shoot.wav">sounds/shoot.wav</file>
+        <file alias="sounds/eshoot.wav">sounds/eshoot.wav</file>
+        <file alias="sounds/hit.wav">sounds/hit.wav</file>
+        <file alias="sounds/explode.wav">sounds/explode.wav</file>
+    </qresource>
+</RCC>

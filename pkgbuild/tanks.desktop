@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tanks
+Comment=Retro 2-player local tank battle vs AI
+Exec=tanks %f
+Icon=tanks
+Terminal=false
+Categories=Game;ArcadeGame;
+StartupWMClass=tanks
