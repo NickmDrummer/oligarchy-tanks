@@ -27,7 +27,7 @@ ApplicationWindow {
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
     Shortcut { sequence: "P"; context: Qt.ApplicationShortcut; onActivated: backend.togglePause() }
-    Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { backend.startGame(); keys.forceActiveFocus() } }
+    Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { if (backend.state === "victory") backend.nextLevel(); else backend.startGame(); keys.forceActiveFocus() } }
     Shortcut { sequence: "M"; context: Qt.ApplicationShortcut; onActivated: backend.soundEnabled = !backend.soundEnabled }
 
     SoundEffect { id: sndShoot; source: "qrc:/sounds/shoot.wav"; volume: 0.5 }
@@ -195,6 +195,12 @@ ApplicationWindow {
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 15
                         color: "#f2f4f8"
                     }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "SEC " + backend.level
+                        font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
+                        color: "#edc400"
+                    }
                 }
             }
         }
@@ -326,38 +332,21 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        // Base: pixel Omarchy "O" from the wordmark, on a dark plate.
-                        // Defend it. A cracked rubble O marks a destroyed base.
+                        // Base: the official Omarchy wordmark in pixels. Defend it.
                         Item {
                             id: baseTile
                             visible: t === "X" || t === "x"
                             anchors.fill: parent
                             property bool dead: t === "x"
-                            property var oRows: dead ? [
-                                "XXXXXXXXX",
-                                "XXXXXXXXX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XXX...XXX",
-                                "X.......X",
-                                "X..X..X..",
-                                "..X...X..",
-                                "...X.X...",
-                                "....X....",
-                            ] : [
-                                "XXXXXXXXX",
-                                "XXXXXXXXX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XX.....XX",
-                                "XXXXXXXXX",
-                                "XXXXXXXXX",
+                            // 3x5 micro font spelling "omarchy", 27x5 blocks.
+                            property var word: [
+                                "XXX X.X .X. XX. .XX X.. X.X",
+                                "X.X XXX X.X X.X X.. X.. X.X",
+                                "X.X X.X XXX X.. X.. XXX XXX",
+                                "X.X X.X X.X X.. X.. X.X .X.",
+                                "XXX X.X X.X X.. .XX X.X .X.",
                             ]
+                            property real px: Math.max(1.5, win.cell / 30)
                             Rectangle {
                                 anchors.fill: parent
                                 anchors.margins: 1
@@ -367,16 +356,16 @@ ApplicationWindow {
                             }
                             Grid {
                                 anchors.centerIn: parent
-                                columns: 9
-                                rows: 11
+                                columns: 27
+                                rows: 5
                                 Repeater {
-                                    model: 99
+                                    model: 135
                                     Rectangle {
-                                        property int r: Math.floor(index / 9)
-                                        property int c: index % 9
-                                        property string ch: baseTile.oRows[r][c]
-                                        width: (win.cell - 8) / 9
-                                        height: (win.cell - 8) / 11
+                                        property int r: Math.floor(index / 27)
+                                        property int c: index % 27
+                                        property string ch: baseTile.word[r][c]
+                                        width: baseTile.px
+                                        height: baseTile.px
                                         color: ch === "X" ? (baseTile.dead ? "#7a3535" : theme.accent) : "transparent"
                                     }
                                 }
@@ -388,7 +377,7 @@ ApplicationWindow {
                 // Enemies: 0 gray basic, 1 green fast, 2 steel armored.
                 // Fixed model: delegates persist, only properties update.
                 Repeater {
-                    model: 4
+                    model: 6
                     Item {
                         property var e: backend.enemyAt(index, backend.frameTick)
                         visible: e.alive
@@ -632,8 +621,8 @@ ApplicationWindow {
                             PixelButton {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 accent: theme.accent
-                                text: backend.state === "menu" ? ">> START <<" : ">> RETRY (R) <<"
-                                onClicked: { backend.startGame(); keys.forceActiveFocus() }
+                                text: backend.state === "menu" ? ">> START <<" : backend.state === "victory" ? ">> NEXT SECTOR (R) <<" : ">> RETRY (R) <<"
+                                onClicked: { if (backend.state === "victory") backend.nextLevel(); else backend.startGame(); keys.forceActiveFocus() }
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -715,7 +704,8 @@ ApplicationWindow {
                         }
                     }
                 }
-                Text { text: "DEFEND THE BASE. 8 ENEMIES PER SECTOR."; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
+                Text { text: "DEFEND THE BASE. LATER SECTORS: MORE TANKS,"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
+                Text { text: "FASTER SPECIALS, TOUGHER ARMOR."; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
             }
         }

@@ -25,6 +25,7 @@ class Backend : public QObject {
     Q_PROPERTY(QVariantList pickups READ pickups NOTIFY frameChanged)
     Q_PROPERTY(int nextBonus READ nextBonus NOTIFY frameChanged)
     Q_PROPERTY(int frameTick READ frameTick NOTIFY frameChanged)
+    Q_PROPERTY(int level READ level NOTIFY stateChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
 
 public:
@@ -47,6 +48,8 @@ public:
     int enemiesLeft() const;
     int nextBonus() const { return m_nextBonus; }
     int frameTick() const { return m_frameTick; }
+    int level() const { return m_level; }
+    int totalForLevel() const { return TOTAL_ENEMIES + 2 * (m_level - 1); }
 
     // Stable per-slot getters for QML. Delegates are created once with a
     // fixed count and only update properties, so the scene graph is never
@@ -65,6 +68,7 @@ public:
     Q_INVOKABLE void fireP1();
     Q_INVOKABLE void fireP2();
     Q_INVOKABLE void startGame();
+    Q_INVOKABLE void nextLevel();
     Q_INVOKABLE void togglePause();
 
 signals:
@@ -113,6 +117,7 @@ private:
         int dir = 0;
         int owner = 2; // 0 p1, 1 p2, 2 enemy
         bool active = false;
+        double speed = 0;
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
@@ -120,13 +125,14 @@ private:
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
-    void resetTanks();
+    void resetTanks(bool fullStats);
     void tick();
     void updateTank(Tank &t, bool up, bool down, bool left, bool right, double dt, double speed);
     void updateEnemies(double dt);
     void updateBullets(double dt);
     void spawnEnemy();
-    void fireBullet(double x, double y, int dir, int owner);
+    void fireBullet(double x, double y, int dir, int owner, double speed);
+    double enemySpeedMult() const { return 1.0 + 0.1 * (m_level - 1); }
     bool solidAt(double x, double y, double size) const;
     bool hitsTank(double bx, double by, double tx, double ty) const;
     bool blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const;
@@ -155,6 +161,7 @@ private:
     double m_time = 0;
     int m_nextBonus = 500;
     int m_frameTick = 0;
+    int m_level = 1;
     QElapsedTimer m_clock;
     bool m_p1Up = false, m_p1Down = false, m_p1Left = false, m_p1Right = false;
     bool m_p2Up = false, m_p2Down = false, m_p2Left = false, m_p2Right = false;

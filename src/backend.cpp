@@ -5,18 +5,18 @@
 
 namespace {
 constexpr double TANK_SIZE = 0.8;
-constexpr double PLAYER_SPEED = 4.2;
-constexpr double ENEMY_SPEED = 2.4;
+constexpr double PLAYER_SPEED = 3.15;
+constexpr double ENEMY_SPEED = 1.8;
 constexpr double BULLET_SPEED = 8.0;
 constexpr double FIRE_GAP = 0.35;
 constexpr double RAPID_GAP = 0.15;
 }
 
 Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) {
-    m_foes.resize(4);
+    m_foes.resize(6);
     m_bullets.reserve(16);
     generateMap();
-    resetTanks();
+    resetTanks(true);
     connect(&m_timer, &QTimer::timeout, this, &Backend::tick);
     m_timer.setInterval(16);
     m_timer.setTimerType(Qt::PreciseTimer);
@@ -126,7 +126,7 @@ QVariantList Backend::pickups() const {
 }
 
 int Backend::enemiesLeft() const {
-    int dead = TOTAL_ENEMIES - m_spawned;
+    int dead = totalForLevel() - m_spawned;
     return aliveEnemies() + (dead > 0 ? dead : 0);
 }
 
@@ -155,19 +155,20 @@ void Backend::fireP1() {
     if (m_state != "playing" || !m_p[0].alive || m_p[0].cooldown > 0)
         return;
     m_p[0].cooldown = (m_time < m_p[0].rapidUntil) ? RAPID_GAP : FIRE_GAP;
-    fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0);
+    fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
 }
 
 void Backend::fireP2() {
     if (m_state != "playing" || !m_p[1].alive || m_p[1].cooldown > 0)
         return;
     m_p[1].cooldown = (m_time < m_p[1].rapidUntil) ? RAPID_GAP : FIRE_GAP;
-    fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1);
+    fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1, BULLET_SPEED);
 }
 
 void Backend::startGame() {
+    m_level = 1;
     generateMap();
-    resetTanks();
+    resetTanks(true);
     m_bullets.clear();
     m_floaters.clear();
     m_pickup = Pickup{};
@@ -183,6 +184,22 @@ void Backend::startGame() {
     m_p2Up = m_p2Down = m_p2Left = m_p2Right = false;
     setState("playing");
     emit frameChanged();
+}
+
+void Backend::nextLevel() {
+    ++m_level;
+    generateMap();
+    resetTanks(false);
+    m_bullets.clear();
+    m_floaters.clear();
+    m_pickup = Pickup{};
+    m_fortified.clear();
+    m_fortifyUntil = -1;
+    m_spawned = 0;
+    m_spawnTimer = 1.0;
+    m_p1Up = m_p1Down = m_p1Left = m_p1Right = false;
+    m_p2Up = m_p2Down = m_p2Left = m_p2Right = false;
+    setState("playing", QString("Sector %1 — specials are faster and tougher").arg(m_level));
 }
 
 void Backend::togglePause() {
@@ -258,9 +275,17 @@ void Backend::generateMap() {
                 clear(sx + dx, dy);
 }
 
-void Backend::resetTanks() {
+void Backend::resetTanks(bool fullStats) {
+    const int lives0 = fullStats ? 3 : m_p[0].lives;
+    const int lives1 = fullStats ? 3 : m_p[1].lives;
+    const int score0 = fullStats ? 0 : m_p[0].score;
+    const int score1 = fullStats ? 0 : m_p[1].score;
     m_p[0] = Tank{};
     m_p[1] = Tank{};
+    m_p[0].lives = lives0;
+    m_p[1].lives = lives1;
+    m_p[0].score = score0;
+    m_p[1].score = score1;
     // Cell centers, so tanks never start straddling two tiles.
     m_p[0].x = 3.5;
     m_p[0].y = ROWS - 1.5;
@@ -378,8 +403,9 @@ void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, dou
 
 void Backend::updateEnemies(double dt) {
     std::uniform_real_distribution<double> roll(0.0, 1.0);
+    const int maxConcurrent = std::min(3 + (m_level - 1), 5);
     m_spawnTimer -= dt;
-    if (m_spawned < TOTAL_ENEMIES && aliveEnemies() < 3 && m_spawnTimer <= 0) {
+    if (m_spawned < totalForLevel() && aliveEnemies() < maxConcurrent && m_spawnTimer <= 0) {
         spawnEnemy();
         m_spawnTimer = 2.0;
     }
@@ -391,7 +417,9 @@ void Backend::updateEnemies(double dt) {
         if (e.cooldown > 0)
             e.cooldown -= dt;
         e.think -= dt;
-        const double speed = (e.kind == 1) ? ENEMY_SPEED * 1.35 : ENEMY_SPEED;
+        // Only specials scale with the sector: basics stay baseline.
+        const double mult = enemySpeedMult();
+        const double speed = (e.kind == 0) ? ENEMY_SPEED : (e.kind == 1) ? ENEMY_SPEED * 1.35 * mult : ENEMY_SPEED * mult;
         double nx = e.x, ny = e.y;
         if (e.dir == 0) ny -= speed * dt;
         if (e.dir == 2) ny += speed * dt;
@@ -418,7 +446,8 @@ void Backend::updateEnemies(double dt) {
         }
         if (e.cooldown <= 0 && roll(m_rng) < 0.02) {
             e.cooldown = (e.kind == 1) ? 0.8 : 1.1;
-            fireBullet(e.x, e.y, e.dir, 2);
+            const double bs = (e.kind == 0) ? BULLET_SPEED : BULLET_SPEED * enemySpeedMult();
+            fireBullet(e.x, e.y, e.dir, 2, bs);
         }
     }
 }
@@ -428,10 +457,10 @@ void Backend::updateBullets(double dt) {
         if (!b.active)
             continue;
         double nx = b.x, ny = b.y;
-        if (b.dir == 0) ny -= BULLET_SPEED * dt;
-        if (b.dir == 2) ny += BULLET_SPEED * dt;
-        if (b.dir == 3) nx -= BULLET_SPEED * dt;
-        if (b.dir == 1) nx += BULLET_SPEED * dt;
+        if (b.dir == 0) ny -= b.speed * dt;
+        if (b.dir == 2) ny += b.speed * dt;
+        if (b.dir == 3) nx -= b.speed * dt;
+        if (b.dir == 1) nx += b.speed * dt;
 
         // Out of bounds.
         if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) {
@@ -520,8 +549,8 @@ void Backend::updateBullets(double dt) {
 }
 
 void Backend::spawnEnemy() {
-    // Sector roster: green weaklings first, yellow runners mid, gray armor last.
-    static constexpr int roster[TOTAL_ENEMIES] = {0, 0, 1, 0, 1, 2, 1, 2};
+    // First wave is always gray basics; specials join from the 5th tank on.
+    // Higher sectors field more total tanks via totalForLevel().
     const int spots[3] = {0, COLS / 2, COLS - 1};
     for (auto &e : m_foes) {
         if (e.alive)
@@ -532,14 +561,14 @@ void Backend::spawnEnemy() {
         e.dir = 2;
         e.cooldown = 1.0;
         e.think = 1.0;
-        e.kind = roster[m_spawned % TOTAL_ENEMIES];
-        e.hp = (e.kind == 2) ? 2 : 1;
+        e.kind = (m_spawned < 4) ? 0 : ((m_spawned % 2 == 0) ? 1 : 2);
+        e.hp = (e.kind == 2) ? 2 + (m_level >= 3 ? 1 : 0) + (m_level >= 5 ? 1 : 0) : 1;
         ++m_spawned;
         return;
     }
 }
 
-void Backend::fireBullet(double x, double y, int dir, int owner) {
+void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     int live = 0;
     for (const auto &b : m_bullets)
         if (b.active && b.owner == owner)
@@ -567,6 +596,7 @@ void Backend::fireBullet(double x, double y, int dir, int owner) {
     b.dir = dir;
     b.owner = owner;
     b.active = true;
+    b.speed = speed;
     m_bullets.push_back(b);
     if (m_soundEnabled)
         emit playSound(owner == 2 ? "eshoot" : "shoot");
@@ -656,9 +686,9 @@ void Backend::checkEnd() {
         setState("gameover", "Both tanks down — press R to retry");
         return;
     }
-    if (m_spawned >= TOTAL_ENEMIES && aliveEnemies() == 0) {
+    if (m_spawned >= totalForLevel() && aliveEnemies() == 0) {
         const int total = m_p[0].score + m_p[1].score;
-        setState("victory", QString("Sector clear! Score %1 — press R for a new map").arg(total));
+        setState("victory", QString("Sector %1 clear! Score %2 — press R for sector %3").arg(m_level).arg(total).arg(m_level + 1));
     }
 }
 

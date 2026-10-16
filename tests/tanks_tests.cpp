@@ -46,6 +46,17 @@ private slots:
         QCOMPARE(b.state(), QString("playing"));
     }
 
+    void nextLevelKeepsScoreAndScales() {
+        Backend b;
+        b.startGame();
+        QCOMPARE(b.level(), 1);
+        QCOMPARE(b.enemiesLeft(), 8);
+        b.nextLevel();
+        QCOMPARE(b.level(), 2);
+        QCOMPARE(b.state(), QString("playing"));
+        QCOMPARE(b.enemiesLeft(), 10);
+    }
+
     void themeFallsBack() {
         QTemporaryDir dir;
         Theme theme(dir.path());
