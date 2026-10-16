@@ -23,9 +23,9 @@ class Backend : public QObject {
     Q_PROPERTY(int enemiesLeft READ enemiesLeft NOTIFY frameChanged)
     Q_PROPERTY(QVariantList floaters READ floaters NOTIFY frameChanged)
     Q_PROPERTY(QVariantList pickups READ pickups NOTIFY frameChanged)
-    Q_PROPERTY(int nextBonus READ nextBonus NOTIFY frameChanged)
     Q_PROPERTY(int frameTick READ frameTick NOTIFY frameChanged)
     Q_PROPERTY(int level READ level NOTIFY stateChanged)
+    Q_PROPERTY(bool frozen READ frozen NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
 
 public:
@@ -46,9 +46,9 @@ public:
     QVariantList floaters() const;
     QVariantList pickups() const;
     int enemiesLeft() const;
-    int nextBonus() const { return m_nextBonus; }
     int frameTick() const { return m_frameTick; }
     int level() const { return m_level; }
+    bool frozen() const { return m_time < m_freezeUntil; }
     int totalForLevel() const { return TOTAL_ENEMIES + 2 * (m_level - 1); }
 
     // Stable per-slot getters for QML. Delegates are created once with a
@@ -89,6 +89,7 @@ private:
         double respawn = 0;
         double shieldUntil = -1;
         double speedUntil = -1;
+        double cannonUntil = -1;
     };
     struct Enemy {
         double x = 0, y = 0;
@@ -117,10 +118,11 @@ private:
         int owner = 2; // 0 p1, 1 p2, 2 enemy
         bool active = false;
         double speed = 0;
+        bool big = false;
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
-    enum PickupKind { Speed = 0, Shield = 1, Fortify = 2, Life = 3 };
+    enum PickupKind { Speed = 0, Shield = 1, Fortify = 2, Life = 3, Grenade = 4, Cannon = 5, Freeze = 6 };
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
@@ -140,9 +142,8 @@ private:
     void killPlayer(int idx);
     void checkEnd();
     int aliveEnemies() const;
-    int totalScore() const;
     std::vector<int> baseGuard() const;
-    void spawnPickup();
+    void spawnPickupAt(double x, double y);
     void applyPickup(int player);
     void updatePickups(double dt);
     void updateFloaters(double dt);
@@ -157,8 +158,8 @@ private:
     std::vector<Floater> m_floaters;
     std::vector<int> m_fortified;
     double m_fortifyUntil = -1;
+    double m_freezeUntil = -1;
     double m_time = 0;
-    int m_nextBonus = 500;
     int m_frameTick = 0;
     int m_level = 1;
     QElapsedTimer m_clock;

@@ -165,7 +165,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED" : "")) : ""
+                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED " : "") + (backend.players[0].cannon ? "CANNON" : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -191,7 +191,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED" : "")) : ""
+                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED " : "") + (backend.players[1].cannon ? "CANNON" : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -217,9 +217,9 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "SEC " + backend.level
+                        text: backend.frozen ? "FROZEN" : "SEC " + backend.level
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
-                        color: "#edc400"
+                        color: backend.frozen ? "#9fd8ff" : "#edc400"
                     }
                 }
             }
@@ -457,19 +457,19 @@ ApplicationWindow {
                     }
                 }
 
-                // Pixel bullets: glow block + white core, no rounded corners.
+                // Pixel bullets, brass cannon shells while powered.
                 Repeater {
                     model: 16
                     Item {
                         property var b: backend.bulletAt(index, backend.frameTick)
                         visible: b.active
-                        property real s: Math.max(8, win.cell * 0.24)
+                        property real s: b.big ? Math.max(12, win.cell * 0.38) : Math.max(8, win.cell * 0.24)
                         x: b.x * win.cell - s / 2
                         y: b.y * win.cell - s / 2
                         width: s; height: s
                         Rectangle {
                             anchors.fill: parent
-                            color: b.owner === 2 ? "#ff705a" : "#ffd60a"
+                            color: b.big ? "#c8963c" : b.owner === 2 ? "#ff705a" : "#ffd60a"
                         }
                         Rectangle {
                             anchors.centerIn: parent
@@ -479,31 +479,36 @@ ApplicationWindow {
                     }
                 }
 
-                // Bonus pickups: one at a time, drive over to collect.
-                // Pixel icon plus a word label, so each bonus reads at a glance.
+                // Bonus pickups in the Battle City frame: white border,
+                // blue hard shadow, dark navy interior, word label below.
                 Item {
                     id: pickupBox
                     property var k: backend.pickupAt(backend.frameTick)
                     visible: k.active
                     property real s: win.cell * 1.1
-                    property var cols: ["#edc400", "#c9ced6", "#8d8d94", "#e8e8e8"]
-                    property var labels: ["SPEED", "SHIELD", "WALL", "1UP"]
+                    property var cols: ["#edc400", "#c9ced6", "#8d8d94", "#e8e8e8", "#4e8a42", "#c8963c", "#9fd8ff"]
+                    property var labels: ["SPEED", "SHIELD", "WALL", "1UP", "GRENADE", "CANNON", "FREEZE"]
                     x: k.x * win.cell - s / 2
                     y: k.y * win.cell - (s + 18) / 2
                     width: s; height: s + 18
                     opacity: (k.age > 12 && win.treadFrame === 0) ? 0.35 : 1
                     Rectangle {
-                        width: parent.width; height: parent.s
-                        color: "#0d0d12"
-                        border.color: parent.cols[parent.k.kind]
-                        border.width: 3
+                        x: 4; y: 4
+                        width: parent.s; height: parent.s
+                        color: "#2a4a8c"
+                    }
+                    Rectangle {
+                        width: parent.s; height: parent.s
+                        color: "#0a1030"
+                        border.color: "white"
+                        border.width: 2
                     }
                     PickupIcon {
                         y: 4
                         width: parent.width
                         height: parent.s - 8
                         kind: parent.k.kind
-                        side: Math.min(parent.width - 10, parent.s - 12)
+                        side: Math.min(parent.width - 14, parent.s - 16)
                     }
                     Text {
                         y: parent.s + 2
@@ -660,7 +665,7 @@ ApplicationWindow {
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: "BONUS EVERY 500 PTS - FOREST HIDES TANKS"
+                                text: "GREEN DROPS BONUS - FOREST HIDES TANKS"
                                 font.family: "Monospace"; font.bold: true
                                 font.pixelSize: 12; font.letterSpacing: 1
                                 color: "#4e8a42"
@@ -674,7 +679,7 @@ ApplicationWindow {
         Text {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: "P PAUSE - R RESTART - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - BONUS @" + backend.nextBonus
+            text: "P PAUSE - R RESTART - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - GREEN DROPS BONUS"
             font.family: "Monospace"; font.bold: true
             font.pixelSize: 12; font.letterSpacing: 1
             color: "#5a5e68"
@@ -701,19 +706,21 @@ ApplicationWindow {
                 Text { text: "P2 MOVE: ARROWS - FIRE: ENTER"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P PAUSE - R RESTART - M SOUND - Q QUIT"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "GRAY BASIC - GREEN FAST - STEEL 2 HITS"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8d8d94" }
-                Text { text: "BONUS EVERY 500 PTS - ONE AT A TIME"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
-                Row {
+                Text { text: "BONUS DROP FROM GREEN TANKS - ONE AT A TIME"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
+                Grid {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 18
+                    columns: 4
+                    columnSpacing: 16
+                    rowSpacing: 8
                     Repeater {
-                        model: [["SPEED", "#edc400"], ["SHIELD", "#c9ced6"], ["WALL", "#8d8d94"], ["1UP", "#e8e8e8"]]
+                        model: [["SPEED", "#edc400"], ["SHIELD", "#c9ced6"], ["WALL", "#8d8d94"], ["1UP", "#e8e8e8"], ["GRENADE", "#4e8a42"], ["CANNON", "#c8963c"], ["FREEZE", "#9fd8ff"]]
                         Column {
                             spacing: 2
                             PickupIcon {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                width: 40; height: 40
+                                width: 36; height: 36
                                 kind: index
-                                side: 36
+                                side: 32
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter

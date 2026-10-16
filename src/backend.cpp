@@ -46,7 +46,7 @@ QVariantList Backend::players() const {
         out.append(QVariantMap{
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil},
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
         });
     }
     return out;
@@ -75,7 +75,7 @@ QVariantMap Backend::playerAt(int i, int tick) const {
     const Tank &t = m_p[i];
     return {{"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}};
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}};
 }
 
 QVariantMap Backend::enemyAt(int i, int tick) const {
@@ -92,7 +92,7 @@ QVariantMap Backend::bulletAt(int i, int tick) const {
     if (i < 0 || i >= int(m_bullets.size()))
         return {{"active", false}};
     const Bullet &b = m_bullets[i];
-    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}};
+    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}};
 }
 
 QVariantMap Backend::floaterAt(int i, int tick) const {
@@ -166,6 +166,7 @@ void Backend::fireP2() {
 
 void Backend::startGame() {
     m_level = 1;
+    m_freezeUntil = -1;
     generateMap();
     resetTanks(true);
     m_bullets.clear();
@@ -173,8 +174,8 @@ void Backend::startGame() {
     m_pickup = Pickup{};
     m_fortified.clear();
     m_fortifyUntil = -1;
+    m_freezeUntil = -1;
     m_time = 0;
-    m_nextBonus = 500;
     for (auto &e : m_foes)
         e.alive = false;
     m_spawned = 0;
@@ -187,6 +188,7 @@ void Backend::startGame() {
 
 void Backend::nextLevel() {
     ++m_level;
+    m_freezeUntil = -1;
     generateMap();
     resetTanks(false);
     m_bullets.clear();
@@ -413,6 +415,11 @@ void Backend::updateEnemies(double dt) {
             e.moving = false;
             continue;
         }
+        // Freeze clock: enemy armor holds still, no aiming, no firing.
+        if (m_time < m_freezeUntil) {
+            e.moving = false;
+            continue;
+        }
         if (e.cooldown > 0)
             e.cooldown -= dt;
         e.think -= dt;
@@ -501,11 +508,11 @@ void Backend::updateBullets(double dt) {
             b.active = false;
             continue;
         }
-        // Hit enemies. Gray armor takes 2 hits.
+        // Hit enemies. A cannon shell cracks any armor in one hit.
         for (auto &e : m_foes) {
             if (e.alive && hitsTank(nx, ny, e.x, e.y)) {
                 if (b.owner < 2) {
-                    e.hp -= 1;
+                    e.hp -= b.big ? 99 : 1;
                     if (e.hp <= 0) {
                         e.alive = false;
                         const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
@@ -513,6 +520,9 @@ void Backend::updateBullets(double dt) {
                         m_floaters.push_back(Floater{e.x, e.y, pts, 0});
                         if (m_floaters.size() > 8)
                             m_floaters.erase(m_floaters.begin());
+                        // Green runners carry the bonus: one drops where it dies.
+                        if (e.kind == 1 && !m_pickup.active)
+                            spawnPickupAt(e.x, e.y);
                         if (m_soundEnabled)
                             emit playSound("explode");
                     } else if (m_soundEnabled) {
@@ -596,6 +606,7 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     b.owner = owner;
     b.active = true;
     b.speed = speed;
+    b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
     m_bullets.push_back(b);
     if (m_soundEnabled)
         emit playSound(owner == 2 ? "eshoot" : "shoot");
@@ -699,28 +710,27 @@ int Backend::aliveEnemies() const {
     return n;
 }
 
-int Backend::totalScore() const {
-    return m_p[0].score + m_p[1].score;
-}
-
 std::vector<int> Backend::baseGuard() const {
     const int bx = COLS / 2, by = ROWS - 1;
     return {by * COLS + bx - 1, by * COLS + bx + 1, (by - 1) * COLS + bx - 1,
             (by - 1) * COLS + bx, (by - 1) * COLS + bx + 1};
 }
 
-void Backend::spawnPickup() {
-    std::uniform_int_distribution<int> cell(0, COLS - 1);
-    std::uniform_int_distribution<int> row(0, ROWS - 1);
-    std::uniform_int_distribution<int> kind(0, 3);
-    for (int attempt = 0; attempt < 40; ++attempt) {
-        const int x = cell(m_rng), y = row(m_rng);
-        const int tile = m_grid[y * COLS + x];
-        if (tile != Empty && tile != Forest)
-            continue;
-        m_pickup = Pickup{double(x) + 0.5, double(y) + 0.5, kind(m_rng), 0, true};
-        return;
-    }
+// Bonuses only drop from green runners, at the spot where they die.
+void Backend::spawnPickupAt(double x, double y) {
+    std::uniform_int_distribution<int> kind(0, 6);
+    const int cx = int(x), cy = int(y);
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+            const int px = cx + dx, py = cy + dy;
+            if (px < 0 || py < 0 || px >= COLS || py >= ROWS)
+                continue;
+            const int tile = m_grid[py * COLS + px];
+            if (tile != Empty && tile != Forest)
+                continue;
+            m_pickup = Pickup{double(px) + 0.5, double(py) + 0.5, kind(m_rng), 0, true};
+            return;
+        }
 }
 
 void Backend::applyPickup(int player) {
@@ -738,17 +748,33 @@ void Backend::applyPickup(int player) {
         m_fortifyUntil = m_time + 25;
         break;
     case Life: t.lives = std::min(t.lives + 1, 5); break;
+    case Grenade: {
+        for (auto &e : m_foes) {
+            if (!e.alive)
+                continue;
+            e.alive = false;
+            const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
+            t.score += pts;
+            m_floaters.push_back(Floater{e.x, e.y, pts, 0});
+        }
+        if (m_floaters.size() > 8)
+            m_floaters.erase(m_floaters.begin(), m_floaters.begin() + (m_floaters.size() - 8));
+        if (m_soundEnabled)
+            emit playSound("explode");
+        break;
     }
-    if (m_soundEnabled)
+    case Cannon: t.cannonUntil = m_time + 20; break;
+    case Freeze:
+        m_freezeUntil = m_time + 8;
+        if (m_soundEnabled)
+            emit playSound("power");
+        break;
+    }
+    if (m_pickup.kind != Freeze && m_pickup.kind != Grenade && m_soundEnabled)
         emit playSound("power");
 }
 
 void Backend::updatePickups(double dt) {
-    // One bonus on the field at a time, every 500 combined points.
-    if (!m_pickup.active && totalScore() >= m_nextBonus) {
-        spawnPickup();
-        m_nextBonus += 500;
-    }
     if (!m_pickup.active)
         return;
     m_pickup.age += dt;
