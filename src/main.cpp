@@ -40,6 +40,10 @@ int main(int argc, char *argv[]) {
     // Text inherits it; none of them names a family.
     const int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/Silkscreen-Regular.ttf"));
     QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/Silkscreen-Bold.ttf"));
+    // Departure Mono: a more legible pixel mono for body/descriptive text.
+    // Silkscreen stays the global font (titles and key caps inherit it); body
+    // text opts into this one explicitly (see the manual).
+    QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/DepartureMono-Regular.otf"));
     if (fontId >= 0) {
         const QStringList families = QFontDatabase::applicationFontFamilies(fontId);
         if (!families.isEmpty()) {

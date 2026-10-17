@@ -19,8 +19,9 @@ package() {
   cd "$startdir/.."
   install -Dm755 build/tanks "$pkgdir/usr/bin/tanks"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-  # The bundled pixel font is redistributed with it, so its licence travels too.
-  install -Dm644 src/fonts/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL.txt"
+  # The bundled pixel fonts are redistributed with them, so their licences travel too.
+  install -Dm644 src/fonts/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL-Silkscreen.txt"
+  install -Dm644 src/fonts/OFL-DepartureMono.txt "$pkgdir/usr/share/licenses/$pkgname/OFL-DepartureMono.txt"
   install -Dm644 "$startdir/tanks.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/tanks.svg"
   install -Dm644 "$startdir/tanks.desktop" "$pkgdir/usr/share/applications/tanks.desktop"
 }

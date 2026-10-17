@@ -100,4 +100,6 @@ contributor live in [`AGENTS.md`](AGENTS.md).
 
 The UI is set in [Silkscreen](https://github.com/googlefonts/silkscreen) by
 Jason Kottke, bundled under the SIL Open Font License (see
-`src/fonts/OFL.txt`).
+`src/fonts/OFL.txt`). Descriptive text in the manual uses
+[Departure Mono](https://departuremono.com/) by Helena Zhang, also SIL OFL
+(see `src/fonts/OFL-DepartureMono.txt`).

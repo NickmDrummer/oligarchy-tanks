@@ -1144,47 +1144,131 @@ ApplicationWindow {
             Column {
                 id: helpCol
                 anchors.centerIn: parent
-                spacing: 8
-                Text { text: "TANKS - MANUAL"; font.bold: true; font.pixelSize: 22; font.letterSpacing: 2; color: theme.accent }
-                Text { text: "P1 MOVE: W A S D - FIRE: SPACE"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "P2 MOVE: ARROWS - FIRE: ENTER"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "1 OR 2 PLAYERS: CHOSEN ON THE SELECT SCREEN"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "P PAUSE - R MENU - M SOUND - Q QUIT"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "PAD: START JOINS OR PAUSES - SHARE: MANUAL"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "PAD: STICK OR DPAD MOVE - L2/R2 OR SQUARE-X FIRE"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "1 PLAYER: THE KEYBOARD UNLESS A PAD PRESSES START"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
-                Text { text: "2 PLAYERS: KEYBOARD P1, FIRST PAD P2, 2ND PAD P1"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
-                Text { text: "GAME OVER: START OR SPACE GOES BACK TO THE SELECT SCREEN"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
-                Text { text: "GRAY BASIC - GREEN FAST - STEEL 2 HITS"; font.bold: true; font.pixelSize: 14; color: "#8d8d94" }
-                Text { text: "BONUS DROP FROM GREEN TANKS - ONE AT A TIME"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
-                Grid {
+                spacing: 20
+                // Title.
+                Item {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    columns: 4
-                    columnSpacing: 16
-                    rowSpacing: 8
+                    width: helpTitle.implicitWidth + 6
+                    height: helpTitle.implicitHeight + 6
+                    Text {
+                        x: 3; y: 3
+                        text: "TANKS - MANUAL"
+                        font.bold: true; font.pixelSize: 26; font.letterSpacing: 3
+                        color: "#000000"
+                    }
+                    Text {
+                        id: helpTitle
+                        text: "TANKS - MANUAL"
+                        font.bold: true; font.pixelSize: 26; font.letterSpacing: 3
+                        color: theme.accent
+                    }
+                }
+                // ---- CONTROLS ----
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "CONTROLS"
+                    font.bold: true; font.pixelSize: 20; font.letterSpacing: 3
+                    color: theme.accent
+                }
+                Column {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 10
+                    // Keyboard.
+                    Text { text: "KEYBOARD"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 2; color: "#8a8f98" }
+                    Row {
+                        spacing: 10
+                        Text { text: "P1"; font.bold: true; font.pixelSize: 13; color: win.p1body; anchors.verticalCenter: parent.verticalCenter }
+                        KeyCap { unit: 22; label: "W" }
+                        KeyCap { unit: 22; label: "A" }
+                        KeyCap { unit: 22; label: "S" }
+                        KeyCap { unit: 22; label: "D" }
+                        KeyCap { unit: 22; label: "SPACE" }
+                    }
+                    Row {
+                        spacing: 10
+                        Text { text: "P2"; font.bold: true; font.pixelSize: 13; color: win.p2body; anchors.verticalCenter: parent.verticalCenter }
+                        KeyCap { unit: 22; arrow: "up" }
+                        KeyCap { unit: 22; arrow: "left" }
+                        KeyCap { unit: 22; arrow: "down" }
+                        KeyCap { unit: 22; arrow: "right" }
+                        KeyCap { unit: 22; label: "ENTER" }
+                    }
+                    // Gamepad.
+                    Text { text: "PAD"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 2; color: "#8a8f98" }
+                    Row {
+                        spacing: 8
+                        Text { text: "MOVE"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 11; color: "#8a8f98"; anchors.verticalCenter: parent.verticalCenter }
+                        PadIcon { kind: "stick"; unit: 22; face: "#f2f4f8" }
+                        PadIcon { kind: "dpad"; unit: 22; face: "#f2f4f8" }
+                        Item { width: 8; height: 1 }
+                        Text { text: "FIRE"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 11; color: "#8a8f98"; anchors.verticalCenter: parent.verticalCenter }
+                        PadIcon { kind: "trigger"; label: "L2"; unit: 22; face: "#f2f4f8" }
+                        PadIcon { kind: "trigger"; label: "R2"; unit: 22; face: "#f2f4f8" }
+                        PadIcon { kind: "face"; label: "X"; unit: 22; face: "#f2f4f8" }
+                    }
+                    Text { text: "START JOINS OR PAUSES - SHARE: MANUAL"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
+                    Text { text: "1 PLAYER: KEYBOARD UNLESS A PAD PRESSES START"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
+                    Text { text: "2 PLAYERS: KEYBOARD P1, FIRST PAD P2, 2ND PAD P1"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
+                    Text { text: "GAME OVER: START, SPACE OR ENTER GOES BACK TO THE SELECT SCREEN"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
+                }
+                // ---- POWER-UPS ----
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "POWER-UPS"
+                    font.bold: true; font.pixelSize: 20; font.letterSpacing: 3
+                    color: theme.accent
+                }
+                Column {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
                     Repeater {
-                        model: [["SPEED", "#edc400"], ["SHIELD", "#c9ced6"], ["PICK", "#b9c0c9"], ["1UP", "#e8e8e8"], ["GRENADE", "#4e8a42"], ["CANNON", "#c8963c"], ["FREEZE", "#9fd8ff"]]
-                        Column {
-                            spacing: 2
-                            PickupIcon {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: 40; height: 40
-                                kind: index
-                                side: 36
+                        model: [
+                            ["SPEED", "#edc400", "+35% MOVEMENT FOR 20 S"],
+                            ["SHIELD", "#c9ced6", "BLOCKS SHOTS FOR 10 S"],
+                            ["PICK", "#b9c0c9", "BASE WALL BECOMES CONCRETE FOR 20 S"],
+                            ["1UP", "#e8e8e8", "+1 LIFE (CAP 5)"],
+                            ["GRENADE", "#4e8a42", "KILLS ALL ENEMIES"],
+                            ["CANNON", "#c8963c", "ONE-SHOT ARMOUR (BIG SHELL) FOR 20 S"],
+                            ["FREEZE", "#9fd8ff", "ENEMIES STOP FOR 8 S"]
+                        ]
+                        Row {
+                            spacing: 16
+                            Column {
+                                spacing: 2
+                                width: 90
+                                PickupIcon {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: 40; height: 40
+                                    kind: index
+                                    side: 36
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: modelData[0]
+                                    font.bold: true; font.pixelSize: 11
+                                    color: modelData[1]
+                                }
                             }
                             Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: modelData[0]
-                                font.bold: true; font.pixelSize: 11
-                                color: modelData[1]
+                                width: 260
+                                text: modelData[2]
+                                font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13
+                                color: "#f2f4f8"
+                                wrapMode: Text.WordWrap
+                                anchors.verticalCenter: parent.verticalCenter
                             }
                         }
                     }
                 }
-                Text { text: "PICK: BASE WALL BECOMES CONCRETE FOR 20 S"; font.bold: true; font.pixelSize: 14; color: "#b9c0c9" }
-                Text { text: "DEFEND THE BASE. LATER SECTORS: MORE TANKS,"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
-                Text { text: "FASTER SPECIALS, TOUGHER ARMOR."; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
-                PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
+                // Footer
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "BUILD " + buildId
+                    font.family: "Departure Mono"
+                    font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
+                    color: "#5a5e68"
+                }
+            PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
             }
         }
     }

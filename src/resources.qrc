@@ -10,6 +10,7 @@
              Bundled so the UI looks the same on any machine. -->
         <file alias="fonts/Silkscreen-Regular.ttf">fonts/Silkscreen-Regular.ttf</file>
         <file alias="fonts/Silkscreen-Bold.ttf">fonts/Silkscreen-Bold.ttf</file>
+        <file alias="fonts/DepartureMono-Regular.otf">fonts/DepartureMono-Regular.otf</file>
         <file alias="sounds/shoot.wav">sounds/shoot.wav</file>
         <file alias="sounds/eshoot.wav">sounds/eshoot.wav</file>
         <file alias="sounds/hit.wav">sounds/hit.wav</file>
