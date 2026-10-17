@@ -408,28 +408,28 @@ ApplicationWindow {
                 color: "#0d0d12"
                 Column {
                     anchors.centerIn: parent
-                    spacing: 10
+                    spacing: 13
                     visible: backend.state === "playing"
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "STAGE " + backend.level
-                        font.bold: true; font.pixelSize: 16; font.letterSpacing: 2
+                        font.bold: true; font.pixelSize: 20; font.letterSpacing: 2
                         color: "#edc400"
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "ENEMIES"
-                        font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
+                        font.bold: true; font.pixelSize: 17; font.letterSpacing: 2
                         color: "#edc400"
                     }
                     Grid {
                         anchors.horizontalCenter: parent.horizontalCenter
                         columns: 2
-                        spacing: 4
+                        spacing: 20
                         Repeater {
                             model: 32
                             TankSprite {
-                                width: 16; height: 16
+                                width: 20; height: 20
                                 dir: 0; frame: 0
                                 body: "#8d8d8d"; dark: "#4a4a4a"; light: "#b5b5b5"
                                 visible: index < backend.enemiesLeft
