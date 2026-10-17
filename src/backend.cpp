@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace {
 constexpr double TANK_SIZE = 0.8;
@@ -14,6 +15,9 @@ constexpr double FIRE_GAP = 0.35;
 Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) {
     m_foes.resize(6);
     m_bullets.reserve(16);
+    // Fixed seed for deterministic tests via TANKS_SEED.
+    if (const char *seed = std::getenv("TANKS_SEED"))
+        m_rng.seed(unsigned(std::atoi(seed)));
     generateMap();
     resetTanks(true);
     connect(&m_timer, &QTimer::timeout, this, &Backend::tick);
@@ -36,6 +40,19 @@ QString Backend::board() const {
         default: s += '.'; break;
         }
     }
+    return s;
+}
+
+QString Backend::boardQ() const {
+    QString s;
+    s.reserve(COLS * 2 * ROWS * 2);
+    for (int ty = 0; ty < ROWS; ++ty)
+        for (int qy = 0; qy < 2; ++qy)
+            for (int tx = 0; tx < COLS; ++tx)
+                for (int qx = 0; qx < 2; ++qx) {
+                    const int bit = qx + qy * 2;
+                    s += (m_grid[ty * COLS + tx] == Brick && (m_brickQ[ty * COLS + tx] & (1 << bit))) ? 'B' : '.';
+                }
     return s;
 }
 
@@ -270,6 +287,11 @@ void Backend::generateMap() {
         for (int dx = -1; dx <= 1; ++dx)
             for (int dy = 0; dy <= 1; ++dy)
                 clear(sx + dx, dy);
+    // Every surviving brick tile starts whole; pads cleared above stay empty.
+    m_brickQ.assign(COLS * ROWS, 0);
+    for (int i = 0; i < COLS * ROWS; ++i)
+        if (m_grid[i] == Brick)
+            m_brickQ[i] = 0xF;
 }
 
 void Backend::resetTanks(bool fullStats) {
@@ -464,19 +486,33 @@ void Backend::updateBullets(double dt) {
         const int cx = int(nx), cy = int(ny);
         const int tile = tileAt(cx, cy);
         if (tile == Brick || tile == Steel || tile == Base || tile == BaseDead) {
-            if (tile == Brick)
-                damageTile(cx, cy);
-            else if (tile == Steel && b.pick)
-                damageTile(cx, cy);
-            if (tile == Base) {
+            bool blocked = true;
+            if (tile == Brick) {
+                // A shot chips the quarter it lands in; if that quarter is
+                // already gone the bullet flies straight through the gap.
+                const int bit = (nx - cx < 0.5 ? 0 : 1) + (ny - cy < 0.5 ? 0 : 2);
+                if (m_brickQ[cy * COLS + cx] & (1 << bit)) {
+                    damageBrickAt(nx, ny);
+                    if (m_soundEnabled)
+                        emit playSound("hit");
+                } else {
+                    blocked = false;
+                }
+            } else if (tile == Steel) {
+                if (b.pick) {
+                    damageTile(cx, cy);
+                    if (m_soundEnabled)
+                        emit playSound("hit");
+                }
+            } else if (tile == Base) {
                 m_grid[cy * COLS + cx] = BaseDead;
                 if (m_soundEnabled)
                     emit playSound("explode");
-            } else if (m_soundEnabled && (tile == Brick || (tile == Steel && b.pick))) {
-                emit playSound("hit");
             }
-            b.active = false;
-            continue;
+            if (blocked) {
+                b.active = false;
+                continue;
+            }
         }
         // Hit players. A shield blocks the shot with no damage.
         bool consumed = false;
@@ -611,8 +647,15 @@ bool Backend::solidAt(double x, double y, double size) const {
         if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
             return true;
         const int t = tileAt(cx, cy);
-        if (t == Brick || t == Steel || t == Base || t == BaseDead)
+        if (t == Brick) {
+            // Only surviving quarters block.
+            const double fx = p[0] - cx, fy = p[1] - cy;
+            const int bit = (fx < 0.5 ? 0 : 1) + (fy < 0.5 ? 0 : 2);
+            if (m_brickQ[cy * COLS + cx] & (1 << bit))
+                return true;
+        } else if (t == Steel || t == Base || t == BaseDead) {
             return true;
+        }
     }
     return false;
 }
@@ -661,6 +704,20 @@ int Backend::tileAt(int cx, int cy) const {
 
 void Backend::damageTile(int cx, int cy) {
     m_grid[cy * COLS + cx] = Empty;
+}
+
+// A shot chips exactly the quarter it lands in. The tile clears once
+// all four quarters are gone.
+void Backend::damageBrickAt(double bx, double by) {
+    const int cx = int(bx), cy = int(by);
+    if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
+        return;
+    if (m_grid[cy * COLS + cx] != Brick)
+        return;
+    const int bit = (bx - cx < 0.5 ? 0 : 1) + (by - cy < 0.5 ? 0 : 2);
+    m_brickQ[cy * COLS + cx] &= ~(1 << bit);
+    if (m_brickQ[cy * COLS + cx] == 0)
+        m_grid[cy * COLS + cx] = Empty;
 }
 
 void Backend::killPlayer(int idx) {

@@ -8,4 +8,15 @@ cd "$ROOT/build"
 qmake6 "$ROOT/tanks.pro"
 make -j"$(nproc)"
 
+# make can miss a change and leave a stale binary behind. If any input is
+# still newer than the binary, wipe and rebuild once from clean.
+if [ -n "$(find "$ROOT/src" "$ROOT/tanks.pro" -newer "$ROOT/build/tanks" 2>/dev/null)" ]; then
+  echo "Stale build detected, rebuilding from clean..." >&2
+  rm -rf "$ROOT/build"
+  mkdir -p "$ROOT/build"
+  cd "$ROOT/build"
+  qmake6 "$ROOT/tanks.pro"
+  make -j"$(nproc)"
+fi
+
 echo "Built $ROOT/build/tanks"

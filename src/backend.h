@@ -15,6 +15,7 @@ class Backend : public QObject {
     Q_PROPERTY(QString state READ state NOTIFY stateChanged)
     Q_PROPERTY(QString message READ message NOTIFY stateChanged)
     Q_PROPERTY(QString board READ board NOTIFY frameChanged)
+    Q_PROPERTY(QString boardQ READ boardQ NOTIFY frameChanged)
     Q_PROPERTY(int cols READ cols CONSTANT)
     Q_PROPERTY(int rows READ rows CONSTANT)
     Q_PROPERTY(QVariantList players READ players NOTIFY frameChanged)
@@ -38,6 +39,8 @@ public:
     QString state() const { return m_state; }
     QString message() const { return m_message; }
     QString board() const;
+    // Brick quarters, 2x2 per tile: 'B' where a quarter survives.
+    QString boardQ() const;
     int cols() const { return COLS; }
     int rows() const { return ROWS; }
     QVariantList players() const;
@@ -76,6 +79,10 @@ signals:
     void frameChanged();
     void soundChanged();
     void playSound(const QString &name);
+
+    // Test-only access to internal state, so behaviour like bonus effects
+    // can be asserted deterministically without rigging the map at runtime.
+    friend struct TanksTestAccess;
 
 private:
     struct Tank {
@@ -141,6 +148,7 @@ private:
     bool blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const;
     int tileAt(int cx, int cy) const;
     void damageTile(int cx, int cy);
+    void damageBrickAt(double bx, double by);
     void killPlayer(int idx);
     void checkEnd();
     int aliveEnemies() const;
@@ -152,6 +160,8 @@ private:
     QString m_state = "menu";
     QString m_message;
     std::vector<int> m_grid;
+    // Per-tile brick quarter mask, bits 0 TL, 1 TR, 2 BL, 3 BR.
+    std::vector<uint8_t> m_brickQ;
     Tank m_p[2];
     std::vector<Enemy> m_foes;
     std::vector<Bullet> m_bullets;

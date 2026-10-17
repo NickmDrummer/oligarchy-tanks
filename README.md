@@ -28,3 +28,8 @@ bin/build
 bin/test
 bin/install
 ```
+
+## Development
+
+Architecture notes, the state of the build and the handover for the next
+contributor live in [`AGENTS.md`](AGENTS.md).

@@ -1,5 +1,8 @@
 // tanks — retro 2-player local tank battle vs AI.
 
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
@@ -34,7 +37,11 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("backend", &backend);
-    engine.rootContext()->setContextProperty("buildId", QStringLiteral(__DATE__ " " __TIME__));
+    // Stamp the running binary's own mtime, so the footer always names the
+    // exact build on screen even when only QML was recompiled.
+    const QDateTime built = QFileInfo(QCoreApplication::applicationFilePath()).lastModified();
+    engine.rootContext()->setContextProperty(
+        "buildId", built.toString(QStringLiteral("MMM d yyyy HH:mm:ss")));
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;

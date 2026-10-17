@@ -262,6 +262,7 @@ ApplicationWindow {
                 Repeater {
                     model: backend.cols * backend.rows
                     Item {
+                        id: tileItem
                         property int cx: index % backend.cols
                         property int cy: Math.floor(index / backend.cols)
                         property string t: backend.board.length > index ? backend.board[index] : "."
@@ -269,35 +270,43 @@ ApplicationWindow {
                         y: cy * win.cell
                         width: win.cell
                         height: win.cell
-                        Rectangle {
-                            visible: t === "B"
+                        // Only the kind this tile actually is gets instantiated.
+                        // `visible: false` still builds every child, which cost
+                        // tens of thousands of items across the 15x15 board.
+                        Loader {
                             anchors.fill: parent
-                            color: "#2e1a10"
+                            active: tileItem.t === "B"
+                            sourceComponent: brickPart
                         }
-                        Column {
-                            visible: t === "B"
-                            anchors.fill: parent
-                            anchors.margins: 1
-                            spacing: 2
-                            Repeater {
-                                model: 4
-                                Item {
-                                    property bool odd: index % 2 === 1
-                                    width: win.cell - 2
-                                    height: (win.cell - 2 - 6) / 4
-                                    // Even course: two whole bricks.
-                                    Row {
-                                        visible: !odd
-                                        anchors.fill: parent
-                                        spacing: 2
-                                        Repeater {
-                                            model: 2
+                        // Brick quarters: each shot chips one 2x2 quarter.
+                        Component {
+                            id: brickPart
+                            Item {
+                                anchors.fill: parent
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: "#2e1a10"
+                                }
+                                Grid {
+                                    anchors.fill: parent
+                                    anchors.margins: 1
+                                    columns: 2
+                                    rows: 2
+                                    Repeater {
+                                        model: 4
+                                        Item {
+                                            property int qx: index % 2
+                                            property int qy: Math.floor(index / 2)
+                                            property string q: backend.boardQ.length > (tileItem.cy * 2 + qy) * backend.cols * 2 + (tileItem.cx * 2 + qx) ? backend.boardQ[(tileItem.cy * 2 + qy) * backend.cols * 2 + (tileItem.cx * 2 + qx)] : "."
+                                            width: (win.cell - 2) / 2
+                                            height: (win.cell - 2) / 2
                                             Rectangle {
-                                                width: (win.cell - 2 - 2) / 2
-                                                height: parent.height
+                                                visible: q === "B"
+                                                anchors.fill: parent
+                                                anchors.margins: 1
                                                 color: "#9e5230"
                                                 Rectangle {
-                                                    width: parent.width; height: 2
+                                                    width: parent.width; height: 3
                                                     color: "#b96a3e"
                                                 }
                                                 Rectangle {
@@ -305,105 +314,100 @@ ApplicationWindow {
                                                     width: parent.width; height: 2
                                                     color: "#5e2f18"
                                                 }
+                                                Rectangle {
+                                                    x: parent.width / 2 - 1
+                                                    width: 2; height: parent.height
+                                                    color: "#5e2f18"
+                                                    opacity: 0.7
+                                                }
                                             }
                                         }
                                     }
-                                    // Odd course: half + whole + half, offset joints.
-                                    Row {
-                                        visible: odd
-                                        anchors.fill: parent
-                                        spacing: 2
-                                        Rectangle {
-                                            width: (win.cell - 2 - 4) / 4
-                                            height: parent.height
-                                            color: "#9e5230"
-                                            Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
-                                            Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
-                                        }
-                                        Rectangle {
-                                            width: (win.cell - 2 - 4) / 2
-                                            height: parent.height
-                                            color: "#9e5230"
-                                            Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
-                                            Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
-                                        }
-                                        Rectangle {
-                                            width: (win.cell - 2 - 4) / 4
-                                            height: parent.height
-                                            color: "#9e5230"
-                                            Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
-                                            Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
-                                        }
-                                    }
                                 }
                             }
+                        }
+                        Loader {
+                            anchors.fill: parent
+                            active: tileItem.t === "S"
+                            sourceComponent: steelPart
                         }
                         // Concrete pavers: gray blocks with dark grout joints.
-                        Rectangle {
-                            visible: t === "S"
-                            anchors.fill: parent
-                            color: "#3a3a3a"
-                        }
-                        Grid {
-                            visible: t === "S"
-                            anchors.fill: parent
-                            anchors.margins: 2
-                            columns: 2
-                            rows: 2
-                            spacing: 2
-                            Repeater {
-                                model: 4
+                        Component {
+                            id: steelPart
+                            Item {
+                                anchors.fill: parent
                                 Rectangle {
-                                    width: (win.cell - 4 - 2) / 2
-                                    height: (win.cell - 4 - 2) / 2
-                                    color: "#8d8d8d"
-                                    Rectangle {
-                                        width: parent.width; height: 2
-                                        color: "#b5b5b5"
-                                    }
-                                    Rectangle {
-                                        x: parent.width - 8; y: parent.height - 8
-                                        width: 6; height: 6
-                                        color: "#6a6a6a"
+                                    anchors.fill: parent
+                                    color: "#3a3a3a"
+                                }
+                                Grid {
+                                    anchors.fill: parent
+                                    anchors.margins: 2
+                                    columns: 2
+                                    rows: 2
+                                    spacing: 2
+                                    Repeater {
+                                        model: 4
+                                        Rectangle {
+                                            width: (win.cell - 4 - 2) / 2
+                                            height: (win.cell - 4 - 2) / 2
+                                            color: "#8d8d8d"
+                                            Rectangle {
+                                                width: parent.width; height: 2
+                                                color: "#b5b5b5"
+                                            }
+                                            Rectangle {
+                                                x: parent.width - 8; y: parent.height - 8
+                                                width: 6; height: 6
+                                                color: "#6a6a6a"
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                        // Base: the official Omarchy wordmark in pixels. Defend it.
-                        Item {
-                            id: baseTile
-                            visible: t === "X" || t === "x"
+                        Loader {
                             anchors.fill: parent
-                            property bool dead: t === "x"
-                            // 3x5 micro font spelling "omarchy", 27x5 blocks.
-                            property var word: [
-                                "XXX X.X .X. XX. .XX X.. X.X",
-                                "X.X XXX X.X X.X X.. X.. X.X",
-                                "X.X X.X XXX X.. X.. XXX XXX",
-                                "X.X X.X X.X X.. X.. X.X .X.",
-                                "XXX X.X X.X X.. .XX X.X .X.",
-                            ]
-                            property real px: Math.max(1.5, win.cell / 30)
-                            Rectangle {
+                            active: tileItem.t === "X" || tileItem.t === "x"
+                            sourceComponent: basePart
+                        }
+                        // Base: the official Omarchy wordmark in pixels. Defend it.
+                        Component {
+                            id: basePart
+                            Item {
+                                id: baseTile
                                 anchors.fill: parent
-                                anchors.margins: 1
-                                color: baseTile.dead ? "#3d1010" : "#0d0d12"
-                                border.color: baseTile.dead ? "#7a241b" : theme.accent
-                                border.width: 2
-                            }
-                            Grid {
-                                anchors.centerIn: parent
-                                columns: 27
-                                rows: 5
-                                Repeater {
-                                    model: 135
-                                    Rectangle {
-                                        property int r: Math.floor(index / 27)
-                                        property int c: index % 27
-                                        property string ch: baseTile.word[r][c]
-                                        width: baseTile.px
-                                        height: baseTile.px
-                                        color: ch === "X" ? (baseTile.dead ? "#7a3535" : theme.accent) : "transparent"
+                                property bool dead: tileItem.t === "x"
+                                // 3x5 micro font spelling "omarchy", 27x5 blocks.
+                                property var word: [
+                                    "XXX X.X .X. XX. .XX X.. X.X",
+                                    "X.X XXX X.X X.X X.. X.. X.X",
+                                    "X.X X.X XXX X.. X.. XXX XXX",
+                                    "X.X X.X X.X X.. X.. X.X .X.",
+                                    "XXX X.X X.X X.. .XX X.X .X.",
+                                ]
+                                property real px: Math.max(1.5, win.cell / 30)
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: 1
+                                    color: baseTile.dead ? "#3d1010" : "#0d0d12"
+                                    border.color: baseTile.dead ? "#7a241b" : theme.accent
+                                    border.width: 2
+                                }
+                                Grid {
+                                    anchors.centerIn: parent
+                                    columns: 27
+                                    rows: 5
+                                    Repeater {
+                                        model: 135
+                                        Rectangle {
+                                            property int r: Math.floor(index / 27)
+                                            property int c: index % 27
+                                            property string ch: baseTile.word[r][c]
+                                            width: baseTile.px
+                                            height: baseTile.px
+                                            color: ch === "X" ? (baseTile.dead ? "#7a3535" : theme.accent) : "transparent"
+                                        }
                                     }
                                 }
                             }
@@ -562,8 +566,11 @@ ApplicationWindow {
                 }
 
                 // Forest canopy above everything: hides tanks like the original.
-                // Each tile stamps a round leafy blob spilling past its edges,
-                // so neighbours merge into one ragged canopy with holes.
+                // A dithered leaf field keyed on global cell coordinates, so
+                // neighbouring forest tiles join with no visible seams. Clear
+                // cells are real holes you can see through and soft cells are
+                // translucent leaves; the rim of a copse thins out into a
+                // ragged edge instead of a hard square.
                 Repeater {
                     model: backend.cols * backend.rows
                     Item {
@@ -571,47 +578,80 @@ ApplicationWindow {
                         property int cx: index % backend.cols
                         property int cy: Math.floor(index / backend.cols)
                         property string t: backend.board.length > index ? backend.board[index] : "."
-                        property int seed: index
-                        visible: t === "F"
                         x: cx * win.cell
                         y: cy * win.cell
                         width: win.cell
                         height: win.cell
                         z: 8
-                        Grid {
-                            x: -0.3 * win.cell
-                            y: -0.3 * win.cell
-                            columns: 8
-                            rows: 8
-                            Repeater {
-                                model: 64
-                                Rectangle {
-                                    property int r: Math.floor(index / 8)
-                                    property int c: index % 8
-                                    property real dist: Math.max(Math.abs(c - 3.5), Math.abs(r - 3.5))
-                                    property int h: (forestTile.seed * 13 + r * 7 + c * 17) % 100
-                                    width: win.cell * 0.2; height: win.cell * 0.2
-                                    color: {
-                                        if (dist > 3.5)
+
+                        // The 8x8 leaf grid is only built on real forest tiles,
+                        // never on the other cells of the board.
+                        Loader {
+                            anchors.fill: parent
+                            active: forestTile.t === "F"
+                            sourceComponent: canopyPart
+                        }
+
+                        Component {
+                            id: canopyPart
+                            Item {
+                                id: canopyTile
+                                anchors.fill: parent
+                                property bool rimUp: tileAt(forestTile.cx, forestTile.cy - 1) !== "F"
+                                property bool rimDown: tileAt(forestTile.cx, forestTile.cy + 1) !== "F"
+                                property bool rimLeft: tileAt(forestTile.cx - 1, forestTile.cy) !== "F"
+                                property bool rimRight: tileAt(forestTile.cx + 1, forestTile.cy) !== "F"
+
+                                function tileAt(x, y) {
+                                    if (x < 0 || y < 0 || x >= backend.cols || y >= backend.rows)
+                                        return "."
+                                    const i = y * backend.cols + x
+                                    return backend.board.length > i ? backend.board[i] : "."
+                                }
+                                // Stable per-cell hash on global cell coordinates.
+                                function leafNoise(gx, gy) {
+                                    let h = (gx * 374761393 + gy * 668265263) | 0
+                                    h = h ^ (h >>> 15)
+                                    h = Math.imul(h, 2246822519)
+                                    h = h ^ (h >>> 13)
+                                    return (h >>> 0) % 100
+                                }
+                                function canopy(gx, gy, r, c) {
+                                    const n = leafNoise(gx, gy)
+                                    if (n < 18)
+                                        return "transparent"
+                                    if (r === 0 && rimUp || r === 7 && rimDown || c === 0 && rimLeft || c === 7 && rimRight) {
+                                        if (n < 55)
                                             return "transparent"
-                                        if (dist > 2.5) {
-                                            if (h > 50)
-                                                return "transparent"
-                                            if (h < 22)
-                                                return "#664e8a42"
-                                            return h < 70 ? "#2f6630" : "#4e8a42"
+                                    }
+                                    if (n < 32)
+                                        return "#b0336a29"
+                                    const clump = leafNoise(gx >> 1, gy >> 1)
+                                    if (clump < 20)
+                                        return "#1d3d1a"
+                                    if (clump < 45)
+                                        return "#2f662c"
+                                    if (clump < 80)
+                                        return "#468a35"
+                                    return "#6fae4a"
+                                }
+                                function colorAt(r, c) {
+                                    return canopy(forestTile.cx * 8 + c, forestTile.cy * 8 + r, r, c)
+                                }
+
+                                Grid {
+                                    anchors.fill: parent
+                                    columns: 8
+                                    rows: 8
+                                    Repeater {
+                                        model: 64
+                                        Rectangle {
+                                            property int r: Math.floor(index / 8)
+                                            property int c: index % 8
+                                            width: Math.ceil(forestTile.width / 8)
+                                            height: Math.ceil(forestTile.height / 8)
+                                            color: canopyTile.colorAt(r, c)
                                         }
-                                        if (h < 6)
-                                            return "transparent"
-                                        if (h < 16)
-                                            return "#734e8a42"
-                                        if (h < 45)
-                                            return "#2f6630"
-                                        if (h < 80)
-                                            return "#1d3d1a"
-                                        if (h < 94)
-                                            return "#4e8a42"
-                                        return "#6aa84f"
                                     }
                                 }
                             }
@@ -712,13 +752,13 @@ ApplicationWindow {
                             // Bonus preview so the pickups are known before playing.
                             Row {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: 10
+                                spacing: 8
                                 Repeater {
                                     model: 7
                                     PickupIcon {
-                                        width: 30; height: 30
+                                        width: 40; height: 40
                                         kind: index
-                                        side: 28
+                                        side: 36
                                     }
                                 }
                             }
@@ -777,9 +817,9 @@ ApplicationWindow {
                             spacing: 2
                             PickupIcon {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                width: 36; height: 36
+                                width: 40; height: 40
                                 kind: index
-                                side: 32
+                                side: 36
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
