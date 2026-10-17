@@ -199,12 +199,185 @@ ApplicationWindow {
         anchors.margins: 14
         spacing: 8
 
-        // Pixel HUD bar.
-        RowLayout {
+        // Pixel HUD bar: player 1 on the left, the game name in the centre,
+        // player 2 on the right. The enemy count moved to the side panel.
+        Item {
             Layout.fillWidth: true
-            spacing: 10
+            height: 112
+            RowLayout {
+                anchors.fill: parent
+                spacing: 10
+                // P1, with left padding (50% of the box width).
+                Rectangle {
+                    Layout.leftMargin: 120
+                    width: 240; height: 112
+                    color: "#101014"; border.color: win.p1body; border.width: 2
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Row {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: 10
+                            TankSprite {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 30; height: 30
+                                dir: 0; frame: 0
+                                body: win.p1body; dark: win.p1dark; light: win.p1light
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "P1"
+                                font.bold: true; font.pixelSize: 18; font.letterSpacing: 2
+                                color: win.p1body
+                            }
+                            Item { width: 8; height: 1 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 10
+                                Repeater {
+                                    model: 5
+                                    TankSprite {
+                                        width: 12; height: 12
+                                        dir: 0; frame: 0
+                                        body: win.p1body; dark: win.p1dark; light: win.p1light
+                                        visible: backend.players.length > 0
+                                                 && index < backend.players[0].lives
+                                    }
+                                }
+                            }
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: "SCORE " + (backend.players.length > 0 ? backend.players[0].score : 0)
+                            font.bold: true; font.pixelSize: 19; font.letterSpacing: 1
+                            color: "#f2f4f8"
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: backend.players.length > 0
+                                  ? ((backend.players[0].shield ? "SHIELD " : "")
+                                     + (backend.players[0].speed ? "SPEED " : "")
+                                     + (backend.players[0].cannon ? "CANNON " : ""))
+                                  : ""
+                            font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
+                            color: "#ffd60a"
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            visible: backend.players.length > 0
+                                     && backend.players[0].lives === 0
+                            text: "KILLED"
+                            font.bold: true; font.pixelSize: 14; font.letterSpacing: 2
+                            color: "#e85050"
+                        }
+                        Row {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: 4
+                            visible: backend.state !== "select"
+                                     && backend.players.length > 0
+                                     && !backend.players[0].joined
+                            Repeater {
+                                model: win.joinKeys(0)
+                                KeyCap { unit: 23; label: modelData.label; face: theme.accent }
+                            }
+                            SequentialAnimation on opacity {
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 0.3; duration: 550 }
+                                NumberAnimation { to: 1.0; duration: 550 }
+                            }
+                        }
+                    }
+                }
+                Item { Layout.fillWidth: true }
+                // P2, with right padding (50% of the box width). Hidden in a one-player game.
+                Rectangle {
+                    Layout.rightMargin: 120
+                    width: 240; height: 112
+                    visible: backend.playerCount === 2
+                    color: "#101014"; border.color: win.p2body; border.width: 2
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Row {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: 10
+                            TankSprite {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 30; height: 30
+                                dir: 0; frame: 0
+                                body: win.p2body; dark: win.p2dark; light: win.p2light
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "P2"
+                                font.bold: true; font.pixelSize: 18; font.letterSpacing: 2
+                                color: win.p2body
+                            }
+                            Item { width: 8; height: 1 }
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 10
+                                Repeater {
+                                    model: 5
+                                    TankSprite {
+                                        width: 12; height: 12
+                                        dir: 0; frame: 0
+                                        body: win.p2body; dark: win.p2dark; light: win.p2light
+                                        visible: backend.players.length > 1
+                                                 && index < backend.players[1].lives
+                                    }
+                                }
+                            }
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: "SCORE " + (backend.players.length > 1 ? backend.players[1].score : 0)
+                            font.bold: true; font.pixelSize: 19; font.letterSpacing: 1
+                            color: "#f2f4f8"
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: backend.players.length > 1
+                                  ? ((backend.players[1].shield ? "SHIELD " : "")
+                                     + (backend.players[1].speed ? "SPEED " : "")
+                                     + (backend.players[1].cannon ? "CANNON " : ""))
+                                  : ""
+                            font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
+                            color: "#ffd60a"
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            visible: backend.players.length > 1
+                                     && backend.players[1].lives === 0
+                            text: "KILLED"
+                            font.bold: true; font.pixelSize: 14; font.letterSpacing: 2
+                            color: "#e85050"
+                        }
+                        Row {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            spacing: 4
+                            visible: backend.state !== "select"
+                                     && backend.players.length > 1
+                                     && !backend.players[1].joined
+                            Repeater {
+                                model: win.joinKeys(1)
+                                KeyCap { unit: 23; label: modelData.label; face: theme.accent }
+                            }
+                            SequentialAnimation on opacity {
+                                loops: Animation.Infinite
+                                NumberAnimation { to: 0.3; duration: 550 }
+                                NumberAnimation { to: 1.0; duration: 550 }
+                            }
+                        }
+                    }
+                }
+            }
+            // Game name, centred over the bar.
             Item {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
                 width: 190; height: 56
+                z: 1
                 Text {
                     x: 3; y: 4
                     text: "TANKS"
@@ -217,136 +390,6 @@ ApplicationWindow {
                     color: theme.accent
                 }
             }
-            // P1 panel. The tank sprite names the tank, and the join hint
-            // blinks under it until its player has used a control.
-            Rectangle {
-                width: 230; height: 92
-                color: "#101014"; border.color: win.p1body; border.width: 2
-                Column {
-                    anchors.centerIn: parent
-                    spacing: 2
-                    Row {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        spacing: 8
-                        TankSprite {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 26; height: 26
-                            dir: 0; frame: 0
-                            body: win.p1body; dark: win.p1dark; light: win.p1light
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "P1 YELLOW  " + win.padLabel(0)
-                            font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
-                            color: win.p1body
-                        }
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "SC " + (backend.players.length > 0 ? backend.players[0].score : 0) + "  x" + (backend.players.length > 0 ? backend.players[0].lives : 0)
-                        font.bold: true; font.pixelSize: 15; font.letterSpacing: 1
-                        color: "#f2f4f8"
-                    }
-                    Row {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        spacing: 4
-                        visible: backend.state !== "select" && backend.players.length > 0 && !backend.players[0].joined
-                        Repeater {
-                            model: win.joinKeys(0)
-                            KeyCap { unit: 18; label: modelData.label; face: theme.accent }
-                        }
-                        SequentialAnimation on opacity {
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 0.3; duration: 550 }
-                            NumberAnimation { to: 1.0; duration: 550 }
-                        }
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED " : "") + (backend.players[0].cannon ? "CANNON " : "")) : ""
-                        font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
-                        color: "#ffd60a"
-                    }
-                }
-            }
-            // P2 panel. Hidden in a one-player game: there is no second tank.
-            Rectangle {
-                width: 230; height: 92
-                visible: backend.playerCount === 2
-                color: "#101014"; border.color: win.p2body; border.width: 2
-                Column {
-                    anchors.centerIn: parent
-                    spacing: 2
-                    Row {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        spacing: 8
-                        TankSprite {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 26; height: 26
-                            dir: 0; frame: 0
-                            body: win.p2body; dark: win.p2dark; light: win.p2light
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "P2 RED  " + win.padLabel(1)
-                            font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
-                            color: win.p2body
-                        }
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "SC " + (backend.players.length > 1 ? backend.players[1].score : 0) + "  x" + (backend.players.length > 1 ? backend.players[1].lives : 0)
-                        font.bold: true; font.pixelSize: 15; font.letterSpacing: 1
-                        color: "#f2f4f8"
-                    }
-                    Row {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        spacing: 4
-                        visible: backend.state !== "select" && backend.players.length > 1 && !backend.players[1].joined
-                        Repeater {
-                            model: win.joinKeys(1)
-                            KeyCap { unit: 18; label: modelData.label; face: theme.accent }
-                        }
-                        SequentialAnimation on opacity {
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 0.3; duration: 550 }
-                            NumberAnimation { to: 1.0; duration: 550 }
-                        }
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED " : "") + (backend.players[1].cannon ? "CANNON " : "")) : ""
-                        font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
-                        color: "#ffd60a"
-                    }
-                }
-            }
-            Item { Layout.fillWidth: true }
-            Rectangle {
-                width: 150; height: 70
-                color: "#101014"; border.color: "#edc400"; border.width: 2
-                Column {
-                    anchors.centerIn: parent
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "ENEMY"
-                        font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
-                        color: "#edc400"
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "LEFT " + backend.enemiesLeft
-                        font.bold: true; font.pixelSize: 15
-                        color: "#f2f4f8"
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.frozen ? "FROZEN" : "SEC " + backend.level
-                        font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
-                        color: backend.frozen ? "#9fd8ff" : "#edc400"
-                    }
-                }
-            }
         }
 
         Item {
@@ -354,11 +397,55 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
+            // Battle City style side panel: stage and remaining enemies.
+            // Content is shown only while playing; the panel stays in
+            // place so the board never jumps when a game starts.
+            Rectangle {
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 160
+                color: "#0d0d12"
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 10
+                    visible: backend.state === "playing"
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "STAGE " + backend.level
+                        font.bold: true; font.pixelSize: 16; font.letterSpacing: 2
+                        color: "#edc400"
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "ENEMIES"
+                        font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
+                        color: "#edc400"
+                    }
+                    Grid {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        columns: 2
+                        spacing: 4
+                        Repeater {
+                            model: 32
+                            TankSprite {
+                                width: 16; height: 16
+                                dir: 0; frame: 0
+                                body: "#8d8d8d"; dark: "#4a4a4a"; light: "#b5b5b5"
+                                visible: index < backend.enemiesLeft
+                            }
+                        }
+                    }
+                }
+            }
+
             Rectangle {
                 id: board
                 width: win.cell * backend.cols
                 height: win.cell * backend.rows
-                anchors.centerIn: parent
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.horizontalCenterOffset: -80
+                anchors.verticalCenter: parent.verticalCenter
                 color: "#050507"
                 border.color: "#3a3a44"
                 border.width: 4
