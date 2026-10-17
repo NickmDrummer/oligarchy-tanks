@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
@@ -30,7 +31,23 @@ int main(int argc, char *argv[]) {
     app.setDesktopFileName("tanks");
     app.setWindowIcon(QIcon::fromTheme("tanks"));
 
-    QQuickStyle::setStyle("Material");
+    // The UI draws its own pixel furniture (see PixelButton and KeyCap), so the
+    // Controls style only shapes the window: plain Basic, no Material.
+    QQuickStyle::setStyle("Basic");
+
+    // The game's own pixel font: Silkscreen (SIL OFL, see src/fonts/OFL.txt),
+    // bundled in the resources so the UI looks the same on any machine. Every
+    // Text inherits it; none of them names a family.
+    const int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/Silkscreen-Regular.ttf"));
+    QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/Silkscreen-Bold.ttf"));
+    if (fontId >= 0) {
+        const QStringList families = QFontDatabase::applicationFontFamilies(fontId);
+        if (!families.isEmpty()) {
+            QFont appFont = app.font();
+            appFont.setFamily(families.first());
+            app.setFont(appFont);
+        }
+    }
 
     Theme theme;
     Backend backend;

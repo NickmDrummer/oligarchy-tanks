@@ -3,7 +3,7 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc='Retro 2-player local tank battle vs AI'
 arch=('x86_64' 'aarch64')
-license=('MIT')
+license=('MIT' 'OFL')
 depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'qt6-multimedia' 'xdg-desktop-portal')
 makedepends=('gcc' 'make')
 install=tanks.install
@@ -19,6 +19,8 @@ package() {
   cd "$startdir/.."
   install -Dm755 build/tanks "$pkgdir/usr/bin/tanks"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # The bundled pixel font is redistributed with it, so its licence travels too.
+  install -Dm644 src/fonts/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL.txt"
   install -Dm644 "$startdir/tanks.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/tanks.svg"
   install -Dm644 "$startdir/tanks.desktop" "$pkgdir/usr/share/applications/tanks.desktop"
 }

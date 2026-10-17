@@ -13,6 +13,10 @@ The game opens on the arcade select screen: **1 PLAYER** or **2 PLAYERS**.
   highlight.
 - `Space` / `Enter`, `START` on a pad, or a click confirms it.
 
+Each mode shows its own keys under its name, drawn as key caps: player 1 on
+`W A S D` and `Space`, player 2 on the arrows and `Enter`. With a pad plugged
+in, a row of pad pictures appears below them (`L2` / `R2` / `X` to fire).
+
 In a **one-player game there is a single tank**: when it runs out of lives the
 run is over. Either way the run ends on a **`GAME OVER`** screen with the score
 (`BASE DESTROYED` if the base was lost), and `START`, `Space` or `Enter` carries
@@ -49,9 +53,10 @@ players**, so a pad never takes a tank away from anyone.
 | `SHARE` / `SELECT` | Open the manual, like `?` |
 
 Each tank shows the device driving it (`KEY` or `PAD n`) and, underneath,
-a blinking hint naming its controls (`PRESS SPACE`, `PRESS ENTER OR START`).
-The hint is only an invitation: it goes away as soon as that player uses a
-control, and it never blocks anything.
+a blinking hint with the keys that drive it (`Space`; `Enter` for player 2;
+`START` too while a pad is around), drawn as key caps. The hint is only an
+invitation: it goes away as soon as that player uses a control, and it never
+blocks anything.
 
 On the select screen any pad drives the choice, even one that just played a
 run: stick or d-pad moves the highlight, `START` (or `Square` / `X`) confirms it.
@@ -90,3 +95,9 @@ bin/install
 
 Architecture notes, the state of the build and the handover for the next
 contributor live in [`AGENTS.md`](AGENTS.md).
+
+## Credits
+
+The UI is set in [Silkscreen](https://github.com/googlefonts/silkscreen) by
+Jason Kottke, bundled under the SIL Open Font License (see
+`src/fonts/OFL.txt`).

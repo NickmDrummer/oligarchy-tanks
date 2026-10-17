@@ -25,7 +25,6 @@ Rectangle {
     Text {
         id: label
         anchors.centerIn: parent
-        font.family: "Monospace"
         font.bold: true
         font.pixelSize: 17
         font.letterSpacing: 2

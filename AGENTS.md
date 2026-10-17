@@ -10,14 +10,17 @@
 > Keep it current: update the state sections (`Current tree state`, `Feature
 > inventory`, `Next move`) whenever the state of the build changes.
 >
-> Snapshot: `HEAD` is *"Add a player-count select screen and a game over
-> screen"* (section 12.2 commit **C**), on top of the two gamepad commits
-> (section 12.1 **A** and **B**). The tree is clean. The user played all of it
-> — 1 and 2 players, one pad, dying alone, `START` to carry on, mode switching
-> with the pad, `R`, pause, unplug/replug — and every step behaved. **Open:**
-> one unreproducible `QSocketNotifier: Invalid socket 59 and type 'Read',
-> disabling...` during a play session, together with a game that had to be
-> interrupted with `^C` right when the base went down. It is not caused by
+> Snapshot: `HEAD` is the **UI overhaul, phase 1** (section 16) — *"Set the UI
+> in a pixel font, drop Material and rebuild the select screen"* — on top of the
+> player-count select screen (commit **C**, section 12.2), the two gamepad
+> commits (section 12.1 **A** and **B**) and the brick/PICK/frame-rate commit.
+> Nothing pushed. It builds, `bin/test` passes 43/43 and the QML probe 37/37;
+> **the user approved it from the screenshots but has not played this commit**,
+> so a play session is still owed. Later phases of the overhaul (the manual and
+> the in-game interface) come next, one at a time.
+> **Open:** one unreproducible `QSocketNotifier: Invalid socket 59 and type
+> 'Read', disabling...` during a play session, together with a game that had to
+> be interrupted with `^C` right when the base went down. It is not caused by
 > anything the pad reader does (see section 15.5), so it is left to be
 > reproduced with more information rather than fixed blind.
 >
@@ -84,8 +87,11 @@ with `qmake6` + `make`.
 │   ├── TankSprite.qml   # 16x16 tank with animated treads
 │   ├── PickupIcon.qml   # all 7 bonus sprites (per-pixel colour grids)
 │   ├── PixelButton.qml
+│   ├── KeyCap.qml       # one key, drawn as a cap (pixel arrows, no glyphs)
+│   ├── PadIcon.qml      # stick / d-pad / trigger / face button, drawn
 │   ├── theme.cpp/.h     # accent + palette read from the Omarchy theme
 │   ├── resources.qrc
+│   ├── fonts/           # Silkscreen Regular + Bold + OFL.txt (bundled)
 │   └── sounds/*.wav     # engine, shoot, eshoot, hit, explode, power, nuke
 └── tests/
     ├── tanks_tests.cpp  # 35 QtTest cases (37 slots)
@@ -287,11 +293,15 @@ flag are **gone** — do not reintroduce them. Implementation:
   Do not go chasing it.
 
 ### Implemented but not verified on screen by the user
-- Menu legend size bump (30 -> 40 px icons, `side: 28 -> 36`).
-- Nothing else: the player-count select screen and the game over screen
+- The UI overhaul, phase 1 (commit **D**, section 16): the Silkscreen pixel font,
+  no Material style, and the select screen rebuilt out of key caps, pad pictures
+  and a tank marker. `bin/test` 43/43 and the QML probe 37/37, and the user
+  approved the screenshots — but **nobody has played it yet**.
+- Nothing else. The player-count select screen and the game over screen
   (section 15) were played by the user (1 and 2 players, one and two pads,
   dying alone, `START` to carry on, switching modes with the pad, `R`, pause,
-  unplug/replug) and every step behaved.
+  unplug/replug) and every step behaved; the old "menu legend 40 px" item went
+  away with the legend itself (section 16).
 
 ### Broken / unresolved
 - One unreproducible `QSocketNotifier: Invalid socket 59 and type 'Read',
@@ -306,24 +316,34 @@ flag are **gone** — do not reintroduce them. Implementation:
 
 ## 6. Current tree state
 
-`HEAD` is *"Read gamepads from /dev/input and let one join a player"*, sitting on
-top of *"Add a gamepad mapping layer and per-source movement flags"* and the
-brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
+`HEAD` is the **UI overhaul, phase 1** (commit **D**, section 16) on top of
+*"Add a player-count select screen and a game over screen"* (commit **C**,
+section 12.2), *"Read gamepads from /dev/input and let one join a player"*,
+*"Add a gamepad mapping layer and per-source movement flags"* (section 12.1 **A**
+and **B**) and the brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
 
-The tree is **dirty** with the select screen (section 15) — the first new work
-since the gamepad commits, and the reason the rule "one checkpoint commit before
-the next feature" was respected again:
+The tree is **clean** again: phase 1 is one commit, so the next feature starts
+from a checkpoint, which is the rule this project learnt the hard way
+(section 13).
+
+Commit **D** contains exactly these files:
 
 ```
- M README.md              the Start section + the new pad join rules
- M src/Main.qml           select screen, per-tank hints, panels, manual, R
- M src/backend.cpp        select state, menu*, playerCount, joined, checkEnd
- M src/backend.h          playerCount/menuIndex, menu* invokables, m_joined
- M tests/tanks_tests.cpp  6 select-screen cases + TanksTestAccess helpers (37 slots)
+Set the UI in a pixel font, drop Material and rebuild the select screen
+   src/fonts/             Silkscreen Regular + Bold + OFL.txt, bundled
+   src/resources.qrc      KeyCap.qml, PadIcon.qml and the two font files
+   src/main.cpp           Basic style, Silkscreen registered on the application
+   src/KeyCap.qml         one key, drawn as a cap (pixel arrows)
+   src/PadIcon.qml        stick / d-pad / trigger / face button, drawn
+   src/Main.qml           no font families, select screen rebuilt, key caps
+   src/PixelButton.qml    font family dropped
+   pkgbuild/PKGBUILD      the font's licence is installed with the project's
+   README.md              the select screen's keys, the join hint, the credits
+   AGENTS.md              section 16
 ```
 
-Nothing in that list is scaffolding. The two `/tmp` harnesses
-(`opencode/padvis`, `opencode/pad`) are throwaway and outside the repo.
+The throwaway probes (`/tmp/opencode/qmlprobe`, `/tmp/opencode/shots`) stay
+outside the repo.
 
 `build/` is git-ignored, and so are `pkgbuild/pkg/`, `pkgbuild/src/` and
 `pkgbuild/*.pkg.tar.zst` (checked: `git status` stays clean after `makepkg`).
@@ -728,8 +748,17 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
 13. **The player-count select screen** (section 15). Implemented: 37/37 slots, the
     QML probe and the uinput harness both drive the new flow.
 14. **The user plays it** (1 player and 2, one pad and two, dying alone, `START`
-    to retry from the game over). **This is the gate for commit C.**
-15. Then commit **C** (section 12.2).
+    to retry from the game over). **This was the gate for commit C.**
+15. Commit **C** (section 12.2). **Done**, and played.
+16. **The UI overhaul, phase 1** (section 16): the bundled pixel font, no more
+    Material style, and the select screen rebuilt from key caps, pad pictures
+    and a tank marker. **Committed (section 16)**: 43/43 slots, 37/37 QML probe checks,
+    the user approved the result from the screenshots.
+17. **The user plays commit D.** Still owed: it was approved from screenshots,
+    not from a play session. Any surprise there is a small follow-up commit.
+18. **Phase 2 of the overhaul**: the manual (`?`) first, then the in-game
+    interface, both from the user's notes, one at a time — and each one with the
+    same gate: user plays, then commit.
 
 ---
 
@@ -989,7 +1018,9 @@ untested pad to run.
   pad is ignored, `START` pauses once the pad has a player, a pad moves only its
   own tank, keyboard + pad do not cancel each other, fire comes from the right
   tank, disconnect returns the slot and leaves no direction held).
-- **The end-to-end proof is `/tmp/opencode/pad`** (throwaway, section 8.2 style):
+- **The end-to-end proof is `/tmp/opencode/pad`** (throwaway, section 8.2 style;
+  it was **wiped when `/tmp` was cleaned** — this description is the recipe to
+  rebuild it, and it only has to be rebuilt when the reader itself changes):
   `main.cpp` creates one **Xbox-shaped** virtual pad (16-bit sticks, hat d-pad)
   and one **DualSense-shaped** pad (8-bit sticks, `BTN_DPAD_*`) through
   `/dev/uinput`, then drives the **real `Gamepad` + `Backend`** and asserts 37
@@ -1102,15 +1133,18 @@ properties (`playerCount`, `menuIndex`, each with its own `*Changed` signal).
   the sector, as before.
 - **UI**: the overlay's title is `TANKS` / `GAME OVER` / `BASE DESTROYED` /
   `PAUSED` / `VICTORY`; the two options are a `Row` of `Repeater` delegates with
-  a blinking `>` on the highlighted one and a `MouseArea` for the mouse; a
+  a `TankSprite` marker on the highlighted one (section 16 replaced the blinking
+  `>` with it) and a `MouseArea` for the mouse; a
   `gameover` block adds the score line (bigger than the other messages) and a
-  blinking `PRESS START, SPACE OR ENTER`, and the button under it reads
+  blinking row of `START` / `SPACE` / `ENTER` key caps, and the button under it
+  reads
   `>> CONTINUE <<` (`>> RESUME (P) <<` / `>> NEXT SECTOR (R) <<` elsewhere);
   the panels each gained a small `TankSprite` and the hint line, the P2 panel is
   `visible: backend.playerCount === 2`, and the footer's old global
   `PRESS START TO JOIN` is gone (it lives under each tank now). The legend block
-  (keys, bonus icons) is `visible: backend.state === "select"` only, so the
-  game over screen stays down to the title, the score and the one way out.
+  (keys, bonus icons) is gone entirely (section 16): the game over screen stays
+  down to the title, the score and the one way out, and the select screen shows
+  only the modes and their keys.
 
 ### 15.4 Tests and probes
 
@@ -1123,7 +1157,8 @@ properties (`playerCount`, `menuIndex`, each with its own `*Changed` signal).
   `singlePlayerModeReleasesTheSecondPad`, plus `startsOnTheSelectScreen`
   (renamed from `startsPausedInMenu`). `TanksTestAccess` gained `outPlayer()`
   and `endCheck()` so a run can be lost on purpose.
-- **`/tmp/opencode/padvis`** (QML probe, 34 checks and 6 screenshots): the two
+- **`/tmp/opencode/padvis`** (QML probe, 34 checks and 6 screenshots — **wiped with
+  `/tmp`**, see section 16 for its replacement, `/tmp/opencode/qmlprobe`): the two
   options and the chevron, choosing 1 player hides the P2 panel and shows
   `PRESS SPACE`, a pad joining takes the tank and the hint gives way to `PAD 1`,
   dying alone shows `GAME OVER` + `SCORE 0` + `PRESS START, SPACE OR ENTER`
@@ -1173,3 +1208,92 @@ with the `GAME OVER` screen. That decides whether it is the pad reader, Qt's
 event dispatcher, or the compositor dropping the game's Wayland connection.
 
 
+
+---
+
+## 16. The UI overhaul (phase 1) — committed as D
+
+**Why.** The UI looked like a text dump: a Monospace font that fought the pixel
+art, Material widgets the game never used, and a select screen that explained
+itself in sentences ("CHOOSE WITH LEFT/RIGHT - CONFIRM WITH SPACE, ENTER OR
+START", the legend of tile values, the bonus icon row). The user asked for a
+pixel font, no Material, and the information moved into **pictures**: key caps
+instead of key names, a tank instead of a `>`, pad controls instead of a
+sentence. Detail-by-detail iteration comes after this phase.
+
+**What the commit carries.**
+
+- **Font — Silkscreen** (Regular + Bold, SIL OFL), vendored in `src/fonts/` and
+  compiled into the binary through `resources.qrc`. `main.cpp` registers both
+  faces with `QFontDatabase::addApplicationFont` and sets the family on
+  `QGuiApplication`, so **every `Text` inherits it and none names a family**
+  (the 44 `font.family: "Monospace"` lines are gone). A bundled font is a
+  licensing obligation: `pkgbuild/PKGBUILD` installs `src/fonts/OFL.txt` next to
+  the project's own `LICENSE`, and the README credits it.
+  - Silkscreen has **no arrow glyphs** (U+2190-2193 absent), which is why
+    `KeyCap.qml` draws its arrows from a 5x5 pixel grid; it *does* have U+2014,
+    so the three em dashes in `backend.cpp`'s messages stay as they are.
+- **No Material**: `QQuickStyle::setStyle("Basic")`. `QtQuick.Controls` is only
+  used for `ApplicationWindow`, so nothing else changes.
+- **`src/KeyCap.qml`**: one key. Dark face, 2px border, a darker strip along the
+  bottom for depth, square corners, optional pixel arrow, and `face` drives both
+  the border and the legend — which is what makes a whole row fade.
+- **`src/PadIcon.qml`**: one pad control (`stick` | `dpad` | `trigger` | `face`),
+  drawn with the same flat language. The stick/face buttons are circles, so they
+  are the only anti-aliased shapes in the UI; every row of them sets `face`, so
+  they fade with the rest.
+- **The select screen** (`Main.qml`): each mode is a `Column` — its name with a
+  mini `TankSprite` (player 1's tank, treads running on `win.treadFrame`) where
+  the blinking `>` used to be, and under it **its own** row of key caps
+  (`win.modeKeys`). The highlighted mode's row is white, the other fades. The
+  marker is anchored to the *name's* left edge (not the block's), so the name and
+  its keys share one axis.
+  - **The pad row** (stick / d-pad → `MOVE`, `L2` `R2` `X` → `FIRE`) is centred
+    under both modes and only drawn when a pad is connected: a pad can drive
+    either tank, so it belongs to neither option.
+  - **Deleted**: the `CHOOSE WITH LEFT/RIGHT...` line, the two key-name lines,
+    the pad sentence, the tile-value legend, the bonus icon row and the green
+    line. All of it is in the manual (`?`), which is where it belongs.
+  - The panel hints (`PRESS SPACE` / `PRESS ENTER OR START`) and the game over
+    hint (`PRESS START, SPACE OR ENTER`) are now rows of key caps too;
+    `win.joinKeys(player)` keeps the old rule (START is only offered to P2, and
+    to P1 only in a one-player game, because the first pad takes P2).
+- **The select screen breathes**: 22px between its lines and 18px between a
+  mode's name and its keys, applied **only while `state === "select"`** — the
+  paused / game over / victory overlays keep their tighter spacing. The panel
+  box is sized from the column, so it grows on its own.
+- **The gotcha that cost a round trip:** inside a `Repeater`'s delegate,
+  `index` is the *key's* index, not the option's, so colouring the row needs the
+  option index captured one level up (`property int option: index` on the keys
+  `Row`). Comparing `backend.menuIndex === index` lit the same *position* in both
+  rows. Caught by probing pixels, not by reading the QML.
+
+**Verification so far.**
+
+- `bin/build` clean, `bin/test` **43/43** (the tests are backend-only and are
+  untouched by this phase).
+- The offscreen smoke run prints **no QML warnings**.
+- `/tmp/opencode/qmlprobe` (throwaway, rebuilt after `/tmp` was wiped): loads the
+  real `qrc:/Main.qml`, walks the states and prints **37 checks, 37 passed** —
+  the font family on every `Text`, the two modes, every deleted line proven
+  absent, the key caps per row and their centring against their own name, the
+  highlight on one row only, the single tank marker, the pad row's five icons and
+  its absence with no pad, the 1P/2P join hints per panel, and the game over /
+  paused / manual overlays with their buttons.
+- `/tmp/opencode/shots` saves a PNG per state for eyeballing (1040x800 offscreen).
+- **Play session: still owed.** The user approved the result from the
+  screenshots and asked for the commit; nobody has played commit D yet. If
+  anything misbehaves in play, it is a small follow-up commit, not a revert.
+
+**Decisions worth keeping.**
+
+- Only the *select screen* stopped explaining itself in words. The manual stays a
+  text reference on purpose, so the pad sentence still exists — in the manual.
+- The pad row is drawn from `backend.pads.length`, so it appears and disappears
+  with hotplug; it is `visible: false` (built but hidden) when no pad is there,
+  which is the same trade the rest of the UI makes.
+- The em dash stays because Silkscreen carries it; do not "clean up" the
+  `backend.cpp` messages.
+- Phase 2 comes next, from the user's own notes: **the manual first, then the
+  in-game interface**. Only the select screen was decluttered in this phase, on
+  purpose, so the two are still text-heavy and picture-light respectively.
