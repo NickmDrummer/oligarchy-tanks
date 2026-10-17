@@ -8,8 +8,9 @@
 #include <vector>
 
 // Backend owns all game state. QML only renders and forwards key events.
-// Input is abstracted per player (direction flags + fire edge) so a future
-// gamepad (DualSense/Xbox via SDL/evdev) can drive the same path.
+// Input is abstracted per player (direction flags + fire edge), and the
+// gamepad reader in gamepad.cpp drives the same path through the pad*
+// invokables below. The keyboard is always live for both players.
 class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString state READ state NOTIFY stateChanged)
@@ -32,6 +33,8 @@ class Backend : public QObject {
     Q_PROPERTY(int level READ level NOTIFY stateChanged)
     Q_PROPERTY(bool frozen READ frozen NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
+    // Connected pads and the player each one drives (-1 until it joins).
+    Q_PROPERTY(QVariantList pads READ pads NOTIFY padsChanged)
 
 public:
     static constexpr int COLS = 15;
@@ -86,6 +89,21 @@ public:
     Q_INVOKABLE void nextLevel();
     Q_INVOKABLE void togglePause();
 
+    // Gamepads, driven by the reader in gamepad.cpp. The keyboard stays live
+    // for both players; a pad joins by pressing START, and the flags are kept
+    // per source so releasing a key never cancels a stick.
+    //
+    // Who gets which player: player 1 is the keyboard's, so the *first* pad to
+    // press START takes player 2 and a second pad takes player 1. That way one
+    // pad means one human on it, and two pads give each player their own stick.
+    Q_INVOKABLE void padConnected(int pad, const QString &name);
+    Q_INVOKABLE void padDisconnected(int pad);
+    Q_INVOKABLE void padMove(int pad, int dx, int dy, bool pressed);
+    Q_INVOKABLE void padFire(int pad);
+    Q_INVOKABLE void padStart(int pad);
+    Q_INVOKABLE void padSelect(int pad);
+    QVariantList pads() const;
+
 signals:
     void stateChanged();
     void frameChanged();
@@ -93,6 +111,9 @@ signals:
     void boardChanged();
     void soundChanged();
     void playSound(const QString &name);
+    // A pad asked for the manual (SELECT / Share).
+    void helpRequested();
+    void padsChanged();
 
     // Test-only access to internal state, so behaviour like bonus effects
     // can be asserted deterministically without rigging the map at runtime.
@@ -184,6 +205,18 @@ private:
     void updatePickups(double dt);
     void updateFloaters(double dt);
 
+    // Gamepad bookkeeping. A pad is a connected device plus the player it
+    // drives (-1 until it presses START).
+    struct Pad {
+        int index = 0;
+        QString name;
+        int player = -1;
+    };
+    const Pad *padAt(int index) const;
+    int playerForPad(int index) const;
+    // Claims the first free player slot, player 2 before player 1.
+    bool joinPad(int index);
+
     QString m_state = "menu";
     QString m_message;
     std::vector<int> m_grid;
@@ -211,6 +244,10 @@ private:
     QElapsedTimer m_clock;
     bool m_p1Up = false, m_p1Down = false, m_p1Left = false, m_p1Right = false;
     bool m_p2Up = false, m_p2Down = false, m_p2Left = false, m_p2Right = false;
+    // Directions held by a pad, indexed [player][0 up, 1 right, 2 down, 3 left]
+    // and ORed with the keyboard's flags when a tank moves.
+    bool m_padHeld[2][4] = {};
+    std::vector<Pad> m_pads;
     int m_spawned = 0;
     double m_spawnTimer = 0;
     bool m_soundEnabled = true;

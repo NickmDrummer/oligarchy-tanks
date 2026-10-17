@@ -212,6 +212,125 @@ void Backend::fireP2() {
     fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1, BULLET_SPEED);
 }
 
+// --- Gamepads ----------------------------------------------------------------
+
+QVariantList Backend::pads() const {
+    QVariantList out;
+    for (const Pad &p : m_pads) {
+        QVariantMap entry;
+        entry["index"] = p.index;
+        entry["name"] = p.name;
+        entry["player"] = p.player;
+        out.append(entry);
+    }
+    return out;
+}
+
+const Backend::Pad *Backend::padAt(int index) const {
+    for (const Pad &p : m_pads)
+        if (p.index == index)
+            return &p;
+    return nullptr;
+}
+
+int Backend::playerForPad(int index) const {
+    const Pad *p = padAt(index);
+    return p ? p->player : -1;
+}
+
+void Backend::padConnected(int pad, const QString &name) {
+    if (padAt(pad))
+        return;
+    Pad p;
+    p.index = pad;
+    p.name = name;
+    m_pads.push_back(p);
+    emit padsChanged();
+}
+
+void Backend::padDisconnected(int pad) {
+    const int player = playerForPad(pad);
+    for (auto it = m_pads.begin(); it != m_pads.end(); ++it) {
+        if (it->index != pad)
+            continue;
+        m_pads.erase(it);
+        break;
+    }
+    // The slot goes back to the keyboard and nothing stays stuck down.
+    if (player >= 0)
+        for (bool &held : m_padHeld[player])
+            held = false;
+    emit padsChanged();
+}
+
+// START on a pad: join if it has no player yet, otherwise do what P and R do.
+void Backend::padStart(int pad) {
+    // An unassigned pad joins on its first START: player 2 first, then player 1.
+    // A third pad has no slot left to claim, so it leaves the game alone.
+    const bool joining = playerForPad(pad) < 0;
+    if (joining && !joinPad(pad))
+        return;
+    // START from a still screen starts the game, like an arcade cabinet. A pad
+    // that has just joined mid-game must not pause it, so only a pad that
+    // already had a player toggles the pause.
+    if (m_state == "menu" || m_state == "gameover")
+        startGame();
+    else if (m_state == "victory")
+        nextLevel();
+    else if (!joining)
+        togglePause();
+}
+
+bool Backend::joinPad(int pad) {
+    const Pad *const self = padAt(pad);
+    if (!self || self->player >= 0)
+        return false;
+    // Player 1 belongs to the keyboard, so the first pad takes player 2 and a
+    // second pad takes player 1: one pad, one human on it.
+    static const int order[2] = {1, 0};
+    for (int slot : order) {
+        bool taken = false;
+        for (const Pad &other : m_pads)
+            if (other.player == slot)
+                taken = true;
+        if (taken)
+            continue;
+        for (Pad &p : m_pads)
+            if (p.index == pad)
+                p.player = slot;
+        emit padsChanged();
+        return true;
+    }
+    return false;
+}
+
+void Backend::padMove(int pad, int dx, int dy, bool pressed) {
+    const int player = playerForPad(pad);
+    if (player < 0)
+        return;
+    if (dy < 0)
+        m_padHeld[player][0] = pressed;
+    if (dx > 0)
+        m_padHeld[player][1] = pressed;
+    if (dy > 0)
+        m_padHeld[player][2] = pressed;
+    if (dx < 0)
+        m_padHeld[player][3] = pressed;
+}
+
+void Backend::padFire(int pad) {
+    const int player = playerForPad(pad);
+    if (player == 0)
+        fireP1();
+    else if (player == 1)
+        fireP2();
+}
+
+void Backend::padSelect(int pad) {
+    if (playerForPad(pad) >= 0)
+        emit helpRequested();
+}
+
 void Backend::startGame() {
     m_level = 1;
     m_freezeUntil = -1;
@@ -369,10 +488,13 @@ void Backend::tick() {
 
     for (int i = 0; i < 2; ++i) {
         const double boost = (m_time < m_p[i].speedUntil) ? 1.35 : 1.0;
-        if (i == 0)
-            updateTank(m_p[0], m_p1Up, m_p1Down, m_p1Left, m_p1Right, dt, PLAYER_SPEED * boost);
-        else
-            updateTank(m_p[1], m_p2Up, m_p2Down, m_p2Left, m_p2Right, dt, PLAYER_SPEED * boost);
+        // Keyboard and pad are two sources for the same tank: the flags are
+        // ORed, so letting go of a key never cancels a held stick.
+        const bool up = (i == 0 ? m_p1Up : m_p2Up) || m_padHeld[i][0];
+        const bool down = (i == 0 ? m_p1Down : m_p2Down) || m_padHeld[i][2];
+        const bool left = (i == 0 ? m_p1Left : m_p2Left) || m_padHeld[i][3];
+        const bool right = (i == 0 ? m_p1Right : m_p2Right) || m_padHeld[i][1];
+        updateTank(m_p[i], up, down, left, right, dt, PLAYER_SPEED * boost);
     }
 
     // Respawn dead players that still have lives.

@@ -3,7 +3,10 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <vector>
+
 #include "backend.h"
+#include "padmap.h"
 #include "theme.h"
 
 // Deterministic access to Backend internals so bonus behaviour and block
@@ -62,6 +65,42 @@ struct TanksTestAccess {
         b.m_time = b.m_baseGuardUntil + 1;
         b.updateBaseGuard();
     }
+    // Which player a pad drives (-1 while it has not joined).
+    static int padPlayer(const Backend &b, int pad) { return b.playerForPad(pad); }
+    static double playerX(const Backend &b, int i) { return b.m_p[i].x; }
+    // A cleared square, so an input test measures input and not the random map.
+    static void clearArea(Backend &b, int x0, int y0, int x1, int y1) {
+        for (int y = y0; y <= y1; ++y)
+            for (int x = x0; x <= x1; ++x)
+                putTile(b, x, y, Empty);
+    }
+};
+
+// Records what the mapper made of a pad, so the mapping rules can be asserted
+// with no Backend and no controller in the room.
+struct PadCalls {
+    struct Move {
+        int pad, dx, dy;
+        bool pressed;
+    };
+    std::vector<Move> moves;
+    std::vector<int> fires, starts, selects;
+    // Whether a direction is held right now, following the call sequence.
+    bool moving(int pad, int dx, int dy) const {
+        bool on = false;
+        for (const Move &m : moves)
+            if (m.pad == pad && m.dx == dx && m.dy == dy)
+                on = m.pressed;
+        return on;
+    }
+    struct Sink : PadSink {
+        explicit Sink(PadCalls *c) : calls(c) {}
+        void padMove(int pad, int dx, int dy, bool pressed) override { calls->moves.push_back({pad, dx, dy, pressed}); }
+        void padFire(int pad) override { calls->fires.push_back(pad); }
+        void padStart(int pad) override { calls->starts.push_back(pad); }
+        void padSelect(int pad) override { calls->selects.push_back(pad); }
+        PadCalls *calls;
+    };
 };
 
 class TanksTests : public QObject {
@@ -310,6 +349,226 @@ private slots:
         QCOMPARE(TanksTestAccess::enemiesAlive(b), 0);
         QCOMPARE(TanksTestAccess::tile(b, bx + 1, by), int(TanksTestAccess::Steel));
         QCOMPARE(b.players().at(0).toMap().value("score").toInt(), 0);
+    }
+
+    // --- Gamepads -----------------------------------------------------------
+    // The mapper is device-free, so the rules are asserted without a pad:
+    // the stick has to leave the deadzone, the d-pad is digital, a diagonal
+    // sets both axes, and fire/start/select fire once per press.
+
+    void padMapperDeadzoneAndDirections() {
+        PadCalls calls;
+        PadCalls::Sink sink(&calls);
+        PadMapper mapper;
+        PadState s;
+        s.index = 0;
+        s.lx = 0.2; // inside the deadzone
+        s.ly = 0.2;
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.moves.size()), 0);
+
+        s.ly = -0.9;
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.moves.size()), 1);
+        QVERIFY(calls.moving(0, 0, -1));
+
+        // Diagonal: pushing the same stick right adds the second axis.
+        s.lx = 0.9;
+        mapper.apply(s, sink);
+        QVERIFY(calls.moving(0, 1, 0));
+        QVERIFY(calls.moving(0, 0, -1));
+
+        s.lx = 0.0;
+        s.ly = 0.0;
+        mapper.apply(s, sink);
+        QVERIFY(!calls.moving(0, 1, 0));
+        QVERIFY(!calls.moving(0, 0, -1));
+        const int settled = int(calls.moves.size());
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.moves.size()), settled); // nothing to report while centred
+
+        // The d-pad is reported as held flags and works the same way.
+        s.right = true;
+        mapper.apply(s, sink);
+        QVERIFY(calls.moving(0, 1, 0));
+        s.right = false;
+        mapper.apply(s, sink);
+        QVERIFY(!calls.moving(0, 1, 0));
+    }
+
+    void padMapperEdgeTriggersFireAndStart() {
+        PadCalls calls;
+        PadCalls::Sink sink(&calls);
+        PadMapper mapper;
+        PadState s;
+        s.index = 3;
+        s.west = true; // X / Square
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.fires.size()), 1);
+        mapper.apply(s, sink); // still held: no auto-repeat
+        QCOMPARE(int(calls.fires.size()), 1);
+
+        s.west = false;
+        mapper.apply(s, sink);
+        s.lt = 0.5; // either trigger past halfway fires
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.fires.size()), 2);
+        s.lt = 0.0;
+        mapper.apply(s, sink);
+        s.rt = 0.9;
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.fires.size()), 3);
+        // A trigger resting in its own noise band is not a press.
+        s.rt = 0.1;
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.fires.size()), 3);
+
+        s.start = true;
+        s.select = true;
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.starts.size()), 1);
+        QCOMPARE(int(calls.selects.size()), 1);
+        mapper.apply(s, sink);
+        QCOMPARE(int(calls.starts.size()), 1);
+        QCOMPARE(int(calls.selects.size()), 1);
+    }
+
+    void padMapperReleaseLetsGoOfHeldDirections() {
+        PadCalls calls;
+        PadCalls::Sink sink(&calls);
+        PadMapper mapper;
+        PadState s;
+        s.index = 1;
+        s.left = true;
+        s.lx = -1.0;
+        mapper.apply(s, sink);
+        QVERIFY(calls.moving(1, -1, 0));
+        // Unplugging must not leave a direction stuck down.
+        mapper.release(1, sink);
+        QVERIFY(!calls.moving(1, -1, 0));
+    }
+
+    // The first pad to press START takes player 2 (player 1 is the keyboard's)
+    // and joining from the menu starts the game, like a cabinet.
+    void firstPadJoinsPlayerTwo() {
+        Backend b;
+        b.padConnected(0, "Test Pad");
+        QCOMPARE(b.pads().size(), 1);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), -1);
+        b.padStart(0);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 1);
+        QCOMPARE(b.state(), QString("playing"));
+    }
+
+    void secondPadJoinsPlayerOne() {
+        Backend b;
+        b.startGame();
+        b.padConnected(0, "First");
+        b.padConnected(1, "Second");
+        b.padStart(0);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 1);
+        // A pad joining mid-game must not pause the game.
+        QCOMPARE(b.state(), QString("playing"));
+        b.padStart(1);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 1), 0);
+        // A third pad has nowhere to go and leaves the game alone.
+        b.padConnected(2, "Third");
+        b.padStart(2);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 2), -1);
+        QCOMPARE(b.state(), QString("playing"));
+    }
+
+    void padStartPausesOnceThePadHasAPlayer() {
+        Backend b;
+        b.startGame();
+        b.padConnected(0, "Pad");
+        b.padStart(0); // joins
+        QCOMPARE(b.state(), QString("playing"));
+        b.padStart(0); // now START means pause
+        QCOMPARE(b.state(), QString("paused"));
+        b.padStart(0);
+        QCOMPARE(b.state(), QString("playing"));
+    }
+
+    void padMovesOnlyItsOwnPlayer() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::clearArea(b, 5, 6, 10, 8);
+        TanksTestAccess::putPlayer(b, 1, 6.5, 7.5);
+        const double p1x = TanksTestAccess::playerX(b, 0);
+        b.padConnected(0, "Pad");
+        b.padStart(0); // player 2
+        b.padMove(0, 1, 0, true);
+        QTest::qWait(300);
+        b.padMove(0, 1, 0, false);
+        QVERIFY2(TanksTestAccess::playerX(b, 1) > 7.2,
+                 qPrintable(QString("p2x=%1").arg(TanksTestAccess::playerX(b, 1))));
+        QCOMPARE(TanksTestAccess::playerX(b, 0), p1x);
+    }
+
+    // Both sources drive the same tank; letting go of one must not cancel the
+    // other (which is the whole reason the flags are kept per source).
+    void keyboardAndPadDoNotCancelEachOther() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::clearArea(b, 5, 6, 12, 8);
+        TanksTestAccess::putPlayer(b, 1, 6.5, 7.5);
+        b.padConnected(0, "Pad");
+        b.padStart(0);
+        b.setP2Move(1, 0, true); // keyboard holds right
+        b.padMove(0, 1, 0, true); // pad holds right too
+        QTest::qWait(200);
+        const double both = TanksTestAccess::playerX(b, 1);
+        b.setP2Move(1, 0, false); // the key is released, the stick is not
+        QTest::qWait(200);
+        const double padOnly = TanksTestAccess::playerX(b, 1);
+        QVERIFY2(padOnly > both + 0.2, qPrintable(QString("both=%1 padOnly=%2").arg(both).arg(padOnly)));
+        b.padMove(0, 1, 0, false); // now nobody holds it
+        QTest::qWait(200);
+        QCOMPARE(TanksTestAccess::playerX(b, 1), padOnly);
+    }
+
+    void padFireShootsForItsPlayer() {
+        Backend b;
+        b.startGame();
+        b.padConnected(0, "Pad");
+        b.padStart(0); // player 2
+        b.padFire(0);
+        const QVariantList shots = b.bullets();
+        QCOMPARE(shots.size(), 1);
+        QCOMPARE(shots.at(0).toMap().value("owner").toInt(), 1);
+        // A pad with no player is inert.
+        b.padConnected(1, "Idle");
+        b.padFire(1);
+        QCOMPARE(b.bullets().size(), 1);
+    }
+
+    void padDisconnectGivesTheSlotBack() {
+        Backend b;
+        b.startGame();
+        b.padConnected(0, "Pad");
+        b.padStart(0);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 1);
+        b.padDisconnected(0);
+        QCOMPARE(b.pads().size(), 0);
+        TanksTestAccess::clearArea(b, 5, 6, 10, 8);
+        TanksTestAccess::putPlayer(b, 1, 6.5, 7.5);
+        b.padMove(0, 1, 0, true); // ignored: that pad is gone
+        QTest::qWait(200);
+        QCOMPARE(TanksTestAccess::playerX(b, 1), 6.5);
+    }
+
+    void padDisconnectDoesNotLeaveADirectionHeld() {
+        Backend b;
+        b.startGame();
+        b.padConnected(0, "Pad");
+        b.padStart(0);
+        b.padMove(0, 1, 0, true);
+        b.padDisconnected(0);
+        TanksTestAccess::clearArea(b, 5, 6, 10, 8);
+        TanksTestAccess::putPlayer(b, 1, 6.5, 7.5);
+        QTest::qWait(200);
+        QCOMPARE(TanksTestAccess::playerX(b, 1), 6.5);
     }
 
     void themeFallsBack() {
