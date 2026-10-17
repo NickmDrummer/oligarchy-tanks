@@ -1120,13 +1120,25 @@ ApplicationWindow {
             }
         }
 
-        Text {
-            Layout.fillWidth: true
-            horizontalAlignment: Text.AlignHCenter
-            text: "P PAUSE - R MENU - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - GREEN DROPS BONUS - BUILD " + buildId
-            font.bold: true
-            font.pixelSize: 12; font.letterSpacing: 1
-            color: "#5a5e68"
+        Row {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 6
+            KeyCap { unit: 20; label: "P" }
+            Text { text: "PAUSE"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            KeyCap { unit: 20; label: "R" }
+            Text { text: "MENU"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            KeyCap { unit: 20; label: "M" }
+            Text { text: "TOGGLE SOUND"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            KeyCap { unit: 20; label: "?" }
+            Text { text: "HELP"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            KeyCap { unit: 20; label: "Q" }
+            Text { text: "QUIT"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: buildId; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
         }
     }
 
