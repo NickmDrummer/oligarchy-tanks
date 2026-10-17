@@ -14,8 +14,12 @@ class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString state READ state NOTIFY stateChanged)
     Q_PROPERTY(QString message READ message NOTIFY stateChanged)
-    Q_PROPERTY(QString board READ board NOTIFY frameChanged)
-    Q_PROPERTY(QString boardQ READ boardQ NOTIFY frameChanged)
+    // Board state has its own notification: tile queries must only re-run
+    // when the map really changes. Wired to frameChanged they re-evaluated
+    // 60 times a second, and reading a QString property that often is what
+    // made the game crawl (see AGENTS.md section 7).
+    Q_PROPERTY(QString board READ board NOTIFY boardChanged)
+    Q_PROPERTY(int boardRev READ boardRev NOTIFY boardChanged)
     Q_PROPERTY(int cols READ cols CONSTANT)
     Q_PROPERTY(int rows READ rows CONSTANT)
     Q_PROPERTY(QVariantList players READ players NOTIFY frameChanged)
@@ -39,8 +43,16 @@ public:
     QString state() const { return m_state; }
     QString message() const { return m_message; }
     QString board() const;
-    // Brick quarters, 2x2 per tile: 'B' where a quarter survives.
-    QString boardQ() const;
+    int boardRev() const { return m_boardRev; }
+    // Tile kind at (x, y), matching the Tile enum: 0 empty, 1 brick,
+    // 2 steel, 3 base, 4 dead base, 5 forest. Out of bounds reads empty.
+    // QML passes boardRev as `rev`, so the binding is only re-run when the
+    // board changes instead of every frame.
+    Q_INVOKABLE int tileKind(int x, int y, int rev) const;
+    // True while strip `strip` of the brick tile at (x, y) has been shot
+    // away. Strips 0-3 are the vertical quarters, left to right; 4-7 the
+    // horizontal ones, top to bottom. `rev` works like in tileKind().
+    Q_INVOKABLE bool brickStripGone(int x, int y, int strip, int rev) const;
     int cols() const { return COLS; }
     int rows() const { return ROWS; }
     QVariantList players() const;
@@ -77,6 +89,8 @@ public:
 signals:
     void stateChanged();
     void frameChanged();
+    // Emitted whenever the map changes: new map, brick damage, base guard.
+    void boardChanged();
     void soundChanged();
     void playSound(const QString &name);
 
@@ -97,7 +111,6 @@ private:
         double shieldUntil = -1;
         double speedUntil = -1;
         double cannonUntil = -1;
-        double pickUntil = -1;
     };
     struct Enemy {
         double x = 0, y = 0;
@@ -127,7 +140,6 @@ private:
         bool active = false;
         double speed = 0;
         bool big = false;
-        bool pick = false;
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
@@ -144,11 +156,26 @@ private:
     void fireBullet(double x, double y, int dir, int owner, double speed);
     double enemySpeedMult() const { return 1.0 + 0.1 * (m_level - 1); }
     bool solidAt(double x, double y, double size) const;
+    // Solid terrain test for a single point. Brick is special: under half
+    // destroyed the tile blocks as a whole block, from the halfway mark on
+    // only the surviving strips block.
+    bool tileBlocksPoint(double x, double y) const;
     bool hitsTank(double bx, double by, double tx, double ty) const;
     bool blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const;
     int tileAt(int cx, int cy) const;
-    void damageTile(int cx, int cy);
-    void damageBrickAt(double bx, double by);
+    // Shears one strip off a brick tile, on the face the shot came from.
+    void chipBrick(int cx, int cy, int dir);
+    // PICK turns the wall around the base into concrete, then back to brick.
+    // Anything standing where the concrete lands is crushed.
+    void setBaseGuard(bool steel);
+    void updateBaseGuard();
+    // Kills every tank overlapping one board cell, so PICK can rebuild the
+    // base wall without sealing a tank inside it.
+    void crushTanksIn(int cx, int cy);
+    static bool cellHitsTank(int cx, int cy, double tx, double ty);
+    // Board mutations funnel through here: the cached string form is
+    // dropped and QML is told to re-run its tile queries.
+    void bumpBoard();
     void killPlayer(int idx);
     void checkEnd();
     int aliveEnemies() const;
@@ -160,14 +187,24 @@ private:
     QString m_state = "menu";
     QString m_message;
     std::vector<int> m_grid;
-    // Per-tile brick quarter mask, bits 0 TL, 1 TR, 2 BL, 3 BR.
+    // Per-tile brick strip mask, bits 0-3 vertical V0..V3 (left to right),
+    // bits 4-7 horizontal H0..H3 (top to bottom). 0xFF is a whole tile.
     std::vector<uint8_t> m_brickQ;
+    // Bumped on every board change; QML passes it back to the tile queries
+    // so they re-run only when something actually moved.
+    int m_boardRev = 0;
+    // Cached string form of m_grid for board() (tests and probes only).
+    mutable QString m_boardCache;
+    mutable bool m_boardCacheValid = false;
     Tank m_p[2];
     std::vector<Enemy> m_foes;
     std::vector<Bullet> m_bullets;
     Pickup m_pickup;
     std::vector<Floater> m_floaters;
     double m_freezeUntil = -1;
+    // Concrete wall around the base, granted by PICK. Negative means off.
+    double m_baseGuardUntil = -1;
+    std::vector<int> m_baseGuard;
     double m_time = 0;
     int m_frameTick = 0;
     int m_level = 1;

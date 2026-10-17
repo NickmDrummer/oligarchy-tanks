@@ -10,6 +10,22 @@ constexpr double PLAYER_SPEED = 3.62;
 constexpr double ENEMY_SPEED = 2.07;
 constexpr double BULLET_SPEED = 8.0;
 constexpr double FIRE_GAP = 0.35;
+// A shot never advances more than this in one frame, so it cannot jump
+// clean over the quarter-cell gap of a damaged brick tile.
+constexpr double BULLET_MAX_STEP = 0.2;
+// A brick tile that has lost fewer than half its strips still blocks as a
+// whole block. From the halfway mark on, only the masonry that is left
+// blocks, so tanks roll forward to the 50% line and shots fly through the
+// hole they opened.
+constexpr int BRICK_BLOCKS_BELOW = 2;
+
+int goneStrips(unsigned m) {
+    int n = 0;
+    for (int i = 0; i < 8; ++i)
+        if ((m & (1u << i)) == 0)
+            ++n;
+    return n;
+}
 }
 
 Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) {
@@ -28,6 +44,8 @@ Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) 
 }
 
 QString Backend::board() const {
+    if (m_boardCacheValid)
+        return m_boardCache;
     QString s;
     s.reserve(COLS * ROWS);
     for (int t : m_grid) {
@@ -40,20 +58,33 @@ QString Backend::board() const {
         default: s += '.'; break;
         }
     }
+    m_boardCache = s;
+    m_boardCacheValid = true;
     return s;
 }
 
-QString Backend::boardQ() const {
-    QString s;
-    s.reserve(COLS * 2 * ROWS * 2);
-    for (int ty = 0; ty < ROWS; ++ty)
-        for (int qy = 0; qy < 2; ++qy)
-            for (int tx = 0; tx < COLS; ++tx)
-                for (int qx = 0; qx < 2; ++qx) {
-                    const int bit = qx + qy * 2;
-                    s += (m_grid[ty * COLS + tx] == Brick && (m_brickQ[ty * COLS + tx] & (1 << bit))) ? 'B' : '.';
-                }
-    return s;
+// Board mutations funnel through here: drop the cached string, bump the
+// revision QML hands back to its tile queries, and notify.
+void Backend::bumpBoard() {
+    m_boardCacheValid = false;
+    ++m_boardRev;
+    emit boardChanged();
+}
+
+int Backend::tileKind(int x, int y, int rev) const {
+    Q_UNUSED(rev);
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS)
+        return Empty;
+    return m_grid[y * COLS + x];
+}
+
+bool Backend::brickStripGone(int x, int y, int strip, int rev) const {
+    Q_UNUSED(rev);
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS || strip < 0 || strip > 7)
+        return false;
+    if (m_grid[y * COLS + x] != Brick)
+        return false;
+    return (m_brickQ[y * COLS + x] & (1u << strip)) == 0;
 }
 
 QVariantList Backend::players() const {
@@ -63,7 +94,7 @@ QVariantList Backend::players() const {
         out.append(QVariantMap{
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}, {"pick", m_time < t.pickUntil},
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
         });
     }
     return out;
@@ -92,7 +123,7 @@ QVariantMap Backend::playerAt(int i, int tick) const {
     const Tank &t = m_p[i];
     return {{"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}, {"pick", m_time < t.pickUntil}};
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}};
 }
 
 QVariantMap Backend::enemyAt(int i, int tick) const {
@@ -109,7 +140,7 @@ QVariantMap Backend::bulletAt(int i, int tick) const {
     if (i < 0 || i >= int(m_bullets.size()))
         return {{"x", 0.0}, {"y", 0.0}, {"dir", 0}, {"owner", 2}, {"active", false}, {"big", false}};
     const Bullet &b = m_bullets[i];
-    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}, {"pick", b.pick}};
+    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}};
 }
 
 QVariantMap Backend::floaterAt(int i, int tick) const {
@@ -189,6 +220,8 @@ void Backend::startGame() {
     m_bullets.clear();
     m_floaters.clear();
     m_pickup = Pickup{};
+    m_baseGuardUntil = -1;
+    m_baseGuard.clear();
     m_freezeUntil = -1;
     m_time = 0;
     for (auto &e : m_foes)
@@ -209,6 +242,8 @@ void Backend::nextLevel() {
     m_bullets.clear();
     m_floaters.clear();
     m_pickup = Pickup{};
+    m_baseGuardUntil = -1;
+    m_baseGuard.clear();
     m_spawned = 0;
     m_spawnTimer = 1.0;
     m_p1Up = m_p1Down = m_p1Left = m_p1Right = false;
@@ -291,7 +326,8 @@ void Backend::generateMap() {
     m_brickQ.assign(COLS * ROWS, 0);
     for (int i = 0; i < COLS * ROWS; ++i)
         if (m_grid[i] == Brick)
-            m_brickQ[i] = 0xF;
+            m_brickQ[i] = 0xFF;
+    bumpBoard();
 }
 
 void Backend::resetTanks(bool fullStats) {
@@ -357,6 +393,7 @@ void Backend::tick() {
     updateBullets(dt);
     updatePickups(dt);
     updateFloaters(dt);
+    updateBaseGuard();
     checkEnd();
     emit frameChanged();
 }
@@ -472,47 +509,39 @@ void Backend::updateBullets(double dt) {
     for (auto &b : m_bullets) {
         if (!b.active)
             continue;
+        // Capped so a fast shot cannot skip over a quarter-cell gap.
+        const double step = std::min(b.speed * dt, BULLET_MAX_STEP);
         double nx = b.x, ny = b.y;
-        if (b.dir == 0) ny -= b.speed * dt;
-        if (b.dir == 2) ny += b.speed * dt;
-        if (b.dir == 3) nx -= b.speed * dt;
-        if (b.dir == 1) nx += b.speed * dt;
+        if (b.dir == 0) ny -= step;
+        if (b.dir == 2) ny += step;
+        if (b.dir == 3) nx -= step;
+        if (b.dir == 1) nx += step;
 
         // Out of bounds.
         if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) {
             b.active = false;
             continue;
         }
-        const int cx = int(nx), cy = int(ny);
+        const int cx = int(std::floor(nx)), cy = int(std::floor(ny));
         const int tile = tileAt(cx, cy);
-        if (tile == Brick || tile == Steel || tile == Base || tile == BaseDead) {
-            bool blocked = true;
+        // A damaged brick tile whose strips in the shot's way are already
+        // gone is a hole: the shot flies straight through it.
+        const bool through = (tile == Brick) && !tileBlocksPoint(nx, ny);
+        if (!through && (tile == Brick || tile == Steel || tile == Base || tile == BaseDead)) {
             if (tile == Brick) {
-                // A shot chips the quarter it lands in; if that quarter is
-                // already gone the bullet flies straight through the gap.
-                const int bit = (nx - cx < 0.5 ? 0 : 1) + (ny - cy < 0.5 ? 0 : 2);
-                if (m_brickQ[cy * COLS + cx] & (1 << bit)) {
-                    damageBrickAt(nx, ny);
-                    if (m_soundEnabled)
-                        emit playSound("hit");
-                } else {
-                    blocked = false;
-                }
-            } else if (tile == Steel) {
-                if (b.pick) {
-                    damageTile(cx, cy);
-                    if (m_soundEnabled)
-                        emit playSound("hit");
-                }
+                // The shot shears off the strip facing the direction it came
+                // from.
+                chipBrick(cx, cy, b.dir);
+                if (m_soundEnabled)
+                    emit playSound("hit");
             } else if (tile == Base) {
                 m_grid[cy * COLS + cx] = BaseDead;
+                bumpBoard();
                 if (m_soundEnabled)
                     emit playSound("explode");
             }
-            if (blocked) {
-                b.active = false;
-                continue;
-            }
+            b.active = false;
+            continue;
         }
         // Hit players. A shield blocks the shot with no damage.
         bool consumed = false;
@@ -633,30 +662,38 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     b.active = true;
     b.speed = speed;
     b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
-    b.pick = (owner < 2 && m_time < m_p[owner].pickUntil);
     m_bullets.push_back(b);
     if (m_soundEnabled)
         emit playSound(owner == 2 ? "eshoot" : "shoot");
 }
 
+// Solid terrain stops a single point. Brick is special: under half
+// destroyed it blocks as a whole block, so the first shot changes nothing
+// for movement. From the halfway mark on only the surviving strips block,
+// which lets a tank (or a shot) reach exactly the 50% line.
+bool Backend::tileBlocksPoint(double x, double y) const {
+    const int cx = int(std::floor(x)), cy = int(std::floor(y));
+    if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
+        return true;
+    const int t = m_grid[cy * COLS + cx];
+    if (t == Steel || t == Base || t == BaseDead)
+        return true;
+    if (t != Brick)
+        return false;
+    const unsigned m = m_brickQ[cy * COLS + cx];
+    if (goneStrips(m) < BRICK_BLOCKS_BELOW)
+        return true;
+    const int vi = std::min(3, int((x - cx) * 4));
+    const int hi = std::min(3, int((y - cy) * 4));
+    return (m & (1u << vi)) != 0 && (m & (1u << (4 + hi))) != 0;
+}
+
 bool Backend::solidAt(double x, double y, double size) const {
     const double h = size / 2;
     const double pts[4][2] = {{x - h, y - h}, {x + h, y - h}, {x - h, y + h}, {x + h, y + h}};
-    for (auto &p : pts) {
-        const int cx = int(p[0]), cy = int(p[1]);
-        if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
+    for (auto &p : pts)
+        if (tileBlocksPoint(p[0], p[1]))
             return true;
-        const int t = tileAt(cx, cy);
-        if (t == Brick) {
-            // Only surviving quarters block.
-            const double fx = p[0] - cx, fy = p[1] - cy;
-            const int bit = (fx < 0.5 ? 0 : 1) + (fy < 0.5 ? 0 : 2);
-            if (m_brickQ[cy * COLS + cx] & (1 << bit))
-                return true;
-        } else if (t == Steel || t == Base || t == BaseDead) {
-            return true;
-        }
-    }
     return false;
 }
 
@@ -702,22 +739,94 @@ int Backend::tileAt(int cx, int cy) const {
     return m_grid[cy * COLS + cx];
 }
 
-void Backend::damageTile(int cx, int cy) {
-    m_grid[cy * COLS + cx] = Empty;
-}
-
-// A shot chips exactly the quarter it lands in. The tile clears once
-// all four quarters are gone.
-void Backend::damageBrickAt(double bx, double by) {
-    const int cx = int(bx), cy = int(by);
+// A shot shears off the strip on the face it hits: a horizontal shot
+// takes a vertical quarter (1/4 of the width), a vertical shot takes a
+// horizontal quarter (1/4 of the height). The tile only disappears once a
+// whole axis is gone; until half of it is gone it still blocks as a block.
+void Backend::chipBrick(int cx, int cy, int dir) {
     if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
         return;
     if (m_grid[cy * COLS + cx] != Brick)
         return;
-    const int bit = (bx - cx < 0.5 ? 0 : 1) + (by - cy < 0.5 ? 0 : 2);
-    m_brickQ[cy * COLS + cx] &= ~(1 << bit);
-    if (m_brickQ[cy * COLS + cx] == 0)
+    uint8_t &m = m_brickQ[cy * COLS + cx];
+    // dir: 0 up, 1 right, 2 down, 3 left. A shot travelling horizontally
+    // eats a vertical strip; one travelling vertically eats a horizontal one.
+    const int base = (dir == 1 || dir == 3) ? 0 : 4;
+    const bool fromNearSide = (dir == 1 || dir == 2); // left or top
+    if (fromNearSide) {
+        for (int i = 0; i < 4; ++i)
+            if (m & (1 << (base + i))) {
+                m &= uint8_t(~(1 << (base + i)));
+                break;
+            }
+    } else {
+        for (int i = 3; i >= 0; --i)
+            if (m & (1 << (base + i))) {
+                m &= uint8_t(~(1 << (base + i)));
+                break;
+            }
+    }
+    if ((m & 0x0F) == 0 || (m & 0xF0) == 0)
         m_grid[cy * COLS + cx] = Empty;
+    bumpBoard();
+}
+
+// True when the 0.8-wide tank sitting at (tx, ty) overlaps board cell
+// (cx, cy).
+bool Backend::cellHitsTank(int cx, int cy, double tx, double ty) {
+    const double h = TANK_SIZE / 2;
+    return tx + h > cx && tx - h < cx + 1 && ty + h > cy && ty - h < cy + 1;
+}
+
+// PICK rebuilds the wall, so nothing may stay standing where it lands: a
+// tank caught in the gap is crushed on the spot. No score is awarded, the
+// wall is not the player's doing.
+void Backend::crushTanksIn(int cx, int cy) {
+    for (int i = 0; i < 2; ++i)
+        if (m_p[i].alive && cellHitsTank(cx, cy, m_p[i].x, m_p[i].y))
+            killPlayer(i);
+    for (auto &e : m_foes) {
+        if (!e.alive || !cellHitsTank(cx, cy, e.x, e.y))
+            continue;
+        e.alive = false;
+        if (m_soundEnabled)
+            emit playSound("explode");
+    }
+}
+
+// PICK armours the wall around the base, like the shovel in Battle City:
+// the guard tiles become concrete, and turn back into brick when it lapses.
+// The wall is rebuilt whole, damage or not.
+void Backend::setBaseGuard(bool steel) {
+    const int bx = COLS / 2, by = ROWS - 1;
+    static const int offs[5][2] = {{-1, 0}, {1, 0}, {-1, -1}, {0, -1}, {1, -1}};
+    if (steel) {
+        m_baseGuard.clear();
+        for (const auto &o : offs) {
+            const int x = bx + o[0], y = by + o[1];
+            if (x < 0 || y < 0 || x >= COLS || y >= ROWS)
+                continue;
+            crushTanksIn(x, y);
+            m_grid[y * COLS + x] = Steel;
+            m_brickQ[y * COLS + x] = 0;
+            m_baseGuard.push_back(y * COLS + x);
+        }
+    } else {
+        for (int i : m_baseGuard) {
+            crushTanksIn(i % COLS, i / COLS);
+            m_grid[i] = Brick;
+            m_brickQ[i] = 0xFF;
+        }
+        m_baseGuard.clear();
+    }
+    bumpBoard();
+}
+
+void Backend::updateBaseGuard() {
+    if (m_baseGuardUntil > 0 && m_time >= m_baseGuardUntil) {
+        m_baseGuardUntil = -1;
+        setBaseGuard(false);
+    }
 }
 
 void Backend::killPlayer(int idx) {
@@ -780,7 +889,10 @@ void Backend::applyPickup(int player) {
     switch (m_pickup.kind) {
     case Speed: t.speedUntil = m_time + 20; break;
     case Shield: t.shieldUntil = m_time + 10; break;
-    case Pick: t.pickUntil = m_time + 20; break;
+    case Pick:
+        setBaseGuard(true);
+        m_baseGuardUntil = m_time + 20;
+        break;
     case Life: t.lives = std::min(t.lives + 1, 5); break;
     case Grenade: {
         for (auto &e : m_foes) {

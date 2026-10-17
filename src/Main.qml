@@ -38,6 +38,23 @@ ApplicationWindow {
     property color p2dark: "#5e1f18"
     property color p2light: "#e8a49c"
 
+    // Tile kinds, matching the non-empty entries of Backend::Tile. An empty
+    // cell matches none of them and simply draws nothing.
+    readonly property int tileBrick: 1
+    readonly property int tileSteel: 2
+    readonly property int tileBase: 3
+    readonly property int tileDead: 4
+    readonly property int tileForest: 5
+
+    // True while a brick strip has been shot away. Strips 0-3 are the
+    // vertical ones, left to right; 4-7 the horizontal ones, top to bottom.
+    // backend.boardRev is what makes the binding re-run, and only when the
+    // board really changes: pulling a string property from QML every frame
+    // is what used to cost ~100 ms a frame (AGENTS.md section 7).
+    function brickGone(cx, cy, strip) {
+        return backend.brickStripGone(cx, cy, strip, backend.boardRev)
+    }
+
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
     Shortcut { sequence: "P"; context: Qt.ApplicationShortcut; onActivated: backend.togglePause() }
@@ -182,7 +199,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED " : "") + (backend.players[0].cannon ? "CANNON " : "") + (backend.players[0].pick ? "PICK" : "")) : ""
+                        text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED " : "") + (backend.players[0].cannon ? "CANNON " : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -208,7 +225,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED " : "") + (backend.players[1].cannon ? "CANNON " : "") + (backend.players[1].pick ? "PICK" : "")) : ""
+                        text: backend.players.length > 1 ? ((backend.players[1].shield ? "SHIELD " : "") + (backend.players[1].speed ? "SPEED " : "") + (backend.players[1].cannon ? "CANNON " : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
@@ -265,7 +282,9 @@ ApplicationWindow {
                         id: tileItem
                         property int cx: index % backend.cols
                         property int cy: Math.floor(index / backend.cols)
-                        property string t: backend.board.length > index ? backend.board[index] : "."
+                        // Kind comes from an int query keyed on boardRev, so
+                        // it is only recomputed when the map changes.
+                        property int kind: backend.tileKind(cx, cy, backend.boardRev)
                         x: cx * win.cell
                         y: cy * win.cell
                         width: win.cell
@@ -275,10 +294,14 @@ ApplicationWindow {
                         // tens of thousands of items across the 15x15 board.
                         Loader {
                             anchors.fill: parent
-                            active: tileItem.t === "B"
+                            active: tileItem.kind === win.tileBrick
                             sourceComponent: brickPart
                         }
-                        // Brick quarters: each shot chips one 2x2 quarter.
+                        // Brick wall, Battle City style: dark mortar courses
+                        // with offset bricks and a highlight on the top edge.
+                        // A shot shears off the strip on the face it came
+                        // from; the gap shows the board behind, so the
+                        // brickwork keeps exactly its original look.
                         Component {
                             id: brickPart
                             Item {
@@ -287,48 +310,90 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     color: "#2e1a10"
                                 }
-                                Grid {
+                                Column {
                                     anchors.fill: parent
                                     anchors.margins: 1
-                                    columns: 2
-                                    rows: 2
+                                    spacing: 2
                                     Repeater {
                                         model: 4
                                         Item {
-                                            property int qx: index % 2
-                                            property int qy: Math.floor(index / 2)
-                                            property string q: backend.boardQ.length > (tileItem.cy * 2 + qy) * backend.cols * 2 + (tileItem.cx * 2 + qx) ? backend.boardQ[(tileItem.cy * 2 + qy) * backend.cols * 2 + (tileItem.cx * 2 + qx)] : "."
-                                            width: (win.cell - 2) / 2
-                                            height: (win.cell - 2) / 2
-                                            Rectangle {
-                                                visible: q === "B"
+                                            property bool odd: index % 2 === 1
+                                            width: win.cell - 2
+                                            height: (win.cell - 2 - 6) / 4
+                                            // Even course: two whole bricks.
+                                            Row {
+                                                visible: !odd
                                                 anchors.fill: parent
-                                                anchors.margins: 1
-                                                color: "#9e5230"
+                                                spacing: 2
+                                                Repeater {
+                                                    model: 2
+                                                    Rectangle {
+                                                        width: (win.cell - 2 - 2) / 2
+                                                        height: parent.height
+                                                        color: "#9e5230"
+                                                        Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                                        Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
+                                                    }
+                                                }
+                                            }
+                                            // Odd course: half, whole, half, so the
+                                            // joints are offset like real brickwork.
+                                            Row {
+                                                visible: odd
+                                                anchors.fill: parent
+                                                spacing: 2
                                                 Rectangle {
-                                                    width: parent.width; height: 3
-                                                    color: "#b96a3e"
+                                                    width: (win.cell - 2 - 4) / 4
+                                                    height: parent.height
+                                                    color: "#9e5230"
+                                                    Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                                    Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
                                                 }
                                                 Rectangle {
-                                                    y: parent.height - 2
-                                                    width: parent.width; height: 2
-                                                    color: "#5e2f18"
+                                                    width: (win.cell - 2 - 4) / 2
+                                                    height: parent.height
+                                                    color: "#9e5230"
+                                                    Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                                    Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
                                                 }
                                                 Rectangle {
-                                                    x: parent.width / 2 - 1
-                                                    width: 2; height: parent.height
-                                                    color: "#5e2f18"
-                                                    opacity: 0.7
+                                                    width: (win.cell - 2 - 4) / 4
+                                                    height: parent.height
+                                                    color: "#9e5230"
+                                                    Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                                    Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
                                                 }
                                             }
                                         }
+                                    }
+                                }
+                                // Sheared strips: 0-3 vertical, left to right;
+                                // 4-7 horizontal, top to bottom. The gap is
+                                // painted over the whole cell slice, edges
+                                // included, so nothing of the wall is left
+                                // behind: no mortar rim, no lighter fill.
+                                Repeater {
+                                    model: 8
+                                    Rectangle {
+                                        property bool vertical: index < 4
+                                        property int slot: index % 4
+                                        // Integer edges, so two neighbouring
+                                        // strips cannot leave a hairline seam.
+                                        property real e0: Math.round(slot * win.cell / 4)
+                                        property real e1: Math.round((slot + 1) * win.cell / 4)
+                                        visible: win.brickGone(tileItem.cx, tileItem.cy, index)
+                                        x: vertical ? e0 : 0
+                                        y: vertical ? 0 : e0
+                                        width: vertical ? e1 - e0 : win.cell
+                                        height: vertical ? win.cell : e1 - e0
+                                        color: "#050507"
                                     }
                                 }
                             }
                         }
                         Loader {
                             anchors.fill: parent
-                            active: tileItem.t === "S"
+                            active: tileItem.kind === win.tileSteel
                             sourceComponent: steelPart
                         }
                         // Concrete pavers: gray blocks with dark grout joints.
@@ -368,7 +433,7 @@ ApplicationWindow {
                         }
                         Loader {
                             anchors.fill: parent
-                            active: tileItem.t === "X" || tileItem.t === "x"
+                            active: tileItem.kind === win.tileBase || tileItem.kind === win.tileDead
                             sourceComponent: basePart
                         }
                         // Base: the official Omarchy wordmark in pixels. Defend it.
@@ -377,7 +442,7 @@ ApplicationWindow {
                             Item {
                                 id: baseTile
                                 anchors.fill: parent
-                                property bool dead: tileItem.t === "x"
+                                property bool dead: tileItem.kind === win.tileDead
                                 // 3x5 micro font spelling "omarchy", 27x5 blocks.
                                 property var word: [
                                     "XXX X.X .X. XX. .XX X.. X.X",
@@ -577,7 +642,7 @@ ApplicationWindow {
                         id: forestTile
                         property int cx: index % backend.cols
                         property int cy: Math.floor(index / backend.cols)
-                        property string t: backend.board.length > index ? backend.board[index] : "."
+                        property int kind: backend.tileKind(cx, cy, backend.boardRev)
                         x: cx * win.cell
                         y: cy * win.cell
                         width: win.cell
@@ -588,7 +653,7 @@ ApplicationWindow {
                         // never on the other cells of the board.
                         Loader {
                             anchors.fill: parent
-                            active: forestTile.t === "F"
+                            active: forestTile.kind === win.tileForest
                             sourceComponent: canopyPart
                         }
 
@@ -597,16 +662,16 @@ ApplicationWindow {
                             Item {
                                 id: canopyTile
                                 anchors.fill: parent
-                                property bool rimUp: tileAt(forestTile.cx, forestTile.cy - 1) !== "F"
-                                property bool rimDown: tileAt(forestTile.cx, forestTile.cy + 1) !== "F"
-                                property bool rimLeft: tileAt(forestTile.cx - 1, forestTile.cy) !== "F"
-                                property bool rimRight: tileAt(forestTile.cx + 1, forestTile.cy) !== "F"
+                                property bool rimUp: tileAt(forestTile.cx, forestTile.cy - 1) !== win.tileForest
+                                property bool rimDown: tileAt(forestTile.cx, forestTile.cy + 1) !== win.tileForest
+                                property bool rimLeft: tileAt(forestTile.cx - 1, forestTile.cy) !== win.tileForest
+                                property bool rimRight: tileAt(forestTile.cx + 1, forestTile.cy) !== win.tileForest
 
+                                // Int query, not a string one: this is also
+                                // what keeps the canopy from re-reading the
+                                // whole board every frame.
                                 function tileAt(x, y) {
-                                    if (x < 0 || y < 0 || x >= backend.cols || y >= backend.rows)
-                                        return "."
-                                    const i = y * backend.cols + x
-                                    return backend.board.length > i ? backend.board[i] : "."
+                                    return backend.tileKind(x, y, backend.boardRev)
                                 }
                                 // Stable per-cell hash on global cell coordinates.
                                 function leafNoise(gx, gy) {
@@ -830,6 +895,7 @@ ApplicationWindow {
                         }
                     }
                 }
+                Text { text: "PICK: BASE WALL BECOMES CONCRETE FOR 20 S"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#b9c0c9" }
                 Text { text: "DEFEND THE BASE. LATER SECTORS: MORE TANKS,"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 Text { text: "FASTER SPECIALS, TOUGHER ARMOR."; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
