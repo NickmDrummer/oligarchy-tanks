@@ -55,6 +55,26 @@ ApplicationWindow {
         return backend.brickStripGone(cx, cy, strip, backend.boardRev)
     }
 
+    // Gamepads. The keyboard is always live for both players, so this is a
+    // label, not a lock: it names the device that drives each tank once a pad
+    // has pressed START to join. The first pad to join takes player 2 (player 1
+    // stays on the keyboard), a second pad takes player 1.
+    function padLabel(player) {
+        const list = backend.pads
+        for (let i = 0; i < list.length; ++i)
+            if (list[i].player === player)
+                return "PAD " + (list[i].index + 1)
+        return "KEY"
+    }
+    // A connected pad that has not joined yet: the arcade "press start" prompt.
+    readonly property bool padWaiting: {
+        const list = backend.pads
+        for (let i = 0; i < list.length; ++i)
+            if (list[i].player < 0)
+                return true
+        return false
+    }
+
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
     Shortcut { sequence: "P"; context: Qt.ApplicationShortcut; onActivated: backend.togglePause() }
@@ -107,6 +127,8 @@ ApplicationWindow {
                 sndNuke.play()
         }
         function onStateChanged() { keys.forceActiveFocus() }
+        // SELECT / Share on a pad opens the manual, exactly like "?".
+        function onHelpRequested() { win.helpVisible = !win.helpVisible }
     }
 
     // Keyboard state forwarding. Held keys set direction flags in C++,
@@ -187,7 +209,7 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "P1 YELLOW"
+                        text: "P1 YELLOW  " + win.padLabel(0)
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
                         color: win.p1body
                     }
@@ -213,7 +235,7 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "P2 RED"
+                        text: "P2 RED  " + win.padLabel(1)
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
                         color: win.p2body
                     }
@@ -809,6 +831,14 @@ ApplicationWindow {
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
+                                visible: backend.pads.length > 0
+                                text: "PAD: STICK OR DPAD MOVE - L2/R2 OR SQUARE-X FIRE"
+                                font.family: "Monospace"; font.bold: true
+                                font.pixelSize: 12; font.letterSpacing: 1
+                                color: "#8a8f98"
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
                                 text: "GRAY 100 - GREEN 200 - STEEL 300"
                                 font.family: "Monospace"; font.bold: true
                                 font.pixelSize: 12; font.letterSpacing: 1
@@ -837,6 +867,23 @@ ApplicationWindow {
                         }
                     }
                 }
+            }
+        }
+
+        // Arcade invitation: shown while a connected pad has not claimed a
+        // player yet. A pad does nothing until it presses START.
+        Text {
+            Layout.fillWidth: true
+            visible: win.padWaiting
+            horizontalAlignment: Text.AlignHCenter
+            text: "PRESS START TO JOIN"
+            font.family: "Monospace"; font.bold: true
+            font.pixelSize: 15; font.letterSpacing: 2
+            color: theme.accent
+            SequentialAnimation on opacity {
+                loops: Animation.Infinite
+                NumberAnimation { to: 0.25; duration: 550 }
+                NumberAnimation { to: 1.0; duration: 550 }
             }
         }
 
@@ -869,6 +916,9 @@ ApplicationWindow {
                 Text { text: "P1 MOVE: W A S D - FIRE: SPACE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P2 MOVE: ARROWS - FIRE: ENTER"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P PAUSE - R RESTART - M SOUND - Q QUIT"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
+                Text { text: "PAD: START JOIN OR PAUSE - SHARE: MANUAL"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
+                Text { text: "PAD: STICK OR DPAD MOVE - L2/R2 OR SQUARE-X FIRE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
+                Text { text: "1ST PAD JOINS P2, 2ND JOINS P1 - KEYBOARD ALWAYS LIVE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 Text { text: "GRAY BASIC - GREEN FAST - STEEL 2 HITS"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8d8d94" }
                 Text { text: "BONUS DROP FROM GREEN TANKS - ONE AT A TIME"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
                 Grid {

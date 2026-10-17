@@ -10,10 +10,14 @@
 > Keep it current: update the state sections (`Current tree state`, `Feature
 > inventory`, `Next move`) whenever the state of the build changes.
 >
-> Snapshot: the tree is **clean**. `HEAD` is the commit *"Shear bricks in quarter
-> strips, make PICK rebuild the base wall, fix the frame rate"*, on top of the
-> checkpoint `ec59cd9` (brick damage, legible sprites, seamless forest, Loader
-> gating). That commit carries the 50% brick collision rule, PICK rebuilding the
+> Snapshot: `HEAD` is the commit *"Shear bricks in quarter strips, make PICK
+> rebuild the base wall, fix the frame rate"*, on top of the checkpoint
+> `ec59cd9`. The tree is **dirty** with the **gamepad** work (section 14):
+> implemented, 31/31 tests pass, the whole evdev path proven with two virtual
+> pads plus the real DualSense, but **the user has not played with a pad yet** —
+> that play session is the gate for the two commits in section 12.
+>
+> The commit below it carries the 50% brick collision rule, PICK rebuilding the
 > whole base wall, the contour-free gap and the frame-rate fix (**130 ms -> 14 ms**
 > a frame); tests and the user's own play session both pass. See section 6.
 
@@ -62,13 +66,15 @@ with `qmake6` + `make`.
 ├── bin/build            # qmake6 + make, with stale-build self-heal
 ├── bin/test             # test build + run, stale-build self-heal + TANKS_SEED=7
 ├── bin/install          # installs the Arch package (PKGBUILD)
-├── pkgbuild/            # PKGBUILD, .desktop, .svg
-├── README.md            # user-facing docs (controls, build)
+├── pkgbuild/            # PKGBUILD, .desktop, .svg, tanks.install (input group note)
+├── README.md            # user-facing docs (controls, build, gamepad)
 ├── tanks.pro
 ├── src/
 │   ├── main.cpp         # app setup, QML_DISABLE_DISK_CACHE, buildId from binary mtime
 │   ├── backend.h        # all game state + interface (Q_PROPERTY / Q_INVOKABLE)
 │   ├── backend.cpp      # game loop, collisions, bonuses, sectors, sound
+│   ├── padmap.h/.cpp    # PadState + PadMapper: what a pad control means (Qt-free)
+│   ├── gamepad.h/.cpp   # evdev reader + hotplug, hands PadState to the mapper
 │   ├── Main.qml         # window, HUD, board, sprites, overlays, help, footer
 │   ├── TankSprite.qml   # 16x16 tank with animated treads
 │   ├── PickupIcon.qml   # all 7 bonus sprites (per-pixel colour grids)
@@ -77,7 +83,7 @@ with `qmake6` + `make`.
 │   ├── resources.qrc
 │   └── sounds/*.wav     # engine, shoot, eshoot, hit, explode, power, nuke
 └── tests/
-    ├── tanks_tests.cpp  # 18 QtTest cases (20 slots)
+    ├── tanks_tests.cpp  # 29 QtTest cases (31 slots)
     └── tanks_tests.pro
 ```
 
@@ -94,8 +100,11 @@ with `qmake6` + `make`.
   fixed count** and only update properties, so the scene graph never rebuilds
   mid-game. (`tick` is a dummy argument that forces re-evaluation.)
 - Input is abstracted **per player** on purpose: `setP1Move(dx, dy, pressed)`,
-  `setP2Move(...)`, `fireP1()`, `fireP2()`. A future gamepad layer drives the
-  same path. **Gamepad is not implemented.**
+  `setP2Move(...)`, `fireP1()`, `fireP2()`. Keyboard and gamepad are **two
+  sources for the same tank**: `tick()` ORs the keyboard flags with
+  `m_padHeld[player][dir]`, so letting go of a key never cancels a held stick,
+  and vice versa. Fire is edge-triggered in the mapper and reuses `fireP1()` /
+  `fireP2()`. See section 14.
 - Time is real: `QElapsedTimer`, with `dt` clamped to `0.05` max so a hitch
   cannot teleport tanks.
 
@@ -252,8 +261,9 @@ flag are **gone** — do not reintroduce them. Implementation:
   way: a shot-away guard tile comes back as `Steel` along with the rest of the
   wall, a tank parked in the gap is crushed (player loses a life, enemy dies with
   no score), and `updateBaseGuard()` puts whole brick back.
-- All tests pass (`bin/test`): 20 slots = `initTestCase` + 18 cases +
-  `cleanupTestCase`.
+- All tests pass (`bin/test`): 31 slots = `initTestCase` + 29 cases +
+  `cleanupTestCase` (20 before the gamepad work: 3 mapper cases and 8 pad cases
+  were added, section 14).
 - **User-confirmed on screen, by playing** (this was the gate for the commit):
   - The sheared strips disappear as *nothing*: no contour line, no lighter fill.
   - As the strips go, the tank pushes further into the block. The user prefers
@@ -270,20 +280,52 @@ flag are **gone** — do not reintroduce them. Implementation:
 
 ### Implemented but not verified on screen by the user
 - Menu legend size bump (30 -> 40 px icons, `side: 28 -> 36`).
+- **Gamepad support** (section 14). Verified by 31/31 test slots, a `/tmp`
+  harness driving the real `Gamepad` reader with two `uinput` pads (an
+  Xbox-shaped one with 16-bit sticks and a hat d-pad, a DualSense-shaped one
+  with 8-bit sticks and a button d-pad) plus the user's **real DualSense**, and
+  the `bin/build` / offscreen smoke run. **Still to come: the user playing with
+  the DualSense on screen** — that is the gate for the commit.
 
 ### Broken / unresolved
 - Nothing blocking.
 
 ### Known missing
-- Gamepad support (path prepared, not implemented).
+- Nothing blocking the game as it stands.
 
 ---
 
 ## 6. Current tree state
 
-The tree is **clean**. `HEAD` is the commit *"Shear bricks in quarter strips,
-make PICK rebuild the base wall, fix the frame rate"*, sitting on top of the
-previous checkpoint `ec59cd9`. Nothing pushed.
+`HEAD` is the commit *"Shear bricks in quarter strips, make PICK rebuild the base
+wall, fix the frame rate"*, sitting on top of the previous checkpoint `ec59cd9`.
+Nothing pushed.
+
+The tree is **dirty** with the gamepad work (section 14) — the first new work
+since that commit, and the reason the rule "one checkpoint commit before the
+next feature" was respected:
+
+```
+ M README.md            gamepad section, the input group, TANKS_PAD_DEBUG
+ M pkgbuild/PKGBUILD    install=tanks.install
+ M src/Main.qml         pad labels, PRESS START TO JOIN, manual lines, helpRequested
+ M src/backend.cpp      pad registry, pad invokables, per-source m_padHeld in tick()
+ M src/backend.h        pads()/padsChanged/helpRequested, pad struct + helpers
+ M src/main.cpp         create and start Gamepad after Backend
+ M tanks.pro            padmap.cpp, gamepad.cpp
+ M tests/tanks_tests.cpp  3 mapper cases + 8 pad cases (31 slots)
+ M tests/tanks_tests.pro  padmap.cpp
+?? pkgbuild/tanks.install  the input group note
+?? src/padmap.h/.cpp    PadState, PadSink, PadMapper (Qt-free, unit tested)
+?? src/gamepad.h/.cpp   evdev reader, hotplug, TANKS_PAD_DEBUG
+```
+
+Nothing in that list is scaffolding: `TANKS_PAD_DEBUG`, the `[pad]` log lines
+and the scan timing are a **gated diagnostic facility**, which is what the
+`TANKS_PAD_DEBUG` note in section 14 asks a user with an untested pad to run.
+
+`build/` is git-ignored, and so are `pkgbuild/pkg/`, `pkgbuild/src/` and
+`pkgbuild/*.pkg.tar.zst` (checked: `git status` stays clean after `makepkg`).
 
 That commit contains exactly these files (line counts omitted on purpose — this
 file changes itself):
@@ -472,6 +514,44 @@ Build and run exactly like the visual probe (section 8.2) but with
 chosen by the compositor and varies between runs (942x1028 or 1898x1028 have both
 been seen) — quote it with the numbers.
 
+### 7.2 Measured: the gamepad hotplug scan froze the event loop
+
+The gamepad reader rescans `/dev/input` once a second so pads can be plugged in
+and out while playing (section 14). The first version called `open()` +
+`EVIOCGBIT` + `close()` on **every** node it had not identified yet, on every
+scan. Measured with the harness in section 14 (`worst event-loop stall`, a
+`waitMs()` that reports how much longer than asked it took):
+
+| Build | scan cost | worst stall |
+|---|---|---|
+| probing every node, every second | **~620 ms** | **633 ms** |
+| with the sysfs filter + rejected-node cache | **0-2 ms** | **1-2 ms** |
+
+A 620 ms freeze every second is a broken game, and it would have shown up as
+"the pad works but the game stutters". Two causes, both measured from outside
+the repo with `/tmp/opencode/pad/probe.c`:
+
+- **`close()` on an evdev node costs ~20 ms here** (`open` and the ioctls are
+  free: 0 ms). 36 nodes x ~18 ms = 644 ms, all of it in `close()`.
+- The nodes are re-probed on **every** scan, once a second.
+
+Fix, in two parts:
+
+1. **`m_rejected`** (`gamepad.h`): a path that has been looked at and is not a
+   gamepad is not looked at again, so the steady-state scan is just a
+   `QDir::entryList` (0 ms). A path that disappears is dropped from the set, so
+   a node reused by a new device is examined again.
+2. **`looksLikeGamepad()`** (`gamepad.cpp`): the capability masks are in sysfs
+   too (`/sys/class/input/eventN/device/capabilities/{abs,key}`, words printed
+   most significant first in hex), so the "is this a stick with gamepad
+   buttons?" test is answered by reading two small files and only real
+   candidates are ever opened. If sysfs cannot answer, the function returns true
+   and the node is probed the old way — so the filter can only ever make it
+   faster, never blind.
+
+That took the first scan from **601 ms to 2 ms**. The user's real DualSense and
+both `uinput` pads still pass the filter (verified: the harness reports them).
+
 ---
 
 ## 8. Verification workflow
@@ -626,9 +706,14 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
    session (section 5).
 8. ~~Commit.~~ **Done** — one commit, message in section 12.
 9. Optional: a verified screenshot for the record (section 8.1).
-
-**No open work item right now.** Nice-to-haves: gamepad support (section 5,
-`Known missing`) and seeing the menu legend size bump on screen.
+10. ~~Gamepad support.~~ **Implemented and verified every way except one**: 31/31
+    test slots, the `/tmp/opencode/pad` harness driving the real reader with two
+    virtual pads *and* the user's real DualSense, `bin/build`, the offscreen
+    smoke run, and a measured **620 ms -> 2 ms** fix for the hotplug scan
+    (section 7.2). See section 14 for the design and 7.2 for the measurement.
+11. **The user plays with the DualSense on screen** (join prompt, move, fire,
+    `START` pause, unplug/replug). **This is the gate for the commit.**
+12. Then the two commits of section 12, in order.
 
 ---
 
@@ -667,6 +752,23 @@ Shear bricks in quarter strips, make PICK rebuild the base wall, fix the frame r
 For the next commits, the same rules apply: **never commit scaffolding** — no
 `// TMP RIG` blocks, no `TANKS_COUNT_ITEMS` counter, no `Window.FullScreen` — and
 only after the thing works and the user has seen it.
+
+### 12.1 The two commits the gamepad work is waiting for
+
+Two commits, **in this order**, both after the user has played with the pad:
+
+**A — the pure layer** (no device, no UI): `src/padmap.h`/`.cpp`, the `Backend`
+pad registry and per-source `m_padHeld`, and the 11 new test cases (mapper +
+backend). Roughly: *"Add a gamepad mapping layer and per-source movement
+flags"*. Self-contained: `bin/test` passes and nothing changes on screen.
+
+**B — the reader and the wiring**: `src/gamepad.h`/`.cpp`, `main.cpp`,
+`tanks.pro`, `tests/tanks_tests.pro`, `Main.qml` (labels, the join prompt, the
+manual lines), `README.md`, `AGENTS.md`, `pkgbuild/` (the `input` group note).
+Roughly: *"Read gamepads from /dev/input and let them join a player"*.
+
+Keep the 620 ms -> 2 ms scan fix (section 7.2) inside B: it is part of the
+reader, and the measurement belongs with the code it justifies.
 
 ---
 
@@ -707,4 +809,128 @@ only after the thing works and the user has seen it.
   sent the work chasing a phantom rendering bug. `mapToItem` from the item you
   are actually testing removes the guesswork; when a measurement looks wrong,
   suspect the probe first.
+- **Check that your harness actually rebuilt.** Twice in a row the `/tmp` gamepad
+  harness read an *old* report and a stale binary, because the compile had failed
+  and the runner swallowed it: two "fixes" were declared working that had never
+  run. The runner now deletes the report first and exits non-zero on a failed
+  build. **A stale report is worse than no report.**
+- **Measure the thing you are about to blame.** The stall that looked like "the
+  pad delays input" was the game's own hotplug scan spending 620 ms closing
+  fds; one instrumented `waitMs()` and one standalone `probe.c` named it in
+  minutes (section 7.2).
+- **A harness must respect the game's own rules.** Fire checks that pressed the
+  trigger into the 0.35 s cooldown, or counted *enemy* bullets, or fired into a
+  brick one cell away, "failed" a working feature three times. Wait for the
+  game's own state (cooldown, bullets, cleared ground) before asserting.
+
+---
+
+## 14. The gamepad layer
+
+**Goal:** both players on the keyboard by default; a DualSense or Xbox pad joins
+with `START` and drives a player; nothing about the keyboard changes.
+
+Two layers, deliberately:
+
+- **`src/padmap.h` / `padmap.cpp`** — `PadState` (one pad's snapshot: `lx/ly`,
+  `lt/rt`, the four d-pad bools, `west`, `start`, `select`), `PadSink` (what the
+  mapper reports: `padMove/padFire/padStart/padSelect`) and `PadMapper`
+  (deadzone `0.35`, trigger threshold `0.4`, **edge-triggered** fire/start/select,
+  `release()` to let go of everything). **Qt-free and free of any device**, so it
+  is unit tested directly (3 cases, `PadCalls` fake sink in the test file).
+- **`src/gamepad.h` / `gamepad.cpp`** — a `QObject` + `PadSink` that reads
+  `/dev/input/event*` straight through evdev (`linux/input.h`, no new
+  dependency), keeps a `PadMapper` per process, and forwards to `Backend`.
+  Nothing but `PadState` crosses between the layers; the reader knows nothing
+  about tanks.
+
+### 14.1 The rules (user spec — do not "improve" without asking)
+
+- **The keyboard is always live for both players.** A pad never takes a tank
+  away. `tick()` ORs the keyboard flags with `m_padHeld[player][dir]`, so a key
+  release cannot cancel a held stick and vice versa.
+- **The first pad to press `START` joins as player 2** (player 1 keeps the
+  keyboard — that is the one-pad case the user asked for). A **second** pad
+  joins as player 1. `joinPad()` claims slots in the order `{1, 0}`; a third pad
+  finds nothing free and leaves the game alone.
+- **A pad does nothing until it presses `START`** — that is the whole point of
+  the prompt. On the menu or game over, `START` joins *and* starts the game
+  (arcade feel); on victory it calls `nextLevel()`; once the pad has a player,
+  `START` toggles pause. **Joining mid-game must not pause** (locked by
+  `secondPadJoinsPlayerOne`).
+- **Movement:** left stick or d-pad. **Fire:** `L2`/`R2` *or* the face button in
+  the west position — `Square` on a PlayStation pad, `X` on an Xbox one
+  (`BTN_WEST`), so it is the same physical button on both brands. `L1`/`R1` are
+  deliberately not fire.
+- **`SHARE`/`SELECT`** emits `helpRequested`, which QML turns into the same
+  manual as `?` (including the auto-pause).
+- **Unplugging** returns the slot to the keyboard (`padDisconnected` clears
+  `m_padHeld` and `PadMapper::release()` reports the release), and the
+  `PRESS START TO JOIN` prompt comes back. The pad index is the smallest free
+  one, so a **reconnect may come back with a different index and must press
+  `START` again** — documented behaviour, not a bug.
+
+### 14.2 What the reader has to swallow (measured, not assumed)
+
+- The kernel already presents both brands with the same standard codes, so one
+  table covers them: left stick `ABS_X/ABS_Y`, triggers `ABS_Z/ABS_RZ`, hat
+  `ABS_HAT0X/ABS_HAT0Y`, `BTN_WEST/START/SELECT`, and some pads report the d-pad
+  as `BTN_DPAD_*` buttons instead of a hat — both paths are handled.
+- **Ranges differ per driver**, so every axis is scaled through its own
+  `EVIOCGABS` range: the user's real DualSense reports **0..255** for sticks
+  *and* triggers, a 360 pad reports **-32768..32767** for sticks and 0..255 for
+  triggers. Sticks are scaled bipolar around the midpoint, triggers unipolar
+  0..1. Do not hardcode either.
+- **Trigger detection is a range test, not a code test**: `triggersAreZ` is true
+  when `ABS_Z` is `lo >= 0 && hi <= 1023`. If a pad puts a *stick* on `ABS_Z`,
+  those axes are simply not read as triggers.
+- **Jitter filter:** analog axes are ignored unless the raw value moved by
+  `>= 5` counts. It applies to `ABS_X/Y/Z/RZ` only — **never to the hat**, whose
+  whole range is -1/0/1 and would be swallowed by a 5-count deadband (that bug
+  was written and caught in review).
+
+### 14.3 Hotplug, and why it is cheap now
+
+`start()` scans once and then every second. `m_rejected` remembers the paths
+that are not gamepads and `looksLikeGamepad()` answers the "stick with gamepad
+buttons" test from sysfs capability masks without opening anything. Both exist
+because the naive version froze the event loop for 620 ms a second — the
+measurement, the cause (`close()` costs ~20 ms here) and the fix are in section
+7.2. `TANKS_PAD_DEBUG=1` prints what the reader sees: every node it rejects, each
+pad it finds with its axis ranges, every axis and button it reads, each scan's
+cost, and each pad that goes away. That is the tool to ask a user with an
+untested pad to run.
+
+### 14.4 Tests and the harness
+
+- `bin/test` (31 slots) covers the mapper (deadzone, diagonals, release, edge
+  fire/start/select) and the backend (first pad joins P2, joining mid-game does
+  not pause, second pad takes P1, a third pad is ignored, `START` pauses once
+  the pad has a player, a pad moves only its own tank, keyboard + pad do not
+  cancel each other, fire comes from the right tank, disconnect returns the slot
+  and leaves no direction held).
+- **The end-to-end proof is `/tmp/opencode/pad`** (throwaway, section 8.2 style):
+  `main.cpp` creates one **Xbox-shaped** virtual pad (16-bit sticks, hat d-pad)
+  and one **DualSense-shaped** pad (8-bit sticks, `BTN_DPAD_*`) through
+  `/dev/uinput`, then drives the **real `Gamepad` + `Backend`** and asserts 31
+  checks: detection with the right axis ranges, unassigned until `START`, join
+  order, stick/deadzone/hat/button movement on the right tank only, fire from
+  `BTN_WEST` and from a trigger past half pull (and *not* at 100/255), one shot
+  per press while held, `START` pause/resume, `SELECT` → manual, keyboard +
+  pad coexistence, and unplug/replug. `run.sh` builds it against the project's
+  own objects and leaves `report.txt` and `debug.txt`. `probe.c` is the timing
+  probe from section 7.2.
+- Harness traps, all hit and fixed: pads are found **by name** (the machine has
+  a real DualSense on it); enemies are silenced and the board cleared before a
+  movement or fire measurement (`dt` is clamped to 0.05 s, so a stall measures
+  as one short step — sample movement every 50 ms instead of sleeping once);
+  shots are counted from the game's own `playSound("shoot")` rather than from
+  live bullets; and "press into a cooldown" waits for the game's cooldown first.
+
+### 14.5 Left to do
+
+1. **The user plays with the DualSense on screen** — join prompt, moving, firing,
+   `START` pause, unplug/replug. This is the gate for the commit.
+2. Then the two commits of section 12.
+
 

@@ -12,6 +12,7 @@
 #include <QUrl>
 
 #include "backend.h"
+#include "gamepad.h"
 #include "theme.h"
 
 int main(int argc, char *argv[]) {
@@ -33,6 +34,11 @@ int main(int argc, char *argv[]) {
 
     Theme theme;
     Backend backend;
+    // Pads are read straight from /dev/input/event*. A pad joins a player by
+    // pressing START; with none connected nothing changes. The reader writes to
+    // stderr when TANKS_PAD_DEBUG is set.
+    Gamepad gamepad(&backend);
+    gamepad.start();
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("theme", &theme);
