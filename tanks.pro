@@ -18,3 +18,7 @@ SOURCES += \
     src/theme.cpp
 
 RESOURCES += src/resources.qrc
+
+# For a release build, uncomment the next line (or pass DEFINES+=TANKS_RELEASE
+# to qmake). The footer then shows "V0.1" instead of the build stamp.
+# DEFINES += TANKS_RELEASE

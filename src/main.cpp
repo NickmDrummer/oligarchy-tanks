@@ -65,10 +65,15 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("backend", &backend);
     // Stamp the running binary's own mtime, so the footer always names the
-    // exact build on screen even when only QML was recompiled.
+    // exact build on screen even when only QML was recompiled. In a release
+    // build (TANKS_RELEASE defined) the footer shows a version instead.
     const QDateTime built = QFileInfo(QCoreApplication::applicationFilePath()).lastModified();
+#ifdef TANKS_RELEASE
+    engine.rootContext()->setContextProperty("buildId", QStringLiteral("V0.1"));
+#else
     engine.rootContext()->setContextProperty(
-        "buildId", built.toString(QStringLiteral("MMM d yyyy HH:mm:ss")));
+        "buildId", QStringLiteral("BUILD ") + built.toString(QStringLiteral("MMM d yyyy HH:mm:ss")));
+#endif
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;
