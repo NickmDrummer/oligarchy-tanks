@@ -10,12 +10,16 @@
 > Keep it current: update the state sections (`Current tree state`, `Feature
 > inventory`, `Next move`) whenever the state of the build changes.
 >
-> Snapshot: `HEAD` is the commit *"Shear bricks in quarter strips, make PICK
-> rebuild the base wall, fix the frame rate"*, on top of the checkpoint
-> `ec59cd9`. The tree is **dirty** with the **gamepad** work (section 14):
-> implemented, 31/31 tests pass, the whole evdev path proven with two virtual
-> pads plus the real DualSense, but **the user has not played with a pad yet** —
-> that play session is the gate for the two commits in section 12.
+> Snapshot: `HEAD` is *"Add a player-count select screen and a game over
+> screen"* (section 12.2 commit **C**), on top of the two gamepad commits
+> (section 12.1 **A** and **B**). The tree is clean. The user played all of it
+> — 1 and 2 players, one pad, dying alone, `START` to carry on, mode switching
+> with the pad, `R`, pause, unplug/replug — and every step behaved. **Open:**
+> one unreproducible `QSocketNotifier: Invalid socket 59 and type 'Read',
+> disabling...` during a play session, together with a game that had to be
+> interrupted with `^C` right when the base went down. It is not caused by
+> anything the pad reader does (see section 15.5), so it is left to be
+> reproduced with more information rather than fixed blind.
 >
 > The commit below it carries the 50% brick collision rule, PICK rebuilding the
 > whole base wall, the contour-free gap and the frame-rate fix (**130 ms -> 14 ms**
@@ -43,7 +47,8 @@
 
 ## 1. What the project is
 
-A retro **Battle City–style, 2-player local co-op tank game vs AI**, shipped as an
+A retro **Battle City–style tank game vs AI for one or two local players**,
+shipped as an
 Omarchy desktop app: **Qt 6 / C++ backend + QML frontend, single binary**, built
 with `qmake6` + `make`.
 
@@ -83,7 +88,7 @@ with `qmake6` + `make`.
 │   ├── resources.qrc
 │   └── sounds/*.wav     # engine, shoot, eshoot, hit, explode, power, nuke
 └── tests/
-    ├── tanks_tests.cpp  # 29 QtTest cases (31 slots)
+    ├── tanks_tests.cpp  # 35 QtTest cases (37 slots)
     └── tanks_tests.pro
 ```
 
@@ -233,10 +238,12 @@ flag are **gone** — do not reintroduce them. Implementation:
 
 ### Verified working
 - Full game loop; 15x15 random map with brick / steel / base / forest.
-- 2 player tanks + tiered enemies, bullets, collisions, lives, score.
+- A mode select screen (1 / 2 players) at boot and after a game over.
+- One or two player tanks + tiered enemies, bullets, collisions, lives, score.
 - Pause (`P`), restart (`R`), sound toggle (`M`), help (`?`), quit (`Q`).
 - Help auto-pauses the game and resumes only if the help caused the pause.
-- Victory / game-over overlays; sector progression with scaling specials.
+- Victory overlay with sector progression and scaling specials; a game over (or a
+  destroyed base) returns to the select screen, which shows the score of the run.
 - Pixel Omarchy wordmark base, plus rubble when destroyed.
 - 7 bonuses, green-only drops, one at a time.
 - Floating kill-score popups in pixel type.
@@ -261,9 +268,10 @@ flag are **gone** — do not reintroduce them. Implementation:
   way: a shot-away guard tile comes back as `Steel` along with the rest of the
   wall, a tank parked in the gap is crushed (player loses a life, enemy dies with
   no score), and `updateBaseGuard()` puts whole brick back.
-- All tests pass (`bin/test`): 31 slots = `initTestCase` + 29 cases +
+- All tests pass (`bin/test`): 43 slots = `initTestCase` + 41 cases +
   `cleanupTestCase` (20 before the gamepad work: 3 mapper cases and 8 pad cases
-  were added, section 14).
+  were added, plus 12 for the select screen, the player count and the game over
+  screen — sections 14 and 15).
 - **User-confirmed on screen, by playing** (this was the gate for the commit):
   - The sheared strips disappear as *nothing*: no contour line, no lighter fill.
   - As the strips go, the tank pushes further into the block. The user prefers
@@ -280,15 +288,16 @@ flag are **gone** — do not reintroduce them. Implementation:
 
 ### Implemented but not verified on screen by the user
 - Menu legend size bump (30 -> 40 px icons, `side: 28 -> 36`).
-- **Gamepad support** (section 14). Verified by 31/31 test slots, a `/tmp`
-  harness driving the real `Gamepad` reader with two `uinput` pads (an
-  Xbox-shaped one with 16-bit sticks and a hat d-pad, a DualSense-shaped one
-  with 8-bit sticks and a button d-pad) plus the user's **real DualSense**, and
-  the `bin/build` / offscreen smoke run. **Still to come: the user playing with
-  the DualSense on screen** — that is the gate for the commit.
+- Nothing else: the player-count select screen and the game over screen
+  (section 15) were played by the user (1 and 2 players, one and two pads,
+  dying alone, `START` to carry on, switching modes with the pad, `R`, pause,
+  unplug/replug) and every step behaved.
 
 ### Broken / unresolved
-- Nothing blocking.
+- One unreproducible `QSocketNotifier: Invalid socket 59 and type 'Read',
+  disabling...` with a game that had to be interrupted with `^C` (section
+  15.5). Not blocking, and not reproduced by two stress runs; left for more
+  information rather than fixed blind.
 
 ### Known missing
 - Nothing blocking the game as it stands.
@@ -297,48 +306,49 @@ flag are **gone** — do not reintroduce them. Implementation:
 
 ## 6. Current tree state
 
-`HEAD` is the commit *"Shear bricks in quarter strips, make PICK rebuild the base
-wall, fix the frame rate"*, sitting on top of the previous checkpoint `ec59cd9`.
-Nothing pushed.
+`HEAD` is *"Read gamepads from /dev/input and let one join a player"*, sitting on
+top of *"Add a gamepad mapping layer and per-source movement flags"* and the
+brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
 
-The tree is **dirty** with the gamepad work (section 14) — the first new work
-since that commit, and the reason the rule "one checkpoint commit before the
-next feature" was respected:
+The tree is **dirty** with the select screen (section 15) — the first new work
+since the gamepad commits, and the reason the rule "one checkpoint commit before
+the next feature" was respected again:
 
 ```
- M README.md            gamepad section, the input group, TANKS_PAD_DEBUG
- M pkgbuild/PKGBUILD    install=tanks.install
- M src/Main.qml         pad labels, PRESS START TO JOIN, manual lines, helpRequested
- M src/backend.cpp      pad registry, pad invokables, per-source m_padHeld in tick()
- M src/backend.h        pads()/padsChanged/helpRequested, pad struct + helpers
- M src/main.cpp         create and start Gamepad after Backend
- M tanks.pro            padmap.cpp, gamepad.cpp
- M tests/tanks_tests.cpp  3 mapper cases + 8 pad cases (31 slots)
- M tests/tanks_tests.pro  padmap.cpp
-?? pkgbuild/tanks.install  the input group note
-?? src/padmap.h/.cpp    PadState, PadSink, PadMapper (Qt-free, unit tested)
-?? src/gamepad.h/.cpp   evdev reader, hotplug, TANKS_PAD_DEBUG
+ M README.md              the Start section + the new pad join rules
+ M src/Main.qml           select screen, per-tank hints, panels, manual, R
+ M src/backend.cpp        select state, menu*, playerCount, joined, checkEnd
+ M src/backend.h          playerCount/menuIndex, menu* invokables, m_joined
+ M tests/tanks_tests.cpp  6 select-screen cases + TanksTestAccess helpers (37 slots)
 ```
 
-Nothing in that list is scaffolding: `TANKS_PAD_DEBUG`, the `[pad]` log lines
-and the scan timing are a **gated diagnostic facility**, which is what the
-`TANKS_PAD_DEBUG` note in section 14 asks a user with an untested pad to run.
+Nothing in that list is scaffolding. The two `/tmp` harnesses
+(`opencode/padvis`, `opencode/pad`) are throwaway and outside the repo.
 
 `build/` is git-ignored, and so are `pkgbuild/pkg/`, `pkgbuild/src/` and
 `pkgbuild/*.pkg.tar.zst` (checked: `git status` stays clean after `makepkg`).
 
-That commit contains exactly these files (line counts omitted on purpose — this
-file changes itself):
+The two gamepad commits contain exactly these files (line counts omitted on
+purpose — this file changes itself):
 
 ```
- AGENTS.md              this file: the 50% law, PICK rebuild, the frame fix
- src/Main.qml           int tile queries, contour-free gap rectangles
- src/backend.cpp        the 50% collision law, PICK rebuild + crush, bumpBoard
- src/backend.h          boardRev/tileKind/brickStripGone, boardQ removed
- tests/tanks_tests.cpp  TanksTestAccess rework + 18 cases (20 slots)
+ A 2d31ac5  Add a gamepad mapping layer and per-source movement flags
+   src/padmap.h/.cpp      PadState, PadSink, PadMapper (Qt-free, unit tested)
+   src/backend.h/.cpp     pad registry, pad* invokables, per-source m_padHeld
+   tests/tanks_tests.cpp  3 mapper cases + 8 pad cases
+   tests/tanks_tests.pro  padmap.cpp
+
+ B 3a756d0  Read gamepads from /dev/input and let one join a player
+   src/gamepad.h/.cpp     evdev reader, hotplug, sysfs filter, TANKS_PAD_DEBUG
+   src/main.cpp           create and start Gamepad after Backend
+   tanks.pro              padmap.cpp, gamepad.cpp
+   src/Main.qml           pad labels, join prompt, manual lines, helpRequested
+   README.md / AGENTS.md  docs
+   pkgbuild/              install=tanks.install + the input group note
 ```
 
-`build/` is git-ignored.
+Both were verified **in isolation** before landing (a throwaway `git worktree` at
+commit A: `bin/build` clean and 31/31 slots), so each commit builds on its own.
 
 ### 6.1 Already reverted — debug scaffolding, do not bring it back
 
@@ -706,14 +716,20 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
    session (section 5).
 8. ~~Commit.~~ **Done** — one commit, message in section 12.
 9. Optional: a verified screenshot for the record (section 8.1).
-10. ~~Gamepad support.~~ **Implemented and verified every way except one**: 31/31
-    test slots, the `/tmp/opencode/pad` harness driving the real reader with two
-    virtual pads *and* the user's real DualSense, `bin/build`, the offscreen
-    smoke run, and a measured **620 ms -> 2 ms** fix for the hotplug scan
-    (section 7.2). See section 14 for the design and 7.2 for the measurement.
-11. **The user plays with the DualSense on screen** (join prompt, move, fire,
-    `START` pause, unplug/replug). **This is the gate for the commit.**
-12. Then the two commits of section 12, in order.
+10. ~~Gamepad support.~~ **Implemented, verified and committed** (sections 14 and
+    12.1): 31/31 test slots, the `/tmp/opencode/pad` harness driving the real
+    reader with two virtual pads *and* the user's real DualSense, `bin/build`, the
+    offscreen smoke run, the user's own play session ("funciona perfecto") and a
+    measured **620 ms -> 2 ms** fix for the hotplug scan (section 7.2).
+11. ~~The user plays with the DualSense on screen.~~ **Done**: that was the gate,
+    and it passed.
+12. ~~The two commits of section 12.1.~~ **Done**: `2d31ac5` (A) and `3a756d0`
+    (B).
+13. **The player-count select screen** (section 15). Implemented: 37/37 slots, the
+    QML probe and the uinput harness both drive the new flow.
+14. **The user plays it** (1 player and 2, one pad and two, dying alone, `START`
+    to retry from the game over). **This is the gate for commit C.**
+15. Then commit **C** (section 12.2).
 
 ---
 
@@ -753,22 +769,83 @@ For the next commits, the same rules apply: **never commit scaffolding** — no
 `// TMP RIG` blocks, no `TANKS_COUNT_ITEMS` counter, no `Window.FullScreen` — and
 only after the thing works and the user has seen it.
 
-### 12.1 The two commits the gamepad work is waiting for
+### 12.1 The two gamepad commits — **made**
 
-Two commits, **in this order**, both after the user has played with the pad:
+Both landed after the user played with the pad, in this order, each verified on
+its own (B on top of A, and A alone in a throwaway worktree):
 
-**A — the pure layer** (no device, no UI): `src/padmap.h`/`.cpp`, the `Backend`
-pad registry and per-source `m_padHeld`, and the 11 new test cases (mapper +
-backend). Roughly: *"Add a gamepad mapping layer and per-source movement
-flags"*. Self-contained: `bin/test` passes and nothing changes on screen.
+**A — `2d31ac5`, *Add a gamepad mapping layer and per-source movement flags***
 
-**B — the reader and the wiring**: `src/gamepad.h`/`.cpp`, `main.cpp`,
-`tanks.pro`, `tests/tanks_tests.pro`, `Main.qml` (labels, the join prompt, the
-manual lines), `README.md`, `AGENTS.md`, `pkgbuild/` (the `input` group note).
-Roughly: *"Read gamepads from /dev/input and let them join a player"*.
+```
+Add a gamepad mapping layer and per-source movement flags
 
-Keep the 620 ms -> 2 ms scan fix (section 7.2) inside B: it is part of the
-reader, and the measurement belongs with the code it justifies.
+- src/padmap.*: PadState (one pad's controls), PadSink (what the mapper
+  reports) and PadMapper (deadzone, trigger threshold, edge-triggered fire and
+  start). Qt-free and device-free, so it is unit tested directly.
+- Backend keeps pad state: a registry of connected pads (pads()/padsChanged),
+  the pad* invokables the reader drives, and helpRequested for SELECT.
+- Movement flags are kept per source and ORed in tick(), so letting go of a key
+  no longer cancels a held stick and vice versa. The keyboard stays live for
+  both players at all times.
+- A pad joins with START: the first pad takes player 2 (one pad, one human on
+  it) and a second pad takes player 1.
+- Tests: 3 mapper cases and 8 backend cases on top of the brick/PICK ones.
+```
+
+**B — `3a756d0`, *Read gamepads from /dev/input and let one join a player***
+
+```
+Read gamepads from /dev/input and let one join a player
+
+- src/gamepad.*: reads /dev/input/event* through evdev (linux/input.h, no new
+  dependency), keeps a PadMapper per pad and rescans once a second so pads can
+  be plugged in and out while playing. Every axis is scaled through its own
+  EVIOCGABS range, so a DualSense (0..255) and an Xbox pad (-32768..32767)
+  both work, and the d-pad is read from the hat or from BTN_DPAD_* buttons.
+- The naive hotplug scan froze the event loop for ~620 ms a second (closing an
+  evdev node costs ~20 ms here and every node was reopened on every scan). It
+  now reads the capability masks from sysfs to skip what is not a gamepad and
+  remembers the paths it rejected: 601 ms -> 2 ms on the first scan and a
+  1-2 ms worst stall.
+- UI: the player panels name the device that drives each tank (KEY / PAD n), a
+  blinking PRESS START TO JOIN shows while a pad is waiting, SELECT opens the
+  manual, and the manual lists the pad controls.
+- Docs: README pad section, the input group requirement and TANKS_PAD_DEBUG,
+  which prints what the reader sees; the package prints the group note.
+```
+
+### 12.2 Commit C — **made**
+
+One commit for the select screen (section 15), after the user played it. Files:
+`README.md`, `src/Main.qml`, `src/backend.cpp`, `src/backend.h`,
+`tests/tanks_tests.cpp`, and this file. It is one change — the game's opening
+screen and the single-player model — verified together, so it stays one commit.
+
+```
+Add a player-count select screen and a game over screen
+
+- The game opens on a select screen: 1 PLAYER (one tank, and dying ends the
+  run) or 2 PLAYERS (both tanks, as before). Left/Right or A/D move the
+  highlight, the pad's stick and d-pad do the same, and Space/Enter/START/
+  Square or a click confirms it; R confirms the highlighted mode too.
+- One player means one tank: resetTanks() clears any slot at or above the
+  player count and tick()/checkEnd() only see the tanks in the game, so the
+  parked second tank no longer keeps a lost run alive.
+- Every run ends on its own screen: GAME OVER, or BASE DESTROYED when the base
+  was lost, with the score of the run and START / Space / Enter to carry on to
+  the select screen. R mid-game also goes back to the select screen (on
+  victory it advances the sector, as before) and leaves nothing on the board
+  behind the overlay.
+- A pad drives the select screen whatever its slot, assigned or not, so a pad
+  that just played a run can still pick the next mode. Confirming a mode hands
+  every pad back to waiting: which tank a pad gets is decided by the mode and
+  by who presses START, never carried over from the run before.
+- Each panel shows its tank and, until that player touches a control, a
+  blinking PRESS SPACE / PRESS ENTER (OR START with a pad) hint under it.
+- Tests: 43 slots (the select screen, both modes, both endings and what
+  carries on from them, an assigned pad moving the highlight, pads released
+  when a mode is confirmed).
+```
 
 ---
 
@@ -849,14 +926,16 @@ Two layers, deliberately:
 - **The keyboard is always live for both players.** A pad never takes a tank
   away. `tick()` ORs the keyboard flags with `m_padHeld[player][dir]`, so a key
   release cannot cancel a held stick and vice versa.
-- **The first pad to press `START` joins as player 2** (player 1 keeps the
-  keyboard — that is the one-pad case the user asked for). A **second** pad
-  joins as player 1. `joinPad()` claims slots in the order `{1, 0}`; a third pad
-  finds nothing free and leaves the game alone.
+- **The first pad to press `START` joins**, and which tank it gets depends on the
+  mode picked on the select screen (section 15): with **one** tank a pad takes
+  *that* tank; with **two** tanks player 1 keeps the keyboard, so the first pad
+  takes player 2 and a second pad takes player 1 (`joinPad()` claims slots in
+  the order `{1, 0}`). A third pad finds nothing free and leaves the game alone.
 - **A pad does nothing until it presses `START`** — that is the whole point of
-  the prompt. On the menu or game over, `START` joins *and* starts the game
-  (arcade feel); on victory it calls `nextLevel()`; once the pad has a player,
-  `START` toggles pause. **Joining mid-game must not pause** (locked by
+  the hint under each tank. On the select screen `START` (and `Square`/`X`)
+  confirms the highlighted mode and the confirming pad takes its tank; once the
+  pad has a player, `START` toggles pause; on victory it calls `nextLevel()`.
+  **Joining mid-game must not pause** (locked by
   `secondPadJoinsPlayerOne`).
 - **Movement:** left stick or d-pad. **Fire:** `L2`/`R2` *or* the face button in
   the west position — `Square` on a PlayStation pad, `X` on an Xbox one
@@ -865,10 +944,10 @@ Two layers, deliberately:
 - **`SHARE`/`SELECT`** emits `helpRequested`, which QML turns into the same
   manual as `?` (including the auto-pause).
 - **Unplugging** returns the slot to the keyboard (`padDisconnected` clears
-  `m_padHeld` and `PadMapper::release()` reports the release), and the
-  `PRESS START TO JOIN` prompt comes back. The pad index is the smallest free
-  one, so a **reconnect may come back with a different index and must press
-  `START` again** — documented behaviour, not a bug.
+  `m_padHeld` and `PadMapper::release()` reports the release), and the join hint
+  under that tank comes back. The pad index is the smallest free one, so a
+  **reconnect may come back with a different index and must press `START`
+  again** — documented behaviour, not a bug.
 
 ### 14.2 What the reader has to swallow (measured, not assumed)
 
@@ -903,23 +982,27 @@ untested pad to run.
 
 ### 14.4 Tests and the harness
 
-- `bin/test` (31 slots) covers the mapper (deadzone, diagonals, release, edge
-  fire/start/select) and the backend (first pad joins P2, joining mid-game does
-  not pause, second pad takes P1, a third pad is ignored, `START` pauses once
-  the pad has a player, a pad moves only its own tank, keyboard + pad do not
-  cancel each other, fire comes from the right tank, disconnect returns the slot
-  and leaves no direction held).
+- `bin/test` (43 slots) covers the mapper (deadzone, diagonals, release, edge
+  fire/start/select) and the backend (a pad joins on `START`, the select screen,
+  the player count, the game over screen and what carries on from it, joining
+  mid-game does not pause, first pad takes P2 then a second takes P1, a third
+  pad is ignored, `START` pauses once the pad has a player, a pad moves only its
+  own tank, keyboard + pad do not cancel each other, fire comes from the right
+  tank, disconnect returns the slot and leaves no direction held).
 - **The end-to-end proof is `/tmp/opencode/pad`** (throwaway, section 8.2 style):
   `main.cpp` creates one **Xbox-shaped** virtual pad (16-bit sticks, hat d-pad)
   and one **DualSense-shaped** pad (8-bit sticks, `BTN_DPAD_*`) through
-  `/dev/uinput`, then drives the **real `Gamepad` + `Backend`** and asserts 31
-  checks: detection with the right axis ranges, unassigned until `START`, join
-  order, stick/deadzone/hat/button movement on the right tank only, fire from
-  `BTN_WEST` and from a trigger past half pull (and *not* at 100/255), one shot
-  per press while held, `START` pause/resume, `SELECT` → manual, keyboard +
-  pad coexistence, and unplug/replug. `run.sh` builds it against the project's
-  own objects and leaves `report.txt` and `debug.txt`. `probe.c` is the timing
-  probe from section 7.2.
+  `/dev/uinput`, then drives the **real `Gamepad` + `Backend`** and asserts 37
+  checks: detection with the right axis ranges, the select screen (an unassigned
+  pad moves the highlight, `START` confirms the mode and joins P2), stick /
+  deadzone / hat / button movement on the right tank only, fire from `BTN_WEST`
+  and from a trigger past half pull (and *not* at 100/255), one shot per press
+  while held, `START` pause/resume, `SELECT` → manual, keyboard + pad
+  coexistence, leaving a run and confirming another mode with the pad itself,
+  and unplug/replug. `run.sh` builds it against the project's own objects and
+  leaves `report.txt` and `debug.txt`; it prints the report even when a check
+  fails (a `set -e` script used to swallow it). `probe.c` is the timing probe
+  from section 7.2.
 - Harness traps, all hit and fixed: pads are found **by name** (the machine has
   a real DualSense on it); enemies are silenced and the board cleared before a
   movement or fire measurement (`dt` is clamped to 0.05 s, so a stall measures
@@ -929,8 +1012,164 @@ untested pad to run.
 
 ### 14.5 Left to do
 
-1. **The user plays with the DualSense on screen** — join prompt, moving, firing,
-   `START` pause, unplug/replug. This is the gate for the commit.
-2. Then the two commits of section 12.
+Nothing — the pad is committed (`2d31ac5`, `3a756d0`) and the user confirmed it
+plays well. What is left on the pad front is part of the select screen
+(section 15): any pad, assigned or not, drives the mode options, `START`
+confirms the highlighted mode, and confirming hands every pad back to waiting.
+
+---
+
+## 15. The player-count select screen
+
+**Why it exists.** The game used to open straight into a two-tank game with no
+choice, and in a game played by one person the second tank just sat at its spawn
+point. Because "game over" tested *both* tanks, the run never ended: the parked
+tank kept it alive. The user asked for the console-style opening screen and for
+one player to mean one tank.
+
+### 15.1 The states
+
+`m_state` is `select` | `playing` | `paused` | `victory` | `gameover`.
+**`menu` is gone**: `select` is the opening screen *and* where a run goes back to
+when it ends, which is what lets a pad always start the next run with `START`.
+
+The ending gets its own screen so it cannot be missed: `gameover` draws the title
+(`GAME OVER`, or `BASE DESTROYED` when the base was lost) and the score of the
+run, and `START` / `Space` / `Enter` / a click carries on to `select`. The
+*reason* the run ended rides in `m_ending` (`"over"` | `"base"`, read by QML as
+`ending`) and the score in `m_message` (`"SCORE 4120"`).
+
+`m_playerCount` (1 or 2) is what the whole game reads. `m_menuIndex` (0 = `1
+PLAYER`, 1 = `2 PLAYERS`) is the highlight, and QML gets both through small
+properties (`playerCount`, `menuIndex`, each with its own `*Changed` signal).
+
+### 15.2 The rules (user spec)
+
+- **1 PLAYER**: one tank only. The keyboard drives it (`Space`/`WASD`); a pad
+  takes it over when it presses `START`. Dying **ends the run**, because there is
+  no second tank.
+- **2 PLAYERS**: keyboard P1, first pad P2, second pad P1 — unchanged.
+- The choice is made with `Left`/`Right` (`A`/`D`), the pad's stick or d-pad,
+  and confirmed with `Space`/`Enter`, `START`, `Square`/`X`, or a click.
+- **The keyboard is always live for both players**, in every mode.
+
+### 15.3 How it is implemented
+
+- **Input needs no QML routing.** `setP1Move` / `setP2Move` / `fireP1` /
+  `fireP2` already exist and QML forwards keys blindly; when the state is
+  `select` they call `menuMove(dx)` / `menuConfirm()` instead (`dx` or, if the
+  press was vertical, `dy`, so `W`/`S` and `Up`/`Down` work as well as the
+  horizontal pair). `padMove` / `padFire` / `padStart` do the same, and on the
+  select screen a pad goes to the menu **whatever its slot, assigned or not** —
+  the check comes before the `playerForPad()` lookup. That was a real bug: once
+  a pad owned a tank it could no longer pick the next mode, so after a
+  one-pad run only the keyboard could move the highlight. So the select screen
+  is keyboard- and pad-driven without a single new key binding in QML, and the
+  architecture rule ("QML only renders and forwards keys") still holds.
+- **`gameover` is one keypress deep.** `checkEnd()` sets `m_ending` and then
+  `setState("gameover", "SCORE n")`; `fireP1()` / `fireP2()` / `padStart()` /
+  `padFire()` see that state (for a pad *before* the `playerForPad()` lookup, so
+  a pad that never joined carries on too) and call `toSelect()`. `toSelect()` is
+  also `R` mid-game: `clearRun()` (tanks not alive, enemies dead, bullets /
+  floaters / pickup / spawn / freeze / base-guard cleared) leaves an empty board
+  behind the overlay and the state goes back to `select` with no message.
+- **A tank that does not exist is not alive.** `resetTanks()` forces
+  `alive = false`, `lives = 0`, `score = 0` for any slot at or above
+  `m_playerCount`; `playerActive(i)` is `i < m_playerCount`. `tick()` moves and
+  respawns only active players, and `checkEnd()` calls it game over when every
+  **active** player is out. That is the bug fix, in one line of the loop
+  condition.
+- **A new game releases every pad** (`confirmSelect()` calls `releasePads()`
+  before `startGame()`, which clears `m_padHeld` as well so no direction stays
+  stuck). Which tank a pad gets is therefore decided by the mode and by who
+  presses `START`, never carried over from the run before — without this, a pad
+  that played a one-player game stayed glued to player 1 after switching to two
+  players. `releasePads(fromPlayer = 0)` doubles as the safety net
+  `startGame()` needs (drop a pad whose player is out of range, e.g. going from
+  two players back to one).
+- **Per-player "joined" flag.** `m_joined[player]` is set by the first input
+  from either source (`setP1Move`/`fireP1` while playing, `padMove`/`padFire`)
+  *and* by a pad claiming the tank in `joinPad()`. It is exposed in
+  `players()` / `playerAt()` as `joined`, next to the existing `active`. QML
+  draws the blinking hint under that tank while it is false and swaps to the
+  `KEY` / `PAD n` label once it is true; `markJoined()` emits `frameChanged()`
+  so the swap is immediate rather than one frame late.
+- **At boot nothing is on the board**: the constructor calls `resetTanks(true)`
+  and then sets both tanks not-alive, so the select screen has no tank sprites
+  peeking out from behind the overlay.
+- **`R` on the select screen confirms the highlighted mode**; mid-game it goes
+  back to the select screen (`toSelect()`, see above); on victory it advances
+  the sector, as before.
+- **UI**: the overlay's title is `TANKS` / `GAME OVER` / `BASE DESTROYED` /
+  `PAUSED` / `VICTORY`; the two options are a `Row` of `Repeater` delegates with
+  a blinking `>` on the highlighted one and a `MouseArea` for the mouse; a
+  `gameover` block adds the score line (bigger than the other messages) and a
+  blinking `PRESS START, SPACE OR ENTER`, and the button under it reads
+  `>> CONTINUE <<` (`>> RESUME (P) <<` / `>> NEXT SECTOR (R) <<` elsewhere);
+  the panels each gained a small `TankSprite` and the hint line, the P2 panel is
+  `visible: backend.playerCount === 2`, and the footer's old global
+  `PRESS START TO JOIN` is gone (it lives under each tank now). The legend block
+  (keys, bonus icons) is `visible: backend.state === "select"` only, so the
+  game over screen stays down to the title, the score and the one way out.
+
+### 15.4 Tests and probes
+
+- `bin/test` (43 slots): `selectScreenPicksTheMode`, `onePlayerModeLeavesOneTank`,
+  `twoPlayerModeKeepsBothTanks`, `dyingAsASinglePlayerEndsTheRun`,
+  `baseDestroyedEndsTheRun`, `gameOverLeadsToAnEmptySelectScreen`,
+  `leavingARunGoesBackToTheSelectScreen`, `anAssignedPadDrivesTheSelectScreen`,
+  `confirmingAModeReleasesThePadsOfTheLastRun`, `aPadConfirmingTheModeTakesItsTank`,
+  `unassignedPadPicksTheMode`, `padTakesTheOnlyTankInASinglePlayerGame`,
+  `singlePlayerModeReleasesTheSecondPad`, plus `startsOnTheSelectScreen`
+  (renamed from `startsPausedInMenu`). `TanksTestAccess` gained `outPlayer()`
+  and `endCheck()` so a run can be lost on purpose.
+- **`/tmp/opencode/padvis`** (QML probe, 34 checks and 6 screenshots): the two
+  options and the chevron, choosing 1 player hides the P2 panel and shows
+  `PRESS SPACE`, a pad joining takes the tank and the hint gives way to `PAD 1`,
+  dying alone shows `GAME OVER` + `SCORE 0` + `PRESS START, SPACE OR ENTER`
+  (shot `6-game-over.png`) with no mode options on it, `Space` then carries on
+  to the select screen, an **assigned** pad still moves the highlight there
+  (the reported bug), and in 2 players the hints read `PRESS SPACE` /
+  `PRESS ENTER` (`... OR START` with a pad plugged in).
+- **`/tmp/opencode/pad`** (uinput, 37 checks): an unassigned pad moves the
+  highlight with the hat and confirms the mode with `START`, which is the check
+  that proves the whole new flow works through the real evdev reader; later on
+  the **assigned** pad leaves the run, moves the highlight and confirms
+  `2 PLAYERS` again with `START` — claiming P2 while the other pad goes back to
+  waiting. That last step is the user's bug reproduced and fixed end to end.
+
+### 15.5 Open: the `QSocketNotifier: Invalid socket` warning
+
+During the first play session of this commit the user saw, once,
+
+```
+QSocketNotifier: Invalid socket 59 and type 'Read', disabling...
+```
+
+at the same time as the base going down, and had to interrupt the game with
+`^C`. It was **not** reproduced: `coredumpctl` has no core dump for `tanks` (so
+the process did not die on its own), and two purpose-built stress runs came back
+clean:
+
+- `/tmp/opencode/padstress` (30 plug/unplug cycles through the real reader,
+  each device destroyed **while directions and a button are held**, so events
+  are in flight): 30/30 clean, 0 warnings, every pad released.
+- The whole game (QML + audio + reader) running while 12 hotplug cycles went on
+  underneath: still alive at the end, 0 warnings, 8 devices opened and 8 closed.
+
+Where the message comes from: `qeventdispatcher_glib.cpp` prints it when `poll()`
+reports `POLLNVAL` for a descriptor still registered in a `QSocketNotifier` —
+that is, **an fd closed while its notifier is still enabled**. The only code in
+the game that closes descriptors is the pad reader, and `closeDevice()` deletes
+the notifier (which unregisters it) *before* `::close(fd)`; `openDevice()`'s
+error paths close fds that never had a notifier, and the destructor runs outside
+the event loop. Qt's own plugins (Wayland, multimedia) hold notifiers too, so
+the candidates are outside the game unless a new clue appears.
+
+To pick this up again: run it as `./build/tanks 2>&1 | tee /tmp/tanks.log`, and
+note whether the window froze (process alive, no response, sound stopped or
+looping) or the process exited by itself, and whether the warning came exactly
+with the `GAME OVER` screen. That decides whether it is the pad reader, Qt's
+event dispatcher, or the compositor dropping the game's Wayland connection.
 
 

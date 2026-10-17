@@ -1,8 +1,25 @@
 # Tanks
 
-Retro 2-player local tank battle vs AI, in the style of classic Battle City on Sega.
+Retro local tank battle vs AI, in the style of classic Battle City on Sega.
 
-Defend the star base with a friend. 8 enemies per sector, random map every game.
+Defend the star base alone or with a friend. 8 enemies per sector, random map
+every game.
+
+## Start
+
+The game opens on the arcade select screen: **1 PLAYER** or **2 PLAYERS**.
+
+- `Left` / `Right` (or `A` / `D`, or the pad's stick and d-pad) move the
+  highlight.
+- `Space` / `Enter`, `START` on a pad, or a click confirms it.
+
+In a **one-player game there is a single tank**: when it runs out of lives the
+run is over. Either way the run ends on a **`GAME OVER`** screen with the score
+(`BASE DESTROYED` if the base was lost), and `START`, `Space` or `Enter` carries
+on to the select screen with the last mode still highlighted.
+
+`R` during a game also returns to the select screen; on `victory` it goes
+straight to the next sector.
 
 ## Controls
 
@@ -13,7 +30,7 @@ Defend the star base with a friend. 8 enemies per sector, random map every game.
 | P2 Arrow keys | Move player 2 |
 | `Enter` | Fire player 2 |
 | `P` | Pause / resume |
-| `R` | Restart (new random map) |
+| `R` | Back to the select screen (next sector on `victory`) |
 | `M` | Sound on / off |
 | `?` | Help overlay |
 | `Q` | Quit |
@@ -26,15 +43,33 @@ players**, so a pad never takes a tank away from anyone.
 
 | Pad | Action |
 |-----|--------|
-| `START` | Join (the prompt `PRESS START TO JOIN` shows while a pad is waiting), pause and resume |
-| Left stick / d-pad | Move |
-| `L2` / `R2`, or `Square` (PlayStation) / `X` (Xbox) | Fire |
+| `START` | Confirm the mode on the select screen, join a tank, pause and resume |
+| Left stick / d-pad | Move (and pick the mode on the select screen) |
+| `L2` / `R2`, or `Square` (PlayStation) / `X` (Xbox) | Fire (and confirm the mode) |
 | `SHARE` / `SELECT` | Open the manual, like `?` |
 
-The first pad to press `START` takes **player 2** — player 1 keeps the keyboard.
-A second pad takes **player 1**, so each player gets their own pad. Unplugging a
-pad hands its tank back to the keyboard and the prompt comes back; plug it in
-again and press `START` to rejoin (it may come back with a different pad number).
+Each tank shows the device driving it (`KEY` or `PAD n`) and, underneath,
+a blinking hint naming its controls (`PRESS SPACE`, `PRESS ENTER OR START`).
+The hint is only an invitation: it goes away as soon as that player uses a
+control, and it never blocks anything.
+
+On the select screen any pad drives the choice, even one that just played a
+run: stick or d-pad moves the highlight, `START` (or `Square` / `X`) confirms it.
+Starting a new game hands every pad back to waiting, so which tank a pad gets is
+always decided by the mode and by who presses `START`, never carried over from
+the run before.
+
+Joining is by `START`:
+
+- **One player** — the keyboard drives the tank (or `Space`); a pad takes it
+  over as soon as it presses `START`.
+- **Two players** — player 1 keeps the keyboard, the **first** pad to press
+  `START` takes player 2 and a second pad takes player 1, so one pad means one
+  human on it.
+
+Unplugging a pad hands its tank back to the keyboard and the hint comes back;
+plug it in again and press `START` to rejoin (it may come back with a different
+pad number).
 
 Reading `/dev/input/event*` requires being in the `input` group. Most desktop
 installs already are; if pads are not detected, check with `id -nG`. Without the

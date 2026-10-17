@@ -57,8 +57,9 @@ ApplicationWindow {
 
     // Gamepads. The keyboard is always live for both players, so this is a
     // label, not a lock: it names the device that drives each tank once a pad
-    // has pressed START to join. The first pad to join takes player 2 (player 1
-    // stays on the keyboard), a second pad takes player 1.
+    // has pressed START to join. With two tanks the first pad takes player 2
+    // (player 1 stays on the keyboard) and a second pad takes player 1; with a
+    // single tank the pad takes that one.
     function padLabel(player) {
         const list = backend.pads
         for (let i = 0; i < list.length; ++i)
@@ -66,19 +67,23 @@ ApplicationWindow {
                 return "PAD " + (list[i].index + 1)
         return "KEY"
     }
-    // A connected pad that has not joined yet: the arcade "press start" prompt.
-    readonly property bool padWaiting: {
-        const list = backend.pads
-        for (let i = 0; i < list.length; ++i)
-            if (list[i].player < 0)
-                return true
-        return false
+    // Any pad at all: decides whether the join hints mention START.
+    readonly property bool padConnected: backend.pads.length > 0
+
+    // The hint that blinks under a tank until its player has used a control.
+    // The keyboard is always live, so this only ever invites: it names the
+    // controls that drive that tank and gives way to the KEY / PAD label once
+    // the player has actually played.
+    function joinHint(player) {
+        if (player === 0)
+            return (backend.playerCount === 1 && padConnected) ? "PRESS SPACE OR START" : "PRESS SPACE"
+        return padConnected ? "PRESS ENTER OR START" : "PRESS ENTER"
     }
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
     Shortcut { sequence: "P"; context: Qt.ApplicationShortcut; onActivated: backend.togglePause() }
-    Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { if (backend.state === "victory") backend.nextLevel(); else backend.startGame(); keys.forceActiveFocus() } }
+    Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { if (backend.state === "select") backend.menuConfirm(); else if (backend.state === "victory") backend.nextLevel(); else backend.toSelect(); keys.forceActiveFocus() } }
     Shortcut { sequence: "M"; context: Qt.ApplicationShortcut; onActivated: backend.soundEnabled = !backend.soundEnabled }
 
     SoundEffect { id: sndShoot; source: "qrc:/sounds/shoot.wav"; volume: 0.5 }
@@ -201,17 +206,29 @@ ApplicationWindow {
                     color: theme.accent
                 }
             }
-            // P1 panel.
+            // P1 panel. The tank sprite names the tank, and the join hint
+            // blinks under it until its player has used a control.
             Rectangle {
-                width: 220; height: 70
+                width: 230; height: 92
                 color: "#101014"; border.color: win.p1body; border.width: 2
                 Column {
                     anchors.centerIn: parent
-                    Text {
+                    spacing: 2
+                    Row {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "P1 YELLOW  " + win.padLabel(0)
-                        font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
-                        color: win.p1body
+                        spacing: 8
+                        TankSprite {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 26; height: 26
+                            dir: 0; frame: 0
+                            body: win.p1body; dark: win.p1dark; light: win.p1light
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "P1 YELLOW  " + win.padLabel(0)
+                            font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
+                            color: win.p1body
+                        }
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -221,29 +238,65 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
+                        visible: backend.state !== "select" && backend.players.length > 0 && !backend.players[0].joined
+                        text: win.joinHint(0)
+                        font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
+                        color: theme.accent
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.3; duration: 550 }
+                            NumberAnimation { to: 1.0; duration: 550 }
+                        }
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
                         text: backend.players.length > 0 ? ((backend.players[0].shield ? "SHIELD " : "") + (backend.players[0].speed ? "SPEED " : "") + (backend.players[0].cannon ? "CANNON " : "")) : ""
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                         color: "#ffd60a"
                     }
                 }
             }
-            // P2 panel.
+            // P2 panel. Hidden in a one-player game: there is no second tank.
             Rectangle {
-                width: 220; height: 70
+                width: 230; height: 92
+                visible: backend.playerCount === 2
                 color: "#101014"; border.color: win.p2body; border.width: 2
                 Column {
                     anchors.centerIn: parent
-                    Text {
+                    spacing: 2
+                    Row {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "P2 RED  " + win.padLabel(1)
-                        font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
-                        color: win.p2body
+                        spacing: 8
+                        TankSprite {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 26; height: 26
+                            dir: 0; frame: 0
+                            body: win.p2body; dark: win.p2dark; light: win.p2light
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "P2 RED  " + win.padLabel(1)
+                            font.family: "Monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
+                            color: win.p2body
+                        }
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "SC " + (backend.players.length > 1 ? backend.players[1].score : 0) + "  x" + (backend.players.length > 1 ? backend.players[1].lives : 0)
                         font.family: "Monospace"; font.bold: true; font.pixelSize: 15; font.letterSpacing: 1
                         color: "#f2f4f8"
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible: backend.state !== "select" && backend.players.length > 1 && !backend.players[1].joined
+                        text: win.joinHint(1)
+                        font.family: "Monospace"; font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
+                        color: theme.accent
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.3; duration: 550 }
+                            NumberAnimation { to: 1.0; duration: 550 }
+                        }
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -793,7 +846,9 @@ ApplicationWindow {
                             spacing: 12
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: backend.state === "menu" ? "TANKS" : backend.state === "paused" ? "PAUSED" : backend.state === "victory" ? "VICTORY" : "GAME OVER"
+                                text: backend.state === "select" ? "TANKS"
+                                      : backend.state === "gameover" ? (backend.ending === "base" ? "BASE DESTROYED" : "GAME OVER")
+                                      : backend.state === "paused" ? "PAUSED" : "VICTORY"
                                 font.family: "Monospace"; font.bold: true
                                 font.pixelSize: 46; font.letterSpacing: 4
                                 color: theme.accent
@@ -802,26 +857,109 @@ ApplicationWindow {
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                visible: backend.state === "menu"
-                                text: "2P CO-OP VS AI - DEFEND THE BASE"
+                                visible: backend.state === "select"
+                                text: "1 OR 2 PLAYERS - CO-OP VS AI - DEFEND THE BASE"
                                 font.family: "Monospace"; font.bold: true
                                 font.pixelSize: 14; font.letterSpacing: 1
                                 color: "#f2f4f8"
+                            }
+                            // What the run was worth, on the game over screen.
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                visible: backend.message.length > 0
+                                text: backend.message.toUpperCase()
+                                font.family: "Monospace"; font.bold: true
+                                font.pixelSize: backend.state === "gameover" ? 22 : 14
+                                font.letterSpacing: 2
+                                color: "#f2f4f8"
+                            }
+                            // Mode select, the arcade 1 PLAYER / 2 PLAYERS screen.
+                            // Left/right moves the highlight, Space, Enter or
+                            // START confirms it (the mouse can click either).
+                            Row {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                visible: backend.state === "select"
+                                spacing: 44
+                                Repeater {
+                                    model: 2
+                                    Item {
+                                        width: optionText.implicitWidth + 30
+                                        height: 34
+                                        Text {
+                                            id: optionText
+                                            anchors.centerIn: parent
+                                            text: index === 0 ? "1 PLAYER" : "2 PLAYERS"
+                                            font.family: "Monospace"; font.bold: true
+                                            font.pixelSize: 24; font.letterSpacing: 3
+                                            color: backend.menuIndex === index ? theme.accent : "#6a6e78"
+                                        }
+                                        // Blinking chevron on the highlighted option.
+                                        Text {
+                                            anchors.right: optionText.left
+                                            anchors.rightMargin: 10
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            visible: backend.menuIndex === index
+                                            text: ">"
+                                            font.family: "Monospace"; font.bold: true
+                                            font.pixelSize: 24
+                                            color: theme.accent
+                                            SequentialAnimation on opacity {
+                                                loops: Animation.Infinite
+                                                NumberAnimation { to: 0.2; duration: 450 }
+                                                NumberAnimation { to: 1.0; duration: 450 }
+                                            }
+                                        }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: backend.menuChoose(index)
+                                        }
+                                    }
+                                }
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                visible: backend.state !== "menu"
-                                text: backend.message.toUpperCase()
+                                visible: backend.state === "select"
+                                text: "CHOOSE WITH LEFT/RIGHT - CONFIRM WITH SPACE, ENTER OR START"
                                 font.family: "Monospace"; font.bold: true
-                                font.pixelSize: 14; font.letterSpacing: 1
+                                font.pixelSize: 12; font.letterSpacing: 1
                                 color: "#f2f4f8"
+                            }
+                            // Game over: one way out, and it is the arcade one.
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                visible: backend.state === "gameover"
+                                text: "PRESS START, SPACE OR ENTER"
+                                font.family: "Monospace"; font.bold: true
+                                font.pixelSize: 15; font.letterSpacing: 2
+                                color: theme.accent
+                                SequentialAnimation on opacity {
+                                    loops: Animation.Infinite
+                                    NumberAnimation { to: 0.25; duration: 550 }
+                                    NumberAnimation { to: 1.0; duration: 550 }
+                                }
                             }
                             PixelButton {
                                 anchors.horizontalCenter: parent.horizontalCenter
+                                visible: backend.state !== "select"
                                 accent: theme.accent
-                                text: backend.state === "menu" ? ">> START <<" : backend.state === "victory" ? ">> NEXT SECTOR (R) <<" : ">> RETRY (R) <<"
-                                onClicked: { if (backend.state === "victory") backend.nextLevel(); else backend.startGame(); keys.forceActiveFocus() }
+                                text: backend.state === "victory" ? ">> NEXT SECTOR (R) <<"
+                                      : backend.state === "gameover" ? ">> CONTINUE <<" : ">> RESUME (P) <<"
+                                onClicked: {
+                                    if (backend.state === "victory")
+                                        backend.nextLevel()
+                                    else if (backend.state === "gameover")
+                                        backend.toSelect()
+                                    else
+                                        backend.togglePause()
+                                    keys.forceActiveFocus()
+                                }
                             }
+                            // The legend belongs to the select screen: the game
+                            // over screen stays down to the title and the score.
+                            Column {
+                                spacing: 12
+                                visible: backend.state === "select"
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: "P1 WASD+SPACE - P2 ARROWS+ENTER"
@@ -864,33 +1002,17 @@ ApplicationWindow {
                                 font.pixelSize: 12; font.letterSpacing: 1
                                 color: "#4e8a42"
                             }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Arcade invitation: shown while a connected pad has not claimed a
-        // player yet. A pad does nothing until it presses START.
-        Text {
-            Layout.fillWidth: true
-            visible: win.padWaiting
-            horizontalAlignment: Text.AlignHCenter
-            text: "PRESS START TO JOIN"
-            font.family: "Monospace"; font.bold: true
-            font.pixelSize: 15; font.letterSpacing: 2
-            color: theme.accent
-            SequentialAnimation on opacity {
-                loops: Animation.Infinite
-                NumberAnimation { to: 0.25; duration: 550 }
-                NumberAnimation { to: 1.0; duration: 550 }
-            }
-        }
-
         Text {
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: "P PAUSE - R RESTART - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - GREEN DROPS BONUS - BUILD " + buildId
+            text: "P PAUSE - R MENU - M SOUND " + (backend.soundEnabled ? "ON" : "OFF") + " - ? HELP - Q QUIT - GREEN DROPS BONUS - BUILD " + buildId
             font.family: "Monospace"; font.bold: true
             font.pixelSize: 12; font.letterSpacing: 1
             color: "#5a5e68"
@@ -915,10 +1037,13 @@ ApplicationWindow {
                 Text { text: "TANKS - MANUAL"; font.family: "Monospace"; font.bold: true; font.pixelSize: 22; font.letterSpacing: 2; color: theme.accent }
                 Text { text: "P1 MOVE: W A S D - FIRE: SPACE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "P2 MOVE: ARROWS - FIRE: ENTER"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "P PAUSE - R RESTART - M SOUND - Q QUIT"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "PAD: START JOIN OR PAUSE - SHARE: MANUAL"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
+                Text { text: "1 OR 2 PLAYERS: CHOSEN ON THE SELECT SCREEN"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
+                Text { text: "P PAUSE - R MENU - M SOUND - Q QUIT"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
+                Text { text: "PAD: START JOINS OR PAUSES - SHARE: MANUAL"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
                 Text { text: "PAD: STICK OR DPAD MOVE - L2/R2 OR SQUARE-X FIRE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "white" }
-                Text { text: "1ST PAD JOINS P2, 2ND JOINS P1 - KEYBOARD ALWAYS LIVE"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
+                Text { text: "1 PLAYER: THE KEYBOARD UNLESS A PAD PRESSES START"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
+                Text { text: "2 PLAYERS: KEYBOARD P1, FIRST PAD P2, 2ND PAD P1"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
+                Text { text: "GAME OVER: START OR SPACE GOES BACK TO THE SELECT SCREEN"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8a8f98" }
                 Text { text: "GRAY BASIC - GREEN FAST - STEEL 2 HITS"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#8d8d94" }
                 Text { text: "BONUS DROP FROM GREEN TANKS - ONE AT A TIME"; font.family: "Monospace"; font.bold: true; font.pixelSize: 14; color: "#edc400" }
                 Grid {

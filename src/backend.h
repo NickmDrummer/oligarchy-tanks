@@ -15,6 +15,8 @@ class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString state READ state NOTIFY stateChanged)
     Q_PROPERTY(QString message READ message NOTIFY stateChanged)
+    // Why the last run ended, for the game over screen: "over" or "base".
+    Q_PROPERTY(QString ending READ ending NOTIFY stateChanged)
     // Board state has its own notification: tile queries must only re-run
     // when the map really changes. Wired to frameChanged they re-evaluated
     // 60 times a second, and reading a QString property that often is what
@@ -35,6 +37,10 @@ class Backend : public QObject {
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
     // Connected pads and the player each one drives (-1 until it joins).
     Q_PROPERTY(QVariantList pads READ pads NOTIFY padsChanged)
+    // How many tanks are in the game, picked on the select screen: 1 or 2.
+    Q_PROPERTY(int playerCount READ playerCount NOTIFY playerCountChanged)
+    // Highlighted option on the select screen: 0 is one player, 1 is two.
+    Q_PROPERTY(int menuIndex READ menuIndex NOTIFY menuChanged)
 
 public:
     static constexpr int COLS = 15;
@@ -45,6 +51,7 @@ public:
 
     QString state() const { return m_state; }
     QString message() const { return m_message; }
+    QString ending() const { return m_ending; }
     QString board() const;
     int boardRev() const { return m_boardRev; }
     // Tile kind at (x, y), matching the Tile enum: 0 empty, 1 brick,
@@ -66,6 +73,8 @@ public:
     int enemiesLeft() const;
     int frameTick() const { return m_frameTick; }
     int level() const { return m_level; }
+    int playerCount() const { return m_playerCount; }
+    int menuIndex() const { return m_menuIndex; }
     bool frozen() const { return m_time < m_freezeUntil; }
     int totalForLevel() const { return TOTAL_ENEMIES + 2 * (m_level - 1); }
 
@@ -88,14 +97,25 @@ public:
     Q_INVOKABLE void startGame();
     Q_INVOKABLE void nextLevel();
     Q_INVOKABLE void togglePause();
+    // Back to the select screen: what a game over leads to once the player
+    // presses START, and what R does mid-game (a clean way out of a run).
+    Q_INVOKABLE void toSelect();
+
+    // The select screen, the first screen of the game and where a game over
+    // returns to. Keyboard keys and pad controls both land here, so QML keeps
+    // forwarding input blindly (see setP1Move / fireP1 below).
+    Q_INVOKABLE void menuMove(int delta);
+    Q_INVOKABLE void menuConfirm();
+    Q_INVOKABLE void menuChoose(int mode);
 
     // Gamepads, driven by the reader in gamepad.cpp. The keyboard stays live
     // for both players; a pad joins by pressing START, and the flags are kept
     // per source so releasing a key never cancels a stick.
     //
-    // Who gets which player: player 1 is the keyboard's, so the *first* pad to
-    // press START takes player 2 and a second pad takes player 1. That way one
-    // pad means one human on it, and two pads give each player their own stick.
+    // Who gets which player: with two tanks the keyboard keeps player 1, so the
+    // *first* pad to press START takes player 2 and a second pad takes player 1.
+    // With a single tank (one-player game) the pad takes that tank. Either way
+    // one pad means one human on it.
     Q_INVOKABLE void padConnected(int pad, const QString &name);
     Q_INVOKABLE void padDisconnected(int pad);
     Q_INVOKABLE void padMove(int pad, int dx, int dy, bool pressed);
@@ -114,6 +134,8 @@ signals:
     // A pad asked for the manual (SELECT / Share).
     void helpRequested();
     void padsChanged();
+    void playerCountChanged();
+    void menuChanged();
 
     // Test-only access to internal state, so behaviour like bonus effects
     // can be asserted deterministically without rigging the map at runtime.
@@ -214,11 +236,31 @@ private:
     };
     const Pad *padAt(int index) const;
     int playerForPad(int index) const;
-    // Claims the first free player slot, player 2 before player 1.
+    // Claims the first free tank: the only one with a single player game,
+    // player 2 before player 1 with two.
     bool joinPad(int index);
+    // Is tank i in this game at all? A one-player game has no second tank.
+    bool playerActive(int i) const { return i < m_playerCount; }
+    // The player has used their control at least once in this game, so the
+    // join hint under their tank gives way to the KEY / PAD label.
+    void markJoined(int player);
+    // Starts the game with the highlighted mode. `pad` is the pad that
+    // confirmed, if any: it claims the tank the rules give it.
+    void confirmSelect(int pad);
+    // Hands every pad back to waiting and lets go of the directions it held, so
+    // a new game picks its pads from scratch (START decides, nothing carries
+    // over from the run before).
+    void releasePads(int fromPlayer = 0);
+    // Takes every actor off the board, for when the select screen comes back.
+    void clearRun();
 
-    QString m_state = "menu";
+    QString m_state = "select";
     QString m_message;
+    QString m_ending;
+    // 1 or 2 tanks, picked on the select screen.
+    int m_playerCount = 2;
+    int m_menuIndex = 0;
+    bool m_joined[2] = {};
     std::vector<int> m_grid;
     // Per-tile brick strip mask, bits 0-3 vertical V0..V3 (left to right),
     // bits 4-7 horizontal H0..H3 (top to bottom). 0xFF is a whole tile.

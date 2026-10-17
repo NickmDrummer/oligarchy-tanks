@@ -36,6 +36,9 @@ Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) 
         m_rng.seed(unsigned(std::atoi(seed)));
     generateMap();
     resetTanks(true);
+    // The select screen is up, so no tank is on the board yet: startGame()
+    // brings them in once a mode is picked.
+    m_p[0].alive = m_p[1].alive = false;
     connect(&m_timer, &QTimer::timeout, this, &Backend::tick);
     m_timer.setInterval(16);
     m_timer.setTimerType(Qt::PreciseTimer);
@@ -95,6 +98,7 @@ QVariantList Backend::players() const {
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
             {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
+            {"active", playerActive(i)}, {"joined", m_joined[i]},
         });
     }
     return out;
@@ -123,7 +127,8 @@ QVariantMap Backend::playerAt(int i, int tick) const {
     const Tank &t = m_p[i];
     return {{"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
-            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil}};
+            {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
+            {"active", playerActive(i)}, {"joined", m_joined[i]}};
 }
 
 QVariantMap Backend::enemyAt(int i, int tick) const {
@@ -185,6 +190,15 @@ void Backend::setSoundEnabled(bool v) {
 }
 
 void Backend::setP1Move(int dx, int dy, bool pressed) {
+    // QML forwards every key blindly: before the mode is picked those same keys
+    // drive the select screen, which is why menuMove() is reachable from here.
+    if (m_state == "select") {
+        if (pressed)
+            menuMove(dx != 0 ? dx : dy);
+        return;
+    }
+    if (pressed && m_state == "playing")
+        markJoined(0);
     if (dx < 0) m_p1Left = pressed;
     if (dx > 0) m_p1Right = pressed;
     if (dy < 0) m_p1Up = pressed;
@@ -192,6 +206,13 @@ void Backend::setP1Move(int dx, int dy, bool pressed) {
 }
 
 void Backend::setP2Move(int dx, int dy, bool pressed) {
+    if (m_state == "select") {
+        if (pressed)
+            menuMove(dx != 0 ? dx : dy);
+        return;
+    }
+    if (pressed && m_state == "playing")
+        markJoined(1);
     if (dx < 0) m_p2Left = pressed;
     if (dx > 0) m_p2Right = pressed;
     if (dy < 0) m_p2Up = pressed;
@@ -199,6 +220,18 @@ void Backend::setP2Move(int dx, int dy, bool pressed) {
 }
 
 void Backend::fireP1() {
+    // Space confirms the select screen and carries on past a game over, like
+    // Enter below and START on a pad.
+    if (m_state == "select") {
+        menuConfirm();
+        return;
+    }
+    if (m_state == "gameover") {
+        toSelect();
+        return;
+    }
+    if (m_state == "playing")
+        markJoined(0);
     if (m_state != "playing" || !m_p[0].alive || m_p[0].cooldown > 0)
         return;
     m_p[0].cooldown = FIRE_GAP;
@@ -206,6 +239,16 @@ void Backend::fireP1() {
 }
 
 void Backend::fireP2() {
+    if (m_state == "select") {
+        menuConfirm();
+        return;
+    }
+    if (m_state == "gameover") {
+        toSelect();
+        return;
+    }
+    if (m_state == "playing")
+        markJoined(1);
     if (m_state != "playing" || !m_p[1].alive || m_p[1].cooldown > 0)
         return;
     m_p[1].cooldown = FIRE_GAP;
@@ -265,17 +308,27 @@ void Backend::padDisconnected(int pad) {
 
 // START on a pad: join if it has no player yet, otherwise do what P and R do.
 void Backend::padStart(int pad) {
-    // An unassigned pad joins on its first START: player 2 first, then player 1.
-    // A third pad has no slot left to claim, so it leaves the game alone.
+    // On the select screen START picks the highlighted mode, exactly like Space
+    // and Enter on the keyboard.
+    if (m_state == "select") {
+        confirmSelect(pad);
+        return;
+    }
+    // After a game over START goes back to the select screen, whatever pad it
+    // came from: that is how a pad-only player starts the next run.
+    if (m_state == "gameover") {
+        toSelect();
+        return;
+    }
+    // An unassigned pad joins on its first START: the only tank with one player,
+    // the second tank with two. With no tank left to claim it leaves the game
+    // alone.
     const bool joining = playerForPad(pad) < 0;
     if (joining && !joinPad(pad))
         return;
-    // START from a still screen starts the game, like an arcade cabinet. A pad
-    // that has just joined mid-game must not pause it, so only a pad that
-    // already had a player toggles the pause.
-    if (m_state == "menu" || m_state == "gameover")
-        startGame();
-    else if (m_state == "victory")
+    // On victory START moves on. A pad that has just joined mid-game must not
+    // pause it, so only a pad that already had a tank toggles the pause.
+    if (m_state == "victory")
         nextLevel();
     else if (!joining)
         togglePause();
@@ -285,10 +338,15 @@ bool Backend::joinPad(int pad) {
     const Pad *const self = padAt(pad);
     if (!self || self->player >= 0)
         return false;
-    // Player 1 belongs to the keyboard, so the first pad takes player 2 and a
-    // second pad takes player 1: one pad, one human on it.
-    static const int order[2] = {1, 0};
-    for (int slot : order) {
+    // One pad, one human on it: with two tanks the keyboard keeps player 1, so
+    // the first pad takes player 2 and a second pad takes player 1. With a
+    // single tank the pad takes that one.
+    static const int twoPlayers[2] = {1, 0};
+    static const int onePlayer[1] = {0};
+    const int *const order = m_playerCount == 1 ? onePlayer : twoPlayers;
+    const int claimable = m_playerCount == 1 ? 1 : 2;
+    for (int k = 0; k < claimable; ++k) {
+        const int slot = order[k];
         bool taken = false;
         for (const Pad &other : m_pads)
             if (other.player == slot)
@@ -298,16 +356,30 @@ bool Backend::joinPad(int pad) {
         for (Pad &p : m_pads)
             if (p.index == pad)
                 p.player = slot;
+        // A pad claiming a tank is that player playing it: the join hint under
+        // the tank gives way to the PAD label.
+        m_joined[slot] = true;
         emit padsChanged();
+        emit frameChanged();
         return true;
     }
     return false;
 }
 
 void Backend::padMove(int pad, int dx, int dy, bool pressed) {
+    // On the select screen no tank is driven, whatever the pad's slot: the stick
+    // and the d-pad move the highlight, so a pad that already played a run can
+    // still pick the next mode.
+    if (m_state == "select") {
+        if (pressed)
+            menuMove(dx != 0 ? dx : dy);
+        return;
+    }
     const int player = playerForPad(pad);
     if (player < 0)
         return;
+    if (pressed && m_state == "playing")
+        markJoined(player);
     if (dy < 0)
         m_padHeld[player][0] = pressed;
     if (dx > 0)
@@ -319,6 +391,16 @@ void Backend::padMove(int pad, int dx, int dy, bool pressed) {
 }
 
 void Backend::padFire(int pad) {
+    if (m_state == "select") {
+        // Square / X is a confirm too, like START.
+        confirmSelect(pad);
+        return;
+    }
+    if (m_state == "gameover") {
+        // Any pad carries on past the game over screen, joined or not.
+        toSelect();
+        return;
+    }
     const int player = playerForPad(pad);
     if (player == 0)
         fireP1();
@@ -349,6 +431,11 @@ void Backend::startGame() {
     m_spawnTimer = 0;
     m_p1Up = m_p1Down = m_p1Left = m_p1Right = false;
     m_p2Up = m_p2Down = m_p2Left = m_p2Right = false;
+    m_joined[0] = m_joined[1] = false;
+    m_ending.clear();
+    // A pad only drives a tank that exists: starting a one-player game drops a
+    // pad that held the second tank (and lets go of its directions).
+    releasePads(m_playerCount);
     setState("playing");
     emit frameChanged();
 }
@@ -375,6 +462,91 @@ void Backend::togglePause() {
         setState("paused", "Paused — press P to resume");
     else if (m_state == "paused")
         setState("playing");
+}
+
+void Backend::menuMove(int delta) {
+    if (m_state != "select" || delta == 0)
+        return;
+    // Two options in a row: wrap, so the highlight never gets stuck at an end.
+    m_menuIndex = (m_menuIndex + (delta > 0 ? 1 : -1) + 2) % 2;
+    emit menuChanged();
+}
+
+void Backend::menuConfirm() {
+    confirmSelect(-1);
+}
+
+void Backend::menuChoose(int mode) {
+    if (m_state != "select")
+        return;
+    m_menuIndex = mode == 0 ? 0 : 1;
+    emit menuChanged();
+    confirmSelect(-1);
+}
+
+void Backend::confirmSelect(int pad) {
+    if (m_state != "select")
+        return;
+    m_playerCount = m_menuIndex == 0 ? 1 : 2;
+    emit playerCountChanged();
+    // A new game hands every pad back to waiting: which tank a pad gets is
+    // decided by START and the mode, never carried over from the run before.
+    // (Without this a pad that played a one-player game stayed on player 1 even
+    // after switching to two players.)
+    releasePads();
+    startGame();
+    // A pad that confirmed takes the tank the rules give it: the only one with
+    // a single player, the second one with two. The keyboard keeps player 1.
+    if (pad >= 0)
+        joinPad(pad);
+}
+
+void Backend::toSelect() {
+    if (m_state == "select")
+        return;
+    m_ending.clear();
+    clearRun();
+    setState("select");
+}
+
+void Backend::releasePads(int fromPlayer) {
+    bool changed = false;
+    for (Pad &p : m_pads) {
+        if (p.player < fromPlayer)
+            continue;
+        // Let go of whatever the pad was holding, or the tank would keep
+        // rolling after the pad is taken away from it.
+        for (bool &held : m_padHeld[p.player])
+            held = false;
+        p.player = -1;
+        changed = true;
+    }
+    if (changed)
+        emit padsChanged();
+}
+
+void Backend::clearRun() {
+    // The select screen sits over the board, so nothing may be left on it.
+    m_p[0].alive = m_p[1].alive = false;
+    for (auto &e : m_foes)
+        e.alive = false;
+    m_bullets.clear();
+    m_floaters.clear();
+    m_pickup = Pickup{};
+    m_spawned = 0;
+    m_spawnTimer = 0;
+    m_freezeUntil = -1;
+    m_baseGuardUntil = -1;
+    m_baseGuard.clear();
+}
+
+void Backend::markJoined(int player) {
+    if (player < 0 || player > 1 || m_joined[player])
+        return;
+    // The HUD reads this per frame, so tell QML now: the join hint under the
+    // tank gives way to the KEY / PAD label without waiting for the next frame.
+    m_joined[player] = true;
+    emit frameChanged();
 }
 
 void Backend::setState(const QString &s, const QString &msg) {
@@ -467,6 +639,16 @@ void Backend::resetTanks(bool fullStats) {
     m_p[1].x = COLS - 3.5;
     m_p[1].y = ROWS - 1.5;
     m_p[1].dir = 0;
+    // A player that is not in this game has no tank, no lives and no score, so
+    // a one-player run cannot be kept alive by a parked second tank (the bug
+    // the select screen exists to fix).
+    for (int i = 0; i < 2; ++i) {
+        if (playerActive(i))
+            continue;
+        m_p[i].alive = false;
+        m_p[i].lives = 0;
+        m_p[i].score = 0;
+    }
 }
 
 void Backend::tick() {
@@ -486,7 +668,7 @@ void Backend::tick() {
         if (t.cooldown > 0)
             t.cooldown -= dt;
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < m_playerCount; ++i) {
         const double boost = (m_time < m_p[i].speedUntil) ? 1.35 : 1.0;
         // Keyboard and pad are two sources for the same tank: the flags are
         // ORed, so letting go of a key never cancels a held stick.
@@ -498,7 +680,7 @@ void Backend::tick() {
     }
 
     // Respawn dead players that still have lives.
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < m_playerCount; ++i) {
         Tank &t = m_p[i];
         if (!t.alive && t.lives > 0) {
             t.respawn -= dt;
@@ -965,20 +1147,29 @@ void Backend::checkEnd() {
     for (int t : m_grid)
         if (t == BaseDead)
             baseDead = true;
+    // Both endings show the game over screen, which carries on to the select
+    // screen with START (so a pad can always start the next run).
+    int total = 0;
+    for (int i = 0; i < m_playerCount; ++i)
+        total += m_p[i].score;
     if (baseDead) {
-        setState("gameover", "Base destroyed — press R to retry");
+        m_ending = "base";
+        setState("gameover", QString("SCORE %1").arg(total));
         return;
     }
-    const bool p1Out = !m_p[0].alive && m_p[0].lives <= 0;
-    const bool p2Out = !m_p[1].alive && m_p[1].lives <= 0;
-    if (p1Out && p2Out) {
-        setState("gameover", "Both tanks down — press R to retry");
+    // Game over when every tank in the game is out. With a single player that
+    // means dying ends the run, instead of leaving an idle second tank alive.
+    bool allOut = true;
+    for (int i = 0; i < m_playerCount; ++i)
+        if (m_p[i].alive || m_p[i].lives > 0)
+            allOut = false;
+    if (allOut) {
+        m_ending = "over";
+        setState("gameover", QString("SCORE %1").arg(total));
         return;
     }
-    if (m_spawned >= totalForLevel() && aliveEnemies() == 0) {
-        const int total = m_p[0].score + m_p[1].score;
+    if (m_spawned >= totalForLevel() && aliveEnemies() == 0)
         setState("victory", QString("Sector %1 clear! Score %2 — press R for sector %3").arg(m_level).arg(total).arg(m_level + 1));
-    }
 }
 
 int Backend::aliveEnemies() const {

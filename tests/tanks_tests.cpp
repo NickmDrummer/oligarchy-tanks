@@ -67,6 +67,12 @@ struct TanksTestAccess {
     }
     // Which player a pad drives (-1 while it has not joined).
     static int padPlayer(const Backend &b, int pad) { return b.playerForPad(pad); }
+    // Take a player out of the game (no lives left) and run the end check.
+    static void outPlayer(Backend &b, int i) {
+        b.m_p[i].alive = false;
+        b.m_p[i].lives = 0;
+    }
+    static void endCheck(Backend &b) { b.checkEnd(); }
     static double playerX(const Backend &b, int i) { return b.m_p[i].x; }
     // A cleared square, so an input test measures input and not the random map.
     static void clearArea(Backend &b, int x0, int y0, int x1, int y1) {
@@ -107,9 +113,10 @@ class TanksTests : public QObject {
     Q_OBJECT
 
 private slots:
-    void startsPausedInMenu() {
+    // The game opens on the mode select, with a generated map already behind it.
+    void startsOnTheSelectScreen() {
         Backend b;
-        QCOMPARE(b.state(), QString("menu"));
+        QCOMPARE(b.state(), QString("select"));
         QCOMPARE(b.cols(), 15);
         QCOMPARE(b.rows(), 15);
         QCOMPARE(b.board().size(), 15 * 15);
@@ -450,14 +457,204 @@ private slots:
 
     // The first pad to press START takes player 2 (player 1 is the keyboard's)
     // and joining from the menu starts the game, like a cabinet.
-    void firstPadJoinsPlayerTwo() {
+    // The first screen is the mode select, exactly like an arcade cabinet.
+    void selectScreenPicksTheMode() {
         Backend b;
-        b.padConnected(0, "Test Pad");
-        QCOMPARE(b.pads().size(), 1);
-        QCOMPARE(TanksTestAccess::padPlayer(b, 0), -1);
+        QCOMPARE(b.state(), QString("select"));
+        QCOMPARE(b.menuIndex(), 0);
+        b.menuMove(1);
+        QCOMPARE(b.menuIndex(), 1);
+        b.menuMove(1); // the highlight wraps
+        QCOMPARE(b.menuIndex(), 0);
+        b.menuMove(-1);
+        QCOMPARE(b.menuIndex(), 1);
+        b.menuConfirm();
+        QCOMPARE(b.state(), QString("playing"));
+        QCOMPARE(b.playerCount(), 2);
+    }
+
+    // One player means one tank: no parked second tank to keep the run alive.
+    void onePlayerModeLeavesOneTank() {
+        Backend b;
+        b.menuChoose(0);
+        QCOMPARE(b.playerCount(), 1);
+        QCOMPARE(b.state(), QString("playing"));
+        const QVariantList ps = b.players();
+        QCOMPARE(ps.at(0).toMap().value("active").toBool(), true);
+        QCOMPARE(ps.at(1).toMap().value("active").toBool(), false);
+        QCOMPARE(ps.at(1).toMap().value("alive").toBool(), false);
+        QCOMPARE(ps.at(1).toMap().value("lives").toInt(), 0);
+    }
+
+    void twoPlayerModeKeepsBothTanks() {
+        Backend b;
+        b.menuChoose(1);
+        QCOMPARE(b.playerCount(), 2);
+        const QVariantList ps = b.players();
+        QCOMPARE(ps.at(1).toMap().value("active").toBool(), true);
+        QCOMPARE(ps.at(1).toMap().value("alive").toBool(), true);
+    }
+
+    // Losing the only player ends the run; with two, the other one carries on.
+    void dyingAsASinglePlayerEndsTheRun() {
+        Backend b;
+        b.menuChoose(0);
+        TanksTestAccess::outPlayer(b, 0);
+        TanksTestAccess::endCheck(b);
+        QCOMPARE(b.state(), QString("gameover"));
+        QCOMPARE(b.ending(), QString("over"));
+        // START, Space or Enter carries on to the select screen.
+        b.fireP1();
+        QCOMPARE(b.state(), QString("select"));
+
+        Backend two;
+        two.menuChoose(1);
+        TanksTestAccess::outPlayer(two, 0);
+        TanksTestAccess::endCheck(two);
+        QCOMPARE(two.state(), QString("playing"));
+        TanksTestAccess::outPlayer(two, 1);
+        TanksTestAccess::endCheck(two);
+        QCOMPARE(two.state(), QString("gameover"));
+        QCOMPARE(two.ending(), QString("over"));
+    }
+
+    // The base going down ends the run too, and says so.
+    void baseDestroyedEndsTheRun() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::putTile(b, 7, 14, TanksTestAccess::BaseDead);
+        TanksTestAccess::endCheck(b);
+        QCOMPARE(b.state(), QString("gameover"));
+        QCOMPARE(b.ending(), QString("base"));
+        b.padConnected(0, "Pad");
+        b.padStart(0); // any pad carries on, joined or not
+        QCOMPARE(b.state(), QString("select"));
+    }
+
+    // The game over screen is the only way back, and it leaves an empty board.
+    void gameOverLeadsToAnEmptySelectScreen() {
+        Backend b;
+        b.menuChoose(0);
+        TanksTestAccess::outPlayer(b, 0);
+        TanksTestAccess::endCheck(b);
+        QCOMPARE(b.state(), QString("gameover"));
+        b.toSelect();
+        QCOMPARE(b.state(), QString("select"));
+        QCOMPARE(b.message(), QString());
+        QCOMPARE(b.ending(), QString());
+        const QVariantList ps = b.players();
+        QCOMPARE(ps.at(0).toMap().value("alive").toBool(), false);
+        QCOMPARE(ps.at(1).toMap().value("alive").toBool(), false);
+    }
+
+    // R mid-game is a way out of the run, not a hidden restart.
+    void leavingARunGoesBackToTheSelectScreen() {
+        Backend b;
+        b.menuChoose(1);
+        QCOMPARE(b.state(), QString("playing"));
+        b.toSelect();
+        QCOMPARE(b.state(), QString("select"));
+        QCOMPARE(b.playerCount(), 2); // the mode is remembered
+    }
+
+    // A pad that already played drives the next select screen too: this is the
+    // bug where only the keyboard could pick a mode after a one-pad run.
+    void anAssignedPadDrivesTheSelectScreen() {
+        Backend b;
+        b.menuChoose(0);
+        b.padConnected(0, "Pad");
         b.padStart(0);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 0);
+        b.toSelect();
+        QCOMPARE(b.menuIndex(), 0);
+        b.padMove(0, 1, 0, true);
+        b.padMove(0, 1, 0, false);
+        QCOMPARE(b.menuIndex(), 1);
+        b.padMove(0, 0, -1, true); // the d-pad works on the other axis too
+        b.padMove(0, 0, -1, false);
+        QCOMPARE(b.menuIndex(), 0);
+    }
+
+    // A new game hands the pads back to waiting: the pad that played the last
+    // one-player run must not stay glued to player 1 in a two-player game.
+    void confirmingAModeReleasesThePadsOfTheLastRun() {
+        Backend b;
+        b.menuChoose(0);
+        b.padConnected(0, "Pad");
+        b.padStart(0);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 0);
+        TanksTestAccess::outPlayer(b, 0);
+        TanksTestAccess::endCheck(b);
+        b.toSelect();
+        b.menuMove(1); // highlight 2 PLAYERS
+        b.menuConfirm();
+        QCOMPARE(b.playerCount(), 2);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), -1); // free again
+        b.padStart(0); // and it takes P2, the keyboard keeps P1
         QCOMPARE(TanksTestAccess::padPlayer(b, 0), 1);
         QCOMPARE(b.state(), QString("playing"));
+    }
+
+    // The same via START on the pad, which is the arcade path.
+    void aPadConfirmingTheModeTakesItsTank() {
+        Backend b;
+        b.padConnected(0, "Pad");
+        b.padMove(0, 1, 0, true); // the pad picks 2 PLAYERS
+        b.padMove(0, 1, 0, false);
+        b.padStart(0);
+        QCOMPARE(b.playerCount(), 2);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 1);
+        QCOMPARE(b.state(), QString("playing"));
+    }
+
+    // An unassigned pad drives the select screen: left/right, then confirm.
+    void unassignedPadPicksTheMode() {
+        Backend b;
+        b.padConnected(0, "Test Pad");
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), -1);
+        b.padMove(0, 1, 0, true); // no tank yet: this moves the highlight
+        QCOMPARE(b.menuIndex(), 1);
+        b.padMove(0, 1, 0, false);
+        b.padStart(0);
+        QCOMPARE(b.state(), QString("playing"));
+        QCOMPARE(b.playerCount(), 2);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 1);
+    }
+
+    // With a single tank, the first pad to press START takes that one.
+    void padTakesTheOnlyTankInASinglePlayerGame() {
+        Backend b;
+        b.menuChoose(0); // the keyboard picks one player
+        QCOMPARE(b.playerCount(), 1);
+        b.padConnected(0, "Pad");
+        b.padStart(0);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 0);
+        QCOMPARE(b.state(), QString("playing")); // joining must not pause
+        b.padConnected(1, "Second");
+        b.padStart(1);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 1), -1); // no tank left to claim
+        QCOMPARE(b.state(), QString("playing"));
+    }
+
+    // Switching back to one player releases a pad that held the second tank.
+    void singlePlayerModeReleasesTheSecondPad() {
+        Backend b;
+        b.menuChoose(1);
+        b.padConnected(0, "Pad");
+        b.padStart(0);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 1);
+        TanksTestAccess::outPlayer(b, 0);
+        TanksTestAccess::outPlayer(b, 1);
+        TanksTestAccess::endCheck(b); // game over, then on to the select screen
+        QCOMPARE(b.state(), QString("gameover"));
+        b.toSelect();
+        QCOMPARE(b.state(), QString("select"));
+        b.menuMove(-1); // highlight 1 PLAYER, left where it was on 2
+        b.menuConfirm();
+        QCOMPARE(b.playerCount(), 1);
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), -1); // its tank is gone
+        b.padStart(0); // and it can claim the only tank
+        QCOMPARE(TanksTestAccess::padPlayer(b, 0), 0);
     }
 
     void secondPadJoinsPlayerOne() {
