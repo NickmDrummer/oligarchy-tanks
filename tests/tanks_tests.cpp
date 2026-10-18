@@ -103,6 +103,43 @@ struct TanksTestAccess {
             for (int x = x0; x <= x1; ++x)
                 putTile(b, x, y, Empty);
     }
+    // ---- enemies getting stuck (section 17.5) ----
+    static void seed(Backend &b, unsigned s) { b.m_rng.seed(s); }
+    static void remap(Backend &b) { b.generateMap(); }
+    static void clearFoes(Backend &b) {
+        for (auto &e : b.m_foes)
+            e.alive = false;
+    }
+    static void clearPlayers(Backend &b) {
+        b.m_p[0].alive = false;
+        b.m_p[1].alive = false;
+    }
+    static void setSpawned(Backend &b, int n) { b.m_spawned = n; }
+    static void noMoreSpawns(Backend &b) { b.m_spawned = b.totalForLevel(); }
+    static int lastEnemy(const Backend &b) { return int(b.m_foes.size()) - 1; }
+    static int enemyCount(const Backend &b) { return int(b.m_foes.size()); }
+    static double enemyX(const Backend &b, int i) { return b.m_foes[i].x; }
+    static double enemyY(const Backend &b, int i) { return b.m_foes[i].y; }
+    static bool buried(const Backend &b, int i) { return b.buriedInSolid(b.m_foes[i].x, b.m_foes[i].y); }
+    static bool spawnNext(Backend &b) { return b.spawnEnemy(); }
+    // The game's own collision test for a move: can enemy i step to (x, y)?
+    static bool canStep(Backend &b, int i, double x, double y) {
+        return !b.blockedByTank(x, y, 0.8, &b.m_foes[i], true, b.m_foes[i].x, b.m_foes[i].y);
+    }
+    // One frame of the enemy pass, in the order tick() runs it.
+    static void stepEnemies(Backend &b) {
+        b.separateTanks();
+        b.updateEnemies(1.0 / 60.0);
+    }
+    // ---- players out of lives (section 17.6) ----
+    static constexpr int LifeKind = 3; // PickupKind::Life
+    static int playerLives(const Backend &b, int i) { return b.m_p[i].lives; }
+    static void kill(Backend &b, int i) { b.killPlayer(i); }
+    static void givePickup(Backend &b, int player, int kind) {
+        b.m_pickup.kind = kind;
+        b.m_pickup.active = true;
+        b.applyPickup(player);
+    }
 };
 
 // Records what the mapper made of a pad, so the mapping rules can be asserted
@@ -427,6 +464,147 @@ private slots:
         QCOMPARE(TanksTestAccess::enemiesAlive(b), 0);
         QCOMPARE(TanksTestAccess::tile(b, bx + 1, by), int(TanksTestAccess::Steel));
         QCOMPARE(b.players().at(0).toMap().value("score").toInt(), 0);
+    }
+
+    // --- Enemies getting stuck (section 17.5) -------------------------------
+    // Reported: enemies held still at the top-left corner, the top-right corner
+    // and the top centre, with no other tank touching them. Measured cause: two
+    // tanks that come within a hull's width of each other blocked each other in
+    // all four directions for ever (the collision test read the *position*, not
+    // the move), a spawn could drop a tank on top of another one, and the tank
+    // separateTanks() then shoved into the wall could never step back out. The
+    // four cases below lock each of those.
+
+    // Touching tanks may always move apart, and never into each other.
+    void twoTanksInContactCanAlwaysBackAway() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        TanksTestAccess::clearPlayers(b);
+        TanksTestAccess::noMoreSpawns(b);
+        TanksTestAccess::putEnemy(b, 3.5, 3.5);
+        TanksTestAccess::putEnemy(b, 3.5, 3.9); // touching, overlapping
+        const int a = 6, c = 7;
+        QVERIFY(!TanksTestAccess::canStep(b, a, 3.5, 3.6)); // into it: blocked
+        QVERIFY(TanksTestAccess::canStep(b, a, 3.5, 3.4));  // away: allowed
+        TanksTestAccess::stepEnemies(b);
+        QVERIFY(TanksTestAccess::enemyY(b, a) <= 3.5);
+        QVERIFY(TanksTestAccess::enemyY(b, c) >= 3.9);
+    }
+
+    // A tank inside a whole tile cannot be nudged out (its hull is wider than
+    // any step), so it is rescued outright instead of standing there for ever.
+    void aTankBuriedInMasonryIsFreed() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        TanksTestAccess::clearPlayers(b);
+        TanksTestAccess::noMoreSpawns(b);
+        TanksTestAccess::putTile(b, 5, 5, TanksTestAccess::Brick);
+        TanksTestAccess::putEnemy(b, 5.5, 5.5);
+        const int e = TanksTestAccess::lastEnemy(b);
+        QVERIFY(TanksTestAccess::buried(b, e));
+        TanksTestAccess::stepEnemies(b);
+        QVERIFY(!TanksTestAccess::buried(b, e));
+    }
+
+    // Two tanks never come out of the same gate: stacking them is what let
+    // separateTanks() shove one into the wall. With no gate free the spawn
+    // waits instead of stacking.
+    void enemySpawnsNeverStackOnOneCell() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::clearFoes(b);
+        TanksTestAccess::setSpawned(b, 0);
+        TanksTestAccess::putEnemy(b, 0.5, 0.5); // the first gate is taken
+        QVERIFY(TanksTestAccess::spawnNext(b));
+        QCOMPARE(TanksTestAccess::enemyX(b, 0), 7.5); // so it uses another one
+        TanksTestAccess::putEnemy(b, 14.5, 0.5);
+        QVERIFY(!TanksTestAccess::spawnNext(b)); // all three taken: wait
+        QCOMPARE(TanksTestAccess::enemyX(b, 0), 7.5);
+    }
+
+    // Every map leaves the three entry lanes open at the top: spawning inside
+    // masonry is unrecoverable, because an enemy cannot dig.
+    void theEntryLanesAreNeverSealed() {
+        Backend b;
+        b.startGame();
+        const int lanes[3] = {0, Backend::COLS / 2, Backend::COLS - 1};
+        for (int map = 0; map < 50; ++map) {
+            TanksTestAccess::remap(b);
+            for (int l = 0; l < 3; ++l)
+                for (int y = 0; y <= 2; ++y)
+                    QCOMPARE(TanksTestAccess::tile(b, lanes[l], y), int(TanksTestAccess::Empty));
+        }
+    }
+
+    // The user's actual complaint: an enemy that spawns in a corner has to
+    // leave it. Twelve seeded maps, eight seconds each, no standing still.
+    void enemiesLeaveTheTopOfTheBoardOnEveryMap() {
+        Backend b;
+        for (unsigned s = 1; s <= 12; ++s) {
+            TanksTestAccess::seed(b, s);
+            b.startGame();
+            TanksTestAccess::clearFoes(b);
+            TanksTestAccess::clearPlayers(b);
+            TanksTestAccess::noMoreSpawns(b);
+            TanksTestAccess::putEnemy(b, 0.5, 0.5);
+            const int e = TanksTestAccess::lastEnemy(b);
+            double far = 0;
+            for (int f = 0; f < 480; ++f) { // 8 s
+                TanksTestAccess::stepEnemies(b);
+                const double dx = std::abs(TanksTestAccess::enemyX(b, e) - 0.5);
+                const double dy = std::abs(TanksTestAccess::enemyY(b, e) - 0.5);
+                far = std::max(far, std::max(dx, dy));
+            }
+            QVERIFY(far > 1.5);
+        }
+    }
+
+    // --- A player who is out of lives (section 17.6) -------------------------
+    // Reported: P1 ran out of lives, P2 carried on to the next sector, both
+    // tanks came back, P1's panel showed neither spare tanks nor KILLED (a
+    // blank) and P1 was back with a single life. Cause: resetTanks() rebuilt
+    // the tank with alive = true whatever the life count, so an out player
+    // returned as a phantom with 0 lives; dying again took him to -1, which is
+    // neither "spare tank" nor "KILLED" for the panel. An out player now stays
+    // out, and only a LIFE from his partner revives him.
+
+    void anEliminatedPlayerStaysOutInsteadOfReturning() {
+        Backend b;
+        b.menuChoose(1); // two players
+        TanksTestAccess::outPlayer(b, 0);
+        b.nextLevel();
+        QVERIFY(!TanksTestAccess::playerAlive(b, 0));
+        QCOMPARE(TanksTestAccess::playerLives(b, 0), 0);
+        // Dying again cannot push the count below zero, which is what blanked
+        // the panel.
+        TanksTestAccess::kill(b, 0);
+        QCOMPARE(TanksTestAccess::playerLives(b, 0), 0);
+        QVERIFY(!TanksTestAccess::playerAlive(b, 0));
+        // The partner is untouched by any of it.
+        QVERIFY(TanksTestAccess::playerAlive(b, 1));
+    }
+
+    void aLifeFromThePartnerRevivesTheEliminatedPlayer() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::outPlayer(b, 0);
+        TanksTestAccess::givePickup(b, 1, TanksTestAccess::LifeKind); // P2 finds a LIFE
+        QVERIFY(TanksTestAccess::playerAlive(b, 0));      // P1 is back...
+        QCOMPARE(TanksTestAccess::playerLives(b, 0), 1);  // ...with one tank
+        QCOMPARE(TanksTestAccess::playerX(b, 0), 3.5);    // at his own spawn
+        QCOMPARE(TanksTestAccess::playerLives(b, 1), 3);  // P2 gains nothing
+    }
+
+    void aLifeTopsUpThePickerWhileBothAreIn() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::givePickup(b, 1, TanksTestAccess::LifeKind);
+        QCOMPARE(TanksTestAccess::playerLives(b, 1), 4);
+        QCOMPARE(TanksTestAccess::playerLives(b, 0), 3);
     }
 
     // --- Gamepads -----------------------------------------------------------

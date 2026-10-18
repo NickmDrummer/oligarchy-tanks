@@ -199,12 +199,20 @@ private:
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
+    // An enemy cannot dig, so a spawn lane sealed by masonry would trap it for
+    // the whole stage: carve a way down only when the scatter really cut it off.
+    void openSpawnLanes();
     void resetTanks(bool fullStats);
     void tick();
     void updateTank(Tank &t, bool up, bool down, bool left, bool right, double dt, double speed);
     void updateEnemies(double dt);
     void updateBullets(double dt);
-    void spawnEnemy();
+    // Spawns the next tank of the wave in a free lane. Returns false when
+    // every entry lane is taken, so the caller can retry instead of stacking
+    // two tanks on one cell (which separateTanks() would then shove into the
+    // wall).
+    bool spawnEnemy();
+    bool cellBusy(double x, double y) const;
     void fireBullet(double x, double y, int dir, int owner, double speed);
     double enemySpeedMult() const { return 1.0 + 0.1 * (m_level - 1); }
     bool solidAt(double x, double y, double size) const;
@@ -213,9 +221,25 @@ private:
     // only the surviving strips block.
     bool tileBlocksPoint(double x, double y) const;
     bool hitsTank(double bx, double by, double tx, double ty) const;
-    bool blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const;
+    // Would a tank at (nx, ny) run into another one? Contact that already
+    // exists only blocks a move that closes the gap, so two tanks that end up
+    // touching can always back away instead of locking each other in place.
+    // (curX, curY) is where the moving tank is now; `self` is skipped.
+    bool blockedByTank(double nx, double ny, double size, const void *self, bool isEnemy,
+                       double curX, double curY) const;
     // Nudge overlapping tanks apart so they cannot stay locked together.
     void separateTanks();
+    // A tank that ends up inside a whole tile or off the board cannot step out
+    // (its 0.8 hull is wider than any step), so it is rescued to the nearest
+    // cell whose hull is free. The escape nudge handles damaged bricks, which
+    // is the legitimate case of a tank standing on the 50% line.
+    bool buriedInSolid(double x, double y) const;
+    bool nearestFreeSpot(double x, double y, double &outX, double &outY) const;
+    // How far a tank could travel in a direction before hitting anything, in
+    // cells. Used to pick a way out of a corner instead of re-rolling blind
+    // into the wall it just hit.
+    double freeRun(double x, double y, int dir, const void *self, bool isEnemy) const;
+    int bestDir(double x, double y, const void *self, bool isEnemy, int fallback);
     int tileAt(int cx, int cy) const;
     // Shears one strip off a brick tile, on the face the shot came from.
     void chipBrick(int cx, int cy, int dir);
@@ -232,6 +256,9 @@ private:
     // dropped and QML is told to re-run its tile queries.
     void bumpBoard();
     void killPlayer(int idx);
+    // Bring a player who is out back with a single tank, at his spawn point and
+    // with the usual 3 s grace. Used by the LIFE bonus on a partner.
+    void revivePlayer(int idx);
     void checkEnd();
     int aliveEnemies() const;
     void spawnPickupAt(double x, double y);

@@ -635,17 +635,65 @@ void Backend::generateMap() {
             clear(3 + dx, ROWS - 2 + dy);
             clear(COLS - 4 + dx, ROWS - 2 + dy);
         }
-    // Guarantee free enemy entry pads at the top row.
+    // Guarantee free enemy entry pads at the top row. Three rows deep: two
+    // tanks that spawn in the same lane are pushed apart by separateTanks(),
+    // and a one-cell pad has nowhere to push them but into the masonry.
     for (int sx : {0, COLS / 2, COLS - 1})
         for (int dx = -1; dx <= 1; ++dx)
-            for (int dy = 0; dy <= 1; ++dy)
+            for (int dy = 0; dy <= 2; ++dy)
                 clear(sx + dx, dy);
+    // And make sure each lane really reaches the board: a scatter can seal one
+    // off, which would leave an enemy pacing a three-cell pocket at the top.
+    openSpawnLanes();
     // Every surviving brick tile starts whole; pads cleared above stay empty.
     m_brickQ.assign(COLS * ROWS, 0);
     for (int i = 0; i < COLS * ROWS; ++i)
         if (m_grid[i] == Brick)
             m_brickQ[i] = 0xFF;
     bumpBoard();
+}
+
+// An enemy walks, it never digs, so a spawn lane sealed by masonry would trap
+// it at the top of the board for the whole stage. The scatter can seal one
+// (a brick in the lane with brick across its sides), so each lane is checked
+// and, only when it really is cut off, carved down until it joins the board.
+void Backend::openSpawnLanes() {
+    auto reachesMiddle = [&](int sx, int sy) {
+        if (m_grid[sy * COLS + sx] == Brick || m_grid[sy * COLS + sx] == Steel)
+            return false;
+        std::vector<char> seen(COLS * ROWS, 0);
+        std::vector<int> stack;
+        seen[sy * COLS + sx] = 1;
+        stack.push_back(sy * COLS + sx);
+        while (!stack.empty()) {
+            const int at = stack.back();
+            stack.pop_back();
+            const int x = at % COLS, y = at / COLS;
+            if (y >= 6)
+                return true;
+            const int dx[4] = {0, 0, -1, 1}, dy[4] = {-1, 1, 0, 0};
+            for (int k = 0; k < 4; ++k) {
+                const int nx = x + dx[k], ny = y + dy[k];
+                if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS)
+                    continue;
+                if (seen[ny * COLS + nx])
+                    continue;
+                const int t = m_grid[ny * COLS + nx];
+                if (t == Brick || t == Steel || t == Base)
+                    continue;
+                seen[ny * COLS + nx] = 1;
+                stack.push_back(ny * COLS + nx);
+            }
+        }
+        return false;
+    };
+    for (const int x : {0, COLS / 2, COLS - 1}) {
+        for (int y = 0; y <= 7 && !reachesMiddle(x, 0); ++y) {
+            const int t = m_grid[y * COLS + x];
+            if (t == Brick || t == Steel)
+                m_grid[y * COLS + x] = Empty;
+        }
+    }
 }
 
 void Backend::resetTanks(bool fullStats) {
@@ -655,8 +703,8 @@ void Backend::resetTanks(bool fullStats) {
     const int score1 = fullStats ? 0 : m_p[1].score;
     m_p[0] = Tank{};
     m_p[1] = Tank{};
-    m_p[0].lives = lives0;
-    m_p[1].lives = lives1;
+    m_p[0].lives = std::max(0, lives0);
+    m_p[1].lives = std::max(0, lives1);
     m_p[0].score = score0;
     m_p[1].score = score1;
     // Cell centers, so tanks never start straddling two tiles.
@@ -668,13 +716,18 @@ void Backend::resetTanks(bool fullStats) {
     m_p[1].dir = 0;
     // A player that is not in this game has no tank, no lives and no score, so
     // a one-player run cannot be kept alive by a parked second tank (the bug
-    // the select screen exists to fix).
+    // the select screen exists to fix). A player in the game who is out of
+    // lives stays out for the rest of the run: coming back on the next sector
+    // with zero lives handed him a phantom tank (and, on dying again, a blank
+    // panel with lives at -1). Only a LIFE picked up by his partner revives him.
     for (int i = 0; i < 2; ++i) {
-        if (playerActive(i))
+        if (playerActive(i) && m_p[i].lives > 0)
             continue;
         m_p[i].alive = false;
-        m_p[i].lives = 0;
-        m_p[i].score = 0;
+        if (!playerActive(i)) {
+            m_p[i].lives = 0;
+            m_p[i].score = 0;
+        }
     }
 }
 
@@ -781,16 +834,16 @@ void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, dou
     // tank that grazes a wall or another tank does not freeze in place (and can
     // escape a 1/4 brick gap instead of being locked into it).
     bool moved = false;
-    if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &t, false)) {
+    if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &t, false, t.x, t.y)) {
         t.x = nx; t.y = ny; moved = true;
     } else if (dir == 0 || dir == 2) {
         // vertical intent: try sliding horizontally
-        if (!solidAt(t.x, ny, TANK_SIZE) && !blockedByTank(t.x, ny, TANK_SIZE, &t, false)) {
+        if (!solidAt(t.x, ny, TANK_SIZE) && !blockedByTank(t.x, ny, TANK_SIZE, &t, false, t.x, t.y)) {
             t.y = ny; moved = true;
         }
     } else {
         // horizontal intent: try sliding vertically
-        if (!solidAt(nx, t.y, TANK_SIZE) && !blockedByTank(nx, t.y, TANK_SIZE, &t, false)) {
+        if (!solidAt(nx, t.y, TANK_SIZE) && !blockedByTank(nx, t.y, TANK_SIZE, &t, false, t.x, t.y)) {
             t.x = nx; moved = true;
         }
     }
@@ -805,8 +858,19 @@ void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, dou
             if (esc[k] == 2) ny2 += nudge;
             if (esc[k] == 3) nx2 -= nudge;
             if (esc[k] == 1) nx2 += nudge;
-            if (!solidAt(nx2, ny2, TANK_SIZE) && !blockedByTank(nx2, ny2, TANK_SIZE, &t, false)) {
+            if (!solidAt(nx2, ny2, TANK_SIZE) && !blockedByTank(nx2, ny2, TANK_SIZE, &t, false, t.x, t.y)) {
                 t.x = nx2; t.y = ny2; moved = true;
+            }
+        }
+        // A nudge of 0.1 cannot free a hull that is inside a whole tile or off
+        // the board, so that state is rescued outright. It should never happen;
+        // it is here so a tank can never be sealed in for the rest of the run.
+        if (!moved && buriedInSolid(t.x, t.y)) {
+            double rx = t.x, ry = t.y;
+            if (nearestFreeSpot(t.x, t.y, rx, ry)) {
+                t.x = rx;
+                t.y = ry;
+                moved = true;
             }
         }
     }
@@ -818,8 +882,9 @@ void Backend::updateEnemies(double dt) {
     const int maxConcurrent = std::min(4 + (m_level - 1), 6);
     m_spawnTimer -= dt;
     if (m_spawned < totalForLevel() && aliveEnemies() < maxConcurrent && m_spawnTimer <= 0) {
-        spawnEnemy();
-        m_spawnTimer = 2.0;
+        // A busy entry lane means another tank is coming out of that gate:
+        // retry soon instead of stacking two on one cell.
+        m_spawnTimer = spawnEnemy() ? 2.0 : 0.5;
     }
     for (auto &e : m_foes) {
         if (!e.alive) {
@@ -846,14 +911,15 @@ void Backend::updateEnemies(double dt) {
         if (e.dir == 3) nx -= speed * dt;
         if (e.dir == 1) nx += speed * dt;
         bool moved = false;
-        if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &e, true)) {
+        bool escaped = false;
+        if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &e, true, e.x, e.y)) {
             e.x = nx; e.y = ny; moved = true;
         } else if (e.dir == 0 || e.dir == 2) {
-            if (!solidAt(e.x, ny, TANK_SIZE) && !blockedByTank(e.x, ny, TANK_SIZE, &e, true)) {
+            if (!solidAt(e.x, ny, TANK_SIZE) && !blockedByTank(e.x, ny, TANK_SIZE, &e, true, e.x, e.y)) {
                 e.y = ny; moved = true;
             }
         } else {
-            if (!solidAt(nx, e.y, TANK_SIZE) && !blockedByTank(nx, e.y, TANK_SIZE, &e, true)) {
+            if (!solidAt(nx, e.y, TANK_SIZE) && !blockedByTank(nx, e.y, TANK_SIZE, &e, true, e.x, e.y)) {
                 e.x = nx; moved = true;
             }
         }
@@ -866,17 +932,34 @@ void Backend::updateEnemies(double dt) {
                 if (esc[k] == 2) ny2 += nudge;
                 if (esc[k] == 3) nx2 -= nudge;
                 if (esc[k] == 1) nx2 += nudge;
-                if (!solidAt(nx2, ny2, TANK_SIZE) && !blockedByTank(nx2, ny2, TANK_SIZE, &e, true)) {
+                if (!solidAt(nx2, ny2, TANK_SIZE) && !blockedByTank(nx2, ny2, TANK_SIZE, &e, true, e.x, e.y)) {
                     e.x = nx2; e.y = ny2; moved = true;
                 }
             }
+            // A nudge is never progress: the enemy still has to choose a way
+            // out. And a hull inside a whole tile or off the board cannot be
+            // nudged out at all, so it is rescued outright.
+            escaped = moved;
+            if (!moved && buriedInSolid(e.x, e.y)) {
+                double rx = e.x, ry = e.y;
+                if (nearestFreeSpot(e.x, e.y, rx, ry)) {
+                    e.x = rx;
+                    e.y = ry;
+                    moved = true;
+                    escaped = true;
+                }
+            }
         }
-        if (moved) {
+        if (moved && !escaped) {
             e.moving = true;
         } else {
             e.moving = false;
-            e.dir = int(roll(m_rng) * 4);
-            e.think = 0;
+            // Take the way with the most room and commit to it for a while,
+            // instead of re-rolling blind every frame: the blind roll kept
+            // choosing the wall it had just hit (50% "down", 40% "toward the
+            // base"), which is what made enemies jitter in the corners.
+            e.dir = bestDir(e.x, e.y, &e, true, e.dir);
+            e.think = 0.8 + roll(m_rng) * 1.5;
         }
         if (e.think <= 0) {
             if (roll(m_rng) < 0.35)
@@ -1020,7 +1103,7 @@ void Backend::updateBullets(double dt) {
                     m_bullets.end());
 }
 
-void Backend::spawnEnemy() {
+bool Backend::spawnEnemy() {
     // 16 tanks per stage, composition by wave (see AGENTS.md section 17).
     // Carriers are 2 of the basic tanks: slightly faster, flashing, drop a
     // power-up. Armored tanks take 3 hits.
@@ -1028,12 +1111,25 @@ void Backend::spawnEnemy() {
     if (m_level <= 3) { basic = 8; fast = 4; }
     else if (m_level <= 6) { basic = 6; fast = 6; }
     else { basic = 4; fast = 6; }
+    // Enter through a lane no living tank is using. Stacking a tank on top of
+    // another used to leave the pair shoved into the wall by separateTanks()
+    // and unable to move for the rest of the stage.
     const int spots[3] = {0, COLS / 2, COLS - 1};
+    int lane = -1;
+    for (int k = 0; k < 3; ++k) {
+        const int cand = spots[(m_spawned + k) % 3];
+        if (!cellBusy(double(cand) + 0.5, 0.5)) {
+            lane = cand;
+            break;
+        }
+    }
+    if (lane < 0)
+        return false; // every lane is taken: retry on the next tick
     for (auto &e : m_foes) {
         if (e.alive)
             continue;
         e.alive = true;
-        e.x = double(spots[m_spawned % 3]) + 0.5;
+        e.x = double(lane) + 0.5;
         e.y = 0.5;
         e.dir = 2;
         e.cooldown = 1.0;
@@ -1047,15 +1143,16 @@ void Backend::spawnEnemy() {
         } else if (m_spawned < basic) {
             kind = 0; // basic
         } else if (m_spawned < basic + fast) {
-            kind = 1; // fast (green)
+            kind = 1; // fast (wheeled chassis)
         } else {
             kind = 2; // armored
         }
         e.kind = kind;
         e.hp = (kind == 2) ? 3 : 1;
         ++m_spawned;
-        return;
+        return true;
     }
+    return false; // no free slot: only maxConcurrent tanks are ever alive
 }
 
 void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
@@ -1140,14 +1237,25 @@ bool Backend::hitsTank(double bx, double by, double tx, double ty) const {
 
 // Tanks block each other, so allies and enemies can no longer drive
 // or phase through one another.
-bool Backend::blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const {
-    // Use the full hull size as the collision distance: anything smaller lets
-    // two tanks overlap visually and "stick" to each other.
+//
+// This tests the *move*, not the position: two tanks that are already in
+// contact may always move apart. Without that, two tanks that end up within a
+// hull's width of each other are each other's wall in all four directions and
+// neither can move again — which is how enemies got stuck in the corners.
+bool Backend::blockedByTank(double nx, double ny, double size, const void *self, bool isEnemy,
+                            double curX, double curY) const {
     const double minDist = size;
-    auto blocks = [&](double tx, double ty, const void *other) {
+    auto blocks = [&](double ox, double oy, const void *other) {
         if (other == self)
             return false;
-        return std::abs(tx - x) < minDist && std::abs(ty - y) < minDist;
+        if (std::abs(ox - nx) >= minDist || std::abs(oy - ny) >= minDist)
+            return false; // the target position is clear of it
+        if (std::abs(ox - curX) >= minDist || std::abs(oy - curY) >= minDist)
+            return true; // entering contact: blocked
+        // Already in contact: only a move that closes the gap is blocked.
+        const double cur = std::max(std::abs(ox - curX), std::abs(oy - curY));
+        const double nxt = std::max(std::abs(ox - nx), std::abs(oy - ny));
+        return nxt <= cur;
     };
     for (int i = 0; i < 2; ++i) {
         if (m_p[i].alive && blocks(m_p[i].x, m_p[i].y, &m_p[i]))
@@ -1159,15 +1267,100 @@ bool Backend::blockedByTank(double x, double y, double size, const void *self, b
         const void *other = &e;
         if (other == self)
             continue;
-        if (isEnemy) {
-            // Enemies also collide with each other.
-            if (std::abs(e.x - x) < minDist && std::abs(e.y - y) < minDist)
-                return true;
-        } else if (blocks(e.x, e.y, other)) {
+        // Enemies collide with each other and with the players; players only
+        // collide with tanks, which is the same test either way.
+        if (blocks(e.x, e.y, other))
             return true;
-        }
     }
     (void)isEnemy;
+    return false;
+}
+
+// True when the hull is off the board, or when the cell at the tank's centre is
+// a whole tile. A tank standing on the 50% line of a damaged brick does not
+// count: that is a legitimate position and the escape nudge frees it.
+bool Backend::buriedInSolid(double x, double y) const {
+    const double h = TANK_SIZE / 2;
+    const double pts[4][2] = {{x - h, y - h}, {x + h, y - h}, {x - h, y + h}, {x + h, y + h}};
+    for (auto &p : pts) {
+        const int cx = int(std::floor(p[0])), cy = int(std::floor(p[1]));
+        if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
+            return true;
+    }
+    const int cx = int(std::floor(x)), cy = int(std::floor(y));
+    if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
+        return true;
+    const int i = cy * COLS + cx;
+    const int t = m_grid[i];
+    if (t == Steel || t == Base || t == BaseDead)
+        return true;
+    return t == Brick && m_brickQ[i] == 0xFF;
+}
+
+bool Backend::nearestFreeSpot(double x, double y, double &outX, double &outY) const {
+    const int cx0 = int(std::floor(x)), cy0 = int(std::floor(y));
+    for (int r = 0; r <= 3; ++r) {
+        for (int dy = -r; dy <= r; ++dy) {
+            for (int dx = -r; dx <= r; ++dx) {
+                if (std::max(std::abs(dx), std::abs(dy)) != r)
+                    continue; // ring only, nearest first
+                const int cx = cx0 + dx, cy = cy0 + dy;
+                if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
+                    continue;
+                const double px = cx + 0.5, py = cy + 0.5;
+                if (!solidAt(px, py, TANK_SIZE)) {
+                    outX = px;
+                    outY = py;
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+double Backend::freeRun(double x, double y, int dir, const void *self, bool isEnemy) const {
+    const double step = 0.1;
+    double run = 0;
+    for (int k = 1; k <= 20; ++k) {
+        double tx = x, ty = y;
+        if (dir == 0) ty -= step * k;
+        if (dir == 2) ty += step * k;
+        if (dir == 3) tx -= step * k;
+        if (dir == 1) tx += step * k;
+        if (solidAt(tx, ty, TANK_SIZE) || blockedByTank(tx, ty, TANK_SIZE, self, isEnemy, x, y))
+            break;
+        run = step * k;
+    }
+    return run;
+}
+
+int Backend::bestDir(double x, double y, const void *self, bool isEnemy, int fallback) {
+    int order[4] = {0, 1, 2, 3};
+    for (int k = 3; k > 0; --k) {
+        std::uniform_int_distribution<int> pick(0, k);
+        std::swap(order[k], order[pick(m_rng)]);
+    }
+    int best = fallback;
+    double bestRun = -1.0;
+    for (int k = 0; k < 4; ++k) {
+        const double run = freeRun(x, y, order[k], self, isEnemy);
+        if (run > bestRun) {
+            bestRun = run;
+            best = order[k];
+        }
+    }
+    return best;
+}
+
+// A spawn lane is busy when a living tank already sits on it.
+bool Backend::cellBusy(double x, double y) const {
+    for (int i = 0; i < m_playerCount; ++i)
+        if (m_p[i].alive && std::abs(m_p[i].x - x) < TANK_SIZE && std::abs(m_p[i].y - y) < TANK_SIZE)
+            return true;
+    for (const auto &e : m_foes)
+        if (e.alive && std::abs(e.x - x) < TANK_SIZE && std::abs(e.y - y) < TANK_SIZE)
+            return true;
     return false;
 }
 
@@ -1192,19 +1385,33 @@ void Backend::separateTanks() {
             const double dy = by - ay;
             const double adx = std::fabs(dx);
             const double ady = std::fabs(dy);
-            if (adx < minDist && ady < minDist && (adx > 0 || ady > 0)) {
-                // Push apart along the shallowest penetration axis.
-                const double penX = minDist - adx;
-                const double penY = minDist - ady;
-                const double half = 0.5;
-                if (penX < penY) {
-                    const double push = penX * half * (dx >= 0 ? 1.0 : -1.0);
-                    ax -= push;
-                    bx += push;
-                } else {
-                    const double push = penY * half * (dy >= 0 ? 1.0 : -1.0);
-                    ay -= push;
-                    by += push;
+            if (adx >= minDist || ady >= minDist)
+                continue;
+            // Push apart along the shallowest penetration axis, but never into
+            // masonry or off the board: shoving a tank into a wall is how it
+            // used to be left unable to move for the rest of the stage (its
+            // own hull is wider than the escape step).
+            const double penX = minDist - adx;
+            const double penY = minDist - ady;
+            const double half = 0.5;
+            const double hx = penX * half * (dx >= 0 ? 1.0 : -1.0);
+            const double hy = penY * half * (dy >= 0 ? 1.0 : -1.0);
+            auto fits = [&](double x, double y) { return !solidAt(x, y, TANK_SIZE); };
+            if (penX < penY) {
+                if (fits(ax - hx, ay) && fits(bx + hx, by)) {
+                    ax -= hx;
+                    bx += hx;
+                } else if (fits(ax, ay - hy) && fits(bx, by + hy)) {
+                    ay -= hy;
+                    by += hy;
+                }
+            } else {
+                if (fits(ax, ay - hy) && fits(bx, by + hy)) {
+                    ay -= hy;
+                    by += hy;
+                } else if (fits(ax - hx, ay) && fits(bx + hx, by)) {
+                    ax -= hx;
+                    bx += hx;
                 }
             }
         }
@@ -1317,10 +1524,24 @@ void Backend::updateBaseGuard() {
 void Backend::killPlayer(int idx) {
     Tank &t = m_p[idx];
     t.alive = false;
-    t.lives -= 1;
+    // Never below zero: a negative count is neither a spare tank nor a KILLED
+    // panel, it is a blank one. Losing the last life takes the player out.
+    t.lives = std::max(0, t.lives - 1);
     t.respawn = 2.0;
     if (m_soundEnabled)
         emit playSound("explode");
+}
+
+void Backend::revivePlayer(int idx) {
+    Tank &t = m_p[idx];
+    t.alive = true;
+    t.lives = 1;
+    t.x = (idx == 0 ? 3.5 : COLS - 3.5);
+    t.y = ROWS - 1.5;
+    t.dir = 0;
+    t.respawn = 0;
+    t.moving = false;
+    t.shieldUntil = m_time + 3.0; // the same grace a respawn gets
 }
 
 void Backend::checkEnd() {
@@ -1365,7 +1586,7 @@ int Backend::aliveEnemies() const {
     return n;
 }
 
-// Bonuses only drop from green runners, at the spot where they die.
+// Bonuses only drop from carriers, at the spot where they die.
 void Backend::spawnPickupAt(double x, double y) {
     std::uniform_int_distribution<int> kind(0, 6);
     const int cx = int(x), cy = int(y);
@@ -1391,7 +1612,19 @@ void Backend::applyPickup(int player) {
         setBaseGuard(true);
         m_baseGuardUntil = m_time + 20;
         break;
-    case Life: t.lives = std::min(t.lives + 1, 5); break;
+    case Life:
+        // A partner who is out has first claim: the LIFE brings him back at
+        // once with one tank, instead of topping up the player who still has
+        // one. A one-player run has nobody to revive, so it is the old +1.
+        if (m_playerCount == 2) {
+            const int mate = 1 - player;
+            if (!m_p[mate].alive && m_p[mate].lives <= 0) {
+                revivePlayer(mate);
+                break;
+            }
+        }
+        t.lives = std::min(t.lives + 1, 5);
+        break;
     case Grenade: {
         for (auto &e : m_foes) {
             if (!e.alive)
