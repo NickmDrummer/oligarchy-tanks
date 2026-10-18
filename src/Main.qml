@@ -1102,8 +1102,8 @@ ApplicationWindow {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 visible: backend.state !== "select"
                                 accent: theme.accent
-                                text: backend.state === "victory" ? ">> NEXT SECTOR (R) <<"
-                                      : backend.state === "gameover" ? ">> CONTINUE <<" : ">> RESUME (P) <<"
+                                text: backend.state === "victory" ? (backend.pads.length > 0 ? ">> NEXT SECTOR (START) <<" : ">> NEXT SECTOR (R) <<")
+                                      : backend.state === "gameover" ? ">> CONTINUE <<" : (backend.pads.length > 0 ? ">> RESUME (START) <<" : ">> RESUME (P) <<")
                                 onClicked: {
                                     if (backend.state === "victory")
                                         backend.nextLevel()

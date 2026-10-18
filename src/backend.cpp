@@ -458,9 +458,14 @@ void Backend::nextLevel() {
 }
 
 void Backend::togglePause() {
-    if (m_state == "playing")
-        setState("paused", "Paused — press P to resume");
-    else if (m_state == "paused")
+    if (m_state == "playing") {
+        // The keyboard is always live, but the hint names the input the player
+        // is actually using, so a pad holder is not told to find P.
+        if (m_pads.empty())
+            setState("paused", "Paused — press P to resume");
+        else
+            setState("paused", "Paused — press START to resume");
+    } else if (m_state == "paused")
         setState("playing");
 }
 
@@ -1168,8 +1173,12 @@ void Backend::checkEnd() {
         setState("gameover", QString("SCORE %1").arg(total));
         return;
     }
-    if (m_spawned >= totalForLevel() && aliveEnemies() == 0)
-        setState("victory", QString("Sector %1 clear! Score %2 — press R for sector %3").arg(m_level).arg(total).arg(m_level + 1));
+    if (m_spawned >= totalForLevel() && aliveEnemies() == 0) {
+        if (m_pads.empty())
+            setState("victory", QString("Sector %1 clear! Score %2 — press R for sector %3").arg(m_level).arg(total).arg(m_level + 1));
+        else
+            setState("victory", QString("Sector %1 clear! Score %2 — press START for sector %3").arg(m_level).arg(total).arg(m_level + 1));
+    }
 }
 
 int Backend::aliveEnemies() const {
