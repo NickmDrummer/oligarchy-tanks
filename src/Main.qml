@@ -97,12 +97,12 @@ ApplicationWindow {
     Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { if (backend.state === "select") backend.menuConfirm(); else if (backend.state === "victory") backend.nextLevel(); else backend.toSelect(); keys.forceActiveFocus() } }
     Shortcut { sequence: "M"; context: Qt.ApplicationShortcut; onActivated: backend.soundEnabled = !backend.soundEnabled }
 
-    SoundEffect { id: sndShoot; source: "qrc:/sounds/shoot.wav"; volume: 0.5 }
-    SoundEffect { id: sndEShoot; source: "qrc:/sounds/eshoot.wav"; volume: 0.4 }
-    SoundEffect { id: sndHit; source: "qrc:/sounds/hit.wav"; volume: 0.5 }
-    SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 0.7 }
+    SoundEffect { id: sndShoot; source: "qrc:/sounds/shoot.wav"; volume: 0.55 }
+    SoundEffect { id: sndEShoot; source: "qrc:/sounds/eshoot.wav"; volume: 0.45 }
+    SoundEffect { id: sndHit; source: "qrc:/sounds/hit.wav"; volume: 0.55 }
+    SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 0.75 }
     SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
-    SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 0.6 }
+    SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 0.95 }
     // 8-bit engine putter, loops only while a player tank is rolling.
     // Note: SoundEffect.playing is read-only, so a timer drives play/stop.
     SoundEffect {
@@ -112,15 +112,19 @@ ApplicationWindow {
         volume: 0.22
     }
     Timer {
-        interval: 150
+        interval: 100
         running: true
         repeat: true
         onTriggered: {
-            var on = backend.state === "playing" && ((backend.players.length > 0 && backend.players[0].moving) || (backend.players.length > 1 && backend.players[1].moving))
-            if (on && !sndEngine.playing)
-                sndEngine.play()
-            else if (!on && sndEngine.playing)
+            var playing = backend.state === "playing"
+            var moving = playing && ((backend.players.length > 0 && backend.players[0].moving) || (backend.players.length > 1 && backend.players[1].moving))
+            if (playing) {
+                if (!sndEngine.playing)
+                    sndEngine.play()
+                sndEngine.volume = moving ? 0.28 : 0.12
+            } else if (sndEngine.playing) {
                 sndEngine.stop()
+            }
         }
     }
 
