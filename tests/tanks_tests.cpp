@@ -74,6 +74,29 @@ struct TanksTestAccess {
     }
     static void endCheck(Backend &b) { b.checkEnd(); }
     static double playerX(const Backend &b, int i) { return b.m_p[i].x; }
+    // Spawn composition: the kind/hp spawnEnemy() picks for a given spawn index.
+    static int spawnKindAt(Backend &b, int index) {
+        for (auto &e : b.m_foes)
+            e.alive = false;
+        b.m_spawned = index;
+        b.spawnEnemy();
+        for (const auto &e : b.m_foes)
+            if (e.alive)
+                return e.kind;
+        return -1;
+    }
+    static int spawnHpAt(Backend &b, int index) {
+        for (auto &e : b.m_foes)
+            e.alive = false;
+        b.m_spawned = index;
+        b.spawnEnemy();
+        for (const auto &e : b.m_foes)
+            if (e.alive)
+                return e.hp;
+        return -1;
+    }
+    static int enemiesPerStage(const Backend &b) { return b.totalForLevel(); }
+    static void setLevel(Backend &b, int level) { b.m_level = level; }
     // A cleared square, so an input test measures input and not the random map.
     static void clearArea(Backend &b, int x0, int y0, int x1, int y1) {
         for (int y = y0; y <= y1; ++y)
@@ -150,15 +173,63 @@ private slots:
         QCOMPARE(b.state(), QString("playing"));
     }
 
-    void nextLevelKeepsScoreAndScales() {
+    void nextLevelAdvancesWithSixteenTanksPerStage() {
         Backend b;
         b.startGame();
         QCOMPARE(b.level(), 1);
-        QCOMPARE(b.enemiesLeft(), 8);
+        QCOMPARE(b.enemiesLeft(), 16);
         b.nextLevel();
         QCOMPARE(b.level(), 2);
         QCOMPARE(b.state(), QString("playing"));
-        QCOMPARE(b.enemiesLeft(), 10);
+        QCOMPARE(b.enemiesLeft(), 16);
+    }
+
+    // Phase C: 16 tanks a stage whatever the level, with the mix of kinds
+    // changing by level and the two carriers taken from the basic pool,
+    // interleaved rather than both at the start.
+    void stageFieldsSixteenTanksWithInterleavedCarriers() {
+        Backend b;
+        b.startGame();
+        QCOMPARE(TanksTestAccess::enemiesPerStage(b), 16);
+
+        int carriers = 0, basics = 0, fast = 0, armored = 0;
+        for (int i = 0; i < 16; ++i) {
+            const int k = TanksTestAccess::spawnKindAt(b, i);
+            if (k == 3) ++carriers;
+            else if (k == 0) ++basics;
+            else if (k == 1) ++fast;
+            else if (k == 2) ++armored;
+        }
+        QCOMPARE(carriers, 2);
+        QCOMPARE(basics, 6); // the basic pool is 8, two of them carriers
+        QCOMPARE(fast, 4);
+        QCOMPARE(armored, 4);
+
+        // Carriers are interleaved: never the first tank, never both early.
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 0), 0);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 2), 3);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 5), 3);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 8), 1);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 12), 2);
+        // Armour is a fixed three hits, whatever the sector.
+        QCOMPARE(TanksTestAccess::spawnHpAt(b, 12), 3);
+        QCOMPARE(TanksTestAccess::spawnHpAt(b, 0), 1);
+
+        // A later sector keeps 16 tanks but fields more armour.
+        TanksTestAccess::setLevel(b, 7);
+        carriers = basics = fast = armored = 0;
+        for (int i = 0; i < 16; ++i) {
+            const int k = TanksTestAccess::spawnKindAt(b, i);
+            if (k == 3) ++carriers;
+            else if (k == 0) ++basics;
+            else if (k == 1) ++fast;
+            else if (k == 2) ++armored;
+        }
+        QCOMPARE(TanksTestAccess::enemiesPerStage(b), 16);
+        QCOMPARE(carriers, 2);
+        QCOMPARE(basics, 2);
+        QCOMPARE(fast, 6);
+        QCOMPARE(armored, 6);
     }
 
     // The int queries QML drives its tiles with.

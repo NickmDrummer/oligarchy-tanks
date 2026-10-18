@@ -30,6 +30,7 @@ class Backend : public QObject {
     Q_PROPERTY(QVariantList bullets READ bullets NOTIFY frameChanged)
     Q_PROPERTY(int enemiesLeft READ enemiesLeft NOTIFY frameChanged)
     Q_PROPERTY(QVariantList floaters READ floaters NOTIFY frameChanged)
+    Q_PROPERTY(QVariantList explosions READ explosions NOTIFY frameChanged)
     Q_PROPERTY(QVariantList pickups READ pickups NOTIFY frameChanged)
     Q_PROPERTY(int frameTick READ frameTick NOTIFY frameChanged)
     Q_PROPERTY(int level READ level NOTIFY stateChanged)
@@ -45,7 +46,9 @@ class Backend : public QObject {
 public:
     static constexpr int COLS = 15;
     static constexpr int ROWS = 15;
-    static constexpr int TOTAL_ENEMIES = 8;
+    // Tanks per stage: fixed at 16 (phase C). What scales with the level is the
+    // mix of kinds, not the count. See spawnEnemy() and AGENTS.md section 17.
+    static constexpr int TOTAL_ENEMIES = 16;
 
     explicit Backend(QObject *parent = nullptr);
 
@@ -69,6 +72,7 @@ public:
     QVariantList enemies() const;
     QVariantList bullets() const;
     QVariantList floaters() const;
+    QVariantList explosions() const;
     QVariantList pickups() const;
     int enemiesLeft() const;
     int frameTick() const { return m_frameTick; }
@@ -76,7 +80,7 @@ public:
     int playerCount() const { return m_playerCount; }
     int menuIndex() const { return m_menuIndex; }
     bool frozen() const { return m_time < m_freezeUntil; }
-    int totalForLevel() const { return TOTAL_ENEMIES + 2 * (m_level - 1); }
+    int totalForLevel() const { return TOTAL_ENEMIES; }
 
     // Stable per-slot getters for QML. Delegates are created once with a
     // fixed count and only update properties, so the scene graph is never
@@ -85,6 +89,7 @@ public:
     Q_INVOKABLE QVariantMap enemyAt(int i, int tick) const;
     Q_INVOKABLE QVariantMap bulletAt(int i, int tick) const;
     Q_INVOKABLE QVariantMap floaterAt(int i, int tick) const;
+    Q_INVOKABLE QVariantMap explosionAt(int i, int tick) const;
     Q_INVOKABLE QVariantMap pickupAt(int tick) const;
     bool soundEnabled() const { return m_soundEnabled; }
     void setSoundEnabled(bool v);
@@ -176,6 +181,10 @@ private:
         int score = 0;
         double age = 0;
     };
+    struct Explosion {
+        double x = 0, y = 0;
+        double age = 0;
+    };
     struct Bullet {
         double x = 0, y = 0;
         int dir = 0;
@@ -217,6 +226,7 @@ private:
     // Kills every tank overlapping one board cell, so PICK can rebuild the
     // base wall without sealing a tank inside it.
     void crushTanksIn(int cx, int cy);
+    void pushExplosion(double x, double y);
     static bool cellHitsTank(int cx, int cy, double tx, double ty);
     // Board mutations funnel through here: the cached string form is
     // dropped and QML is told to re-run its tile queries.
@@ -228,6 +238,7 @@ private:
     void applyPickup(int player);
     void updatePickups(double dt);
     void updateFloaters(double dt);
+    void updateExplosions(double dt);
 
     // Gamepad bookkeeping. A pad is a connected device plus the player it
     // drives (-1 until it presses START).
@@ -278,6 +289,7 @@ private:
     std::vector<Bullet> m_bullets;
     Pickup m_pickup;
     std::vector<Floater> m_floaters;
+    std::vector<Explosion> m_explosions;
     double m_freezeUntil = -1;
     // Concrete wall around the base, granted by PICK. Negative means off.
     double m_baseGuardUntil = -1;

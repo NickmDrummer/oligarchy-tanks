@@ -10,14 +10,17 @@
 > Keep it current: update the state sections (`Current tree state`, `Feature
 > inventory`, `Next move`) whenever the state of the build changes.
 >
-> Snapshot: `HEAD` is the **UI overhaul, phase 1** (section 16) — *"Set the UI
-> in a pixel font, drop Material and rebuild the select screen"* — on top of the
-> player-count select screen (commit **C**, section 12.2), the two gamepad
-> commits (section 12.1 **A** and **B**) and the brick/PICK/frame-rate commit.
-> Nothing pushed. It builds, `bin/test` passes 43/43 and the QML probe 37/37;
-> **the user approved it from the screenshots but has not played this commit**,
-> so a play session is still owed. Later phases of the overhaul (the manual and
-> the in-game interface) come next, one at a time.
+> Snapshot: `HEAD` is the **enemy overhaul, phase C** (section 17) — *"Overhaul
+> the enemies: 16 a stage, carriers, and the death/freeze/shield visuals"* — on
+> top of the UI overhaul, phase 1 (section 16), the player-count select screen
+> (commit **C**, section 12.2), the two gamepad commits (section 12.1 **A** and
+> **B**) and the brick/PICK/frame-rate commit. Nothing pushed. It builds and
+> `bin/test` passes 44/44; the user played the visuals (explosion, frost,
+> shield) across several rounds and asked for this commit. **One part of it was
+> not played: the fixed 16 tanks a stage** (the tree still had
+> `8 + 2*(level-1)` and the new composition assumed 16; it was corrected at
+> commit time, section 17). If the sector size feels wrong in play, that is the
+> one-line follow-up.
 > **Open:** one unreproducible `QSocketNotifier: Invalid socket 59 and type
 > 'Read', disabling...` during a play session, together with a game that had to
 > be interrupted with `^C` right when the base went down. It is not caused by
@@ -56,11 +59,12 @@ Omarchy desktop app: **Qt 6 / C++ backend + QML frontend, single binary**, built
 with `qmake6` + `make`.
 
 - 15x15 random map per game; brick / steel / forest / base tiles.
-- 2 player tanks (P1 yellow, P2 red) and tiered enemies (gray basic, green fast,
-  gray steel-armoured).
-- 8 enemies per sector, more in later sectors; only **specials** scale (speed,
-  HP, bullet speed) — basic enemies stay constant.
-- 7 bonuses, dropping only from green enemies.
+- 2 player tanks (P1 yellow, P2 red) and four enemy kinds: gray basic, green
+  fast, armored (pastel purple -> cyan -> gray as it takes hits) and the
+  red-flashing carrier.
+- **16 enemies per sector, always**; what changes with the sector is the mix
+  (more fast and more armored). See section 17.
+- 7 bonuses, dropping only from carriers (the red-flashing basics).
 - Defend the base, which renders the official Omarchy pixel wordmark `omarchy`;
   it becomes rubble when destroyed.
 
@@ -85,6 +89,9 @@ with `qmake6` + `make`.
 │   ├── gamepad.h/.cpp   # evdev reader + hotplug, hands PadState to the mapper
 │   ├── Main.qml         # window, HUD, board, sprites, overlays, help, footer
 │   ├── TankSprite.qml   # 16x16 tank with animated treads
+│   ├── ExplosionSprite.qml  # 16x16 death explosion (flash -> smoke -> fire)
+│   ├── FrostSprite.qml      # 16x16 celeste frost patch for frozen enemies
+│   ├── ShieldSprite.qml     # two frames of a jagged lightning ring (shield)
 │   ├── PickupIcon.qml   # all 7 bonus sprites (per-pixel colour grids)
 │   ├── PixelButton.qml
 │   ├── KeyCap.qml       # one key, drawn as a cap (pixel arrows, no glyphs)
@@ -133,9 +140,9 @@ Gameplay constants (`src/backend.cpp`, anonymous namespace):
 | `BULLET_SPEED` | `8.0` |
 | `FIRE_GAP` | `0.35` |
 
-World constants (`src/backend.h`): `COLS = ROWS = 15`, `TOTAL_ENEMIES = 8`,
-per-sector total `8 + 2*(level-1)`, max concurrent `min(3+(level-1), 5)`,
-`enemySpeedMult() = 1.0 + 0.1*(level-1)`.
+World constants (`src/backend.h`): `COLS = ROWS = 15`, `TOTAL_ENEMIES = 16`,
+`totalForLevel() = 16` (constant — section 17), max concurrent
+`min(4+(level-1), 6)`, `enemySpeedMult() = 1.0 + 0.1*(level-1)`.
 
 ### 4.1 Brick slices — the important invariant
 
@@ -199,7 +206,9 @@ per-sector total `8 + 2*(level-1)`, max concurrent `min(3+(level-1), 5)`,
 
 ### 4.2 Bonus drop rule
 
-Only **green (kind 1)** enemies drop a bonus, where they die (`spawnPickupAt`).
+Only **carriers (kind 3)** drop a bonus, where they die (`spawnPickupAt`). A
+carrier is one of the basic tanks: slightly faster, flashing red<->gray, and two
+per stage (section 17). Green runners no longer drop anything.
 Exactly **one pickup at a time**; it expires after 15 s.
 `PickupKind`: `Speed=0, Shield=1, Pick=2, Life=3, Grenade=4, Cannon=5, Freeze=6`.
 
@@ -245,13 +254,17 @@ flag are **gone** — do not reintroduce them. Implementation:
 ### Verified working
 - Full game loop; 15x15 random map with brick / steel / base / forest.
 - A mode select screen (1 / 2 players) at boot and after a game over.
-- One or two player tanks + tiered enemies, bullets, collisions, lives, score.
+- One or two player tanks + four kinds of enemies, bullets, collisions, lives,
+  score.
+- 16 enemies a stage, with the mix by sector (section 17).
+- The death explosion, the frost under frozen enemies and the shield aura:
+  hand-drawn pixel sprites, user-confirmed in play (section 17).
 - Pause (`P`), restart (`R`), sound toggle (`M`), help (`?`), quit (`Q`).
 - Help auto-pauses the game and resumes only if the help caused the pause.
 - Victory overlay with sector progression and scaling specials; a game over (or a
   destroyed base) returns to the select screen, which shows the score of the run.
 - Pixel Omarchy wordmark base, plus rubble when destroyed.
-- 7 bonuses, green-only drops, one at a time.
+- 7 bonuses, carrier-only drops, one at a time.
 - Floating kill-score popups in pixel type.
 - 8-bit sound set; the engine loop is driven by a `Timer`.
 - `?` help lists the 7 bonus icons; the menu legend shows them at 40x40.
@@ -316,13 +329,38 @@ flag are **gone** — do not reintroduce them. Implementation:
 
 ## 6. Current tree state
 
-`HEAD` is the **UI overhaul, phase 1** (commit **D**, section 16) on top of
-*"Add a player-count select screen and a game over screen"* (commit **C**,
-section 12.2), *"Read gamepads from /dev/input and let one join a player"*,
-*"Add a gamepad mapping layer and per-source movement flags"* (section 12.1 **A**
-and **B**) and the brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
+`HEAD` is the **enemy overhaul, phase C** (section 17) on top of the **UI
+overhaul, phase 1** (commit **D**, section 16), *"Add a player-count select
+screen and a game over screen"* (commit **C**, section 12.2), *"Read gamepads
+from /dev/input and let one join a player"*, *"Add a gamepad mapping layer and
+per-source movement flags"* (section 12.1 **A** and **B**) and the
+brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
 
-The tree is **clean** again: phase 1 is one commit, so the next feature starts
+Phase C contains exactly these files:
+
+```
+   src/backend.h          TOTAL_ENEMIES = 16, totalForLevel() constant,
+                          kind 3 carriers, fixed hp 3 armor, Explosion +
+                          m_explosions, pushExplosion/updateExplosions,
+                          explosions()/explosionAt(), the 3 s spawn grace
+   src/backend.cpp        composition by level, carriers interleaved at 1/3 and
+                          2/3 of the basic pool, carrier-only drops, max
+                          concurrent 4-6, explosions on every enemy death,
+                          explosion lifetime 0.5 s
+   src/ExplosionSprite.qml  new: 16x16 pixel flash -> smoke -> fire (0.5 s)
+   src/FrostSprite.qml      new: 16x16 celeste + white frost patch
+   src/ShieldSprite.qml     new: two frames of a jagged, 4-fold symmetric
+                            lightning ring, alternating
+   src/Main.qml           armored hp colours, carrier flashing, frost patches
+                          (enemies only), the explosion delegate, the shield
+                          loader
+   src/resources.qrc      the three new QML components
+   tests/tanks_tests.cpp  the stage composition (16 tanks, kinds by level,
+                          carriers interleaved) and 16/16 in the level test
+   AGENTS.md              section 17
+```
+
+The tree is **clean** again: phase C is one commit, so the next feature starts
 from a checkpoint, which is the rule this project learnt the hard way
 (section 13).
 
@@ -756,7 +794,11 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
     the user approved the result from the screenshots.
 17. **The user plays commit D.** Still owed: it was approved from screenshots,
     not from a play session. Any surprise there is a small follow-up commit.
-18. **Phase 2 of the overhaul**: the manual (`?`) first, then the in-game
+18. **Phase C, the enemy overhaul** (section 17). **Committed.** The user played
+    the death explosion, the frost and the shield across several rounds and
+    asked for the commit; the fixed **16 tanks a stage** was the one piece not
+    played (it was implemented at commit time — section 17).
+19. **Phase 2 of the overhaul**: the manual (`?`) first, then the in-game
     interface, both from the user's notes, one at a time — and each one with the
     same gate: user plays, then commit.
 
@@ -1297,3 +1339,93 @@ sentence. Detail-by-detail iteration comes after this phase.
 - Phase 2 comes next, from the user's own notes: **the manual first, then the
   in-game interface**. Only the select screen was decluttered in this phase, on
   purpose, so the two are still text-heavy and picture-light respectively.
+
+---
+
+## 17. The enemy overhaul (phase C) — committed
+
+**Why.** Enemy waves were one shape for ever: 8 tanks a stage, more each
+sector, the first four gray and the rest alternating green and armour, and the
+only power-up source was a green runner. The user asked for a fixed roster with
+a real mix, for the green runner's drop to move to a distinct **carrier**, and
+for the death explosion, the freeze and the shield to actually look like what
+they are. The agreed plan is `/home/…/.opencode/plan/enemy-overhaul.md`; this
+section is the record of what shipped.
+
+### 17.1 The rules (user spec — do not "improve" without asking)
+
+- **16 tanks a stage, always.** `TOTAL_ENEMIES = 16` and `totalForLevel()` is
+  that constant: later sectors do **not** add tanks. What changes is the mix.
+- **Mix by level** (in `spawnEnemy()`): levels 1-3 = 8 basic + 4 fast + 4
+  armored; 4-6 = 6 fast + 6 basic + 4 armored; 7+ = 4 basic + 6 fast + 6
+  armored. Armored is the remainder, so the three always sum to 16.
+- **Four kinds.** `0` basic gray (hp 1, `ENEMY_SPEED`); `1` fast green (hp 1,
+  `ENEMY_SPEED * 1.35 * mult`); `2` armored (**fixed hp 3**, `ENEMY_SPEED *
+  mult`); `3` carrier (**hp 1, `ENEMY_SPEED * 1.15`**).
+- **Armoured colour is by hits left, not by sector:** 3 = pastel purple, 2 =
+  cyan, 1 = gray. No more armour pips.
+- **Carriers are 2 of the basic pool**, not extra tanks, and they are
+  **interleaved** at roughly 1/3 and 2/3 of that pool (`basic/3` and
+  `2*basic/3`), never both at the start. They flash **red <-> gray** and are the
+  **only** power-up droppers — green no longer drops anything.
+- **Max concurrent** scales gradually: `min(4 + (level-1), 6)`.
+- **Spawn/respawn grace:** every player is shielded for **3 s** on spawn and on
+  respawn (`shieldUntil`), so nothing is killed the instant it appears.
+- Explosions live **0.5 s** (the plan said 0.8; the user settled on 0.5).
+
+### 17.2 The visuals (three hand-drawn pixel sprites)
+
+All three follow the 16x16 (shield: 20x20) string-grid language of
+`TankSprite` / `PickupIcon`, each a `Grid` of `Math.max(1, floor(min(w,h)/N))`
+blocks at a **whole-pixel** origin (a fractional origin antialiases the grid
+into a smudge). The first frost and shield attempts used plain `Rectangle`s and
+read as coloured circles; that is the mistake the pixel grids fix.
+
+- **`ExplosionSprite.qml`** — the user's favourite. Three phases driven by
+  `progress` (`1 - progress/0.30` flash; smoke ramps 0.12->0.24 and fades
+  0.75->1.0; fire ramps 0.45->0.63 and fades 0.82->1.0), each phase a separate
+  16x16 grid behind its own `Loader`, so the silhouette is a bumpy cloud and
+  **the flash -> smoke transition is visible**. The delegate scales it
+  `cell * (1.3 + 1.0 * boom)` with `boom = min(1, age/0.5)`.
+- **`FrostSprite.qml`** — celeste + white ice, drawn **under enemies only**,
+  `z: -1`, never on players. A big patch under the tank plus **one** smaller
+  patch to the lower-right; a first version had a second patch at the upper-left
+  and the user called it out as "sobreruido". The whole block sits in a
+  `Loader { active: backend.frozen }`, so nothing is built while time runs.
+  **The full-board blue overlay is gone and must stay gone.**
+- **`ShieldSprite.qml`** — two hand-drawn 20x20 frames of a jagged ring of
+  lightning around the hull, **alternating** every ~96 ms, **4-fold symmetric**
+  (mirrored on both axes) and of even thickness. Not a circle, not a square
+  frame, no scatter of sparks: the user rejected both a round ring and a square
+  one, and rejected a "cloud of noise" version. The tiers tried, in order: round
+  aura -> square frame of blocks -> sparse scattered bolts -> the two symmetric
+  frames that shipped. Keep them symmetric and uniform.
+- The shield power-up icon is gray, and the aura reflects that (white/gray).
+
+### 17.3 Verification
+
+- `bin/build` clean, `bin/test` **44/44** (43 before; the level test was
+  rewritten to 16/16 and a composition test was added), offscreen smoke with no
+  QML warnings.
+- `stageFieldsSixteenTanksWithInterleavedCarriers` locks the new rule: 16 tanks
+  a stage, 6+2/4/4 kinds at level 1 and 2+2/6/6 at level 7, carriers at indices
+  2 and 5 (never 0), armor hp 3 and basic hp 1.
+- `/tmp/opencode/shots` (throwaway) dumps each sprite as ASCII luminance and
+  saves a PNG per state; that is how the silhouettes were checked with no screen
+  available. The user then played the explosion, the frost and the shield.
+- **Not played: the fixed 16 a stage.** The tree still had `8 + 2*(level-1)`
+  while the new composition assumed 16, so levels 1-2 would have had no green
+  and no armour at all. It was corrected to 16 at commit time, on the user's
+  explicit choice; the mix is otherwise as above.
+
+### 17.4 Decisions worth keeping
+
+- The three sprite grids are the pattern for any future effect: string arrays,
+  integral block size, a whole-pixel origin, and a `Loader` per variant so the
+  invisible ones cost nothing.
+- The composition lives entirely in `spawnEnemy()` as the remainder of `basic`
+  and `fast`; the total is the constant, so the three kinds can never disagree
+  with it.
+- The explosion/floater/frost all hang off `frameChanged`, like everything else;
+  `Explosion` is a plain `{x, y, age}` on the heap-owning `m_explosions` vector,
+  capped at 8.

@@ -170,6 +170,21 @@ QVariantList Backend::floaters() const {
     return out;
 }
 
+QVariantList Backend::explosions() const {
+    QVariantList out;
+    for (const auto &e : m_explosions)
+        out.append(QVariantMap{{"x", e.x}, {"y", e.y}, {"age", e.age}});
+    return out;
+}
+
+QVariantMap Backend::explosionAt(int i, int tick) const {
+    Q_UNUSED(tick);
+    if (i < 0 || i >= int(m_explosions.size()))
+        return {{"x", 0.0}, {"y", 0.0}, {"age", 0.0}, {"active", false}};
+    const Explosion &e = m_explosions[i];
+    return {{"x", e.x}, {"y", e.y}, {"age", e.age}, {"active", true}};
+}
+
 QVariantList Backend::pickups() const {
     QVariantList out;
     if (m_pickup.active)
@@ -420,6 +435,7 @@ void Backend::startGame() {
     resetTanks(true);
     m_bullets.clear();
     m_floaters.clear();
+    m_explosions.clear();
     m_pickup = Pickup{};
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
@@ -433,6 +449,10 @@ void Backend::startGame() {
     m_p2Up = m_p2Down = m_p2Left = m_p2Right = false;
     m_joined[0] = m_joined[1] = false;
     m_ending.clear();
+    // Grace period: a freshly spawned tank is shielded so it is not killed
+    // instantly on spawn or respawn.
+    for (int i = 0; i < m_playerCount; ++i)
+        m_p[i].shieldUntil = m_time + 3.0;
     // A pad only drives a tank that exists: starting a one-player game drops a
     // pad that held the second tank (and lets go of its directions).
     releasePads(m_playerCount);
@@ -447,6 +467,7 @@ void Backend::nextLevel() {
     resetTanks(false);
     m_bullets.clear();
     m_floaters.clear();
+    m_explosions.clear();
     m_pickup = Pickup{};
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
@@ -537,6 +558,7 @@ void Backend::clearRun() {
         e.alive = false;
     m_bullets.clear();
     m_floaters.clear();
+    m_explosions.clear();
     m_pickup = Pickup{};
     m_spawned = 0;
     m_spawnTimer = 0;
@@ -698,6 +720,7 @@ void Backend::tick() {
                 t.x = (i == 0 ? 3.5 : COLS - 3.5);
                 t.y = ROWS - 1.5;
                 t.dir = 0;
+                t.shieldUntil = m_time + 3.0;
             }
         }
     }
@@ -706,6 +729,7 @@ void Backend::tick() {
     updateBullets(dt);
     updatePickups(dt);
     updateFloaters(dt);
+    updateExplosions(dt);
     updateBaseGuard();
     checkEnd();
     emit frameChanged();
@@ -791,7 +815,7 @@ void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, dou
 
 void Backend::updateEnemies(double dt) {
     std::uniform_real_distribution<double> roll(0.0, 1.0);
-    const int maxConcurrent = std::min(3 + (m_level - 1), 5);
+    const int maxConcurrent = std::min(4 + (m_level - 1), 6);
     m_spawnTimer -= dt;
     if (m_spawned < totalForLevel() && aliveEnemies() < maxConcurrent && m_spawnTimer <= 0) {
         spawnEnemy();
@@ -812,7 +836,10 @@ void Backend::updateEnemies(double dt) {
         e.think -= dt;
         // Only specials scale with the sector: basics stay baseline.
         const double mult = enemySpeedMult();
-        const double speed = (e.kind == 0) ? ENEMY_SPEED : (e.kind == 1) ? ENEMY_SPEED * 1.35 * mult : ENEMY_SPEED * mult;
+        const double speed = (e.kind == 0) ? ENEMY_SPEED
+                                : (e.kind == 1) ? ENEMY_SPEED * 1.35 * mult
+                                : (e.kind == 3) ? ENEMY_SPEED * 1.15
+                                : ENEMY_SPEED * mult;
         double nx = e.x, ny = e.y;
         if (e.dir == 0) ny -= speed * dt;
         if (e.dir == 2) ny += speed * dt;
@@ -863,7 +890,7 @@ void Backend::updateEnemies(double dt) {
         }
         if (e.cooldown <= 0 && roll(m_rng) < 0.02) {
             e.cooldown = (e.kind == 1) ? 0.8 : 1.1;
-            const double bs = (e.kind == 0) ? BULLET_SPEED : BULLET_SPEED * enemySpeedMult();
+            const double bs = (e.kind == 0 || e.kind == 3) ? BULLET_SPEED : BULLET_SPEED * enemySpeedMult();
             fireBullet(e.x, e.y, e.dir, 2, bs);
         }
     }
@@ -950,13 +977,14 @@ void Backend::updateBullets(double dt) {
                     e.hp = std::max(0, e.hp - (b.big ? 99 : 1));
                     if (e.hp <= 0) {
                         e.alive = false;
+                        pushExplosion(e.x, e.y);
                         const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
                         m_p[b.owner].score += pts;
                         m_floaters.push_back(Floater{e.x, e.y, pts, 0});
                         if (m_floaters.size() > 8)
                             m_floaters.erase(m_floaters.begin());
                         // Green runners carry the bonus: one drops where it dies.
-                        if (e.kind == 1 && !m_pickup.active)
+                        if (e.kind == 3 && !m_pickup.active)
                             spawnPickupAt(e.x, e.y);
                         if (m_soundEnabled)
                             emit playSound("explode");
@@ -993,8 +1021,13 @@ void Backend::updateBullets(double dt) {
 }
 
 void Backend::spawnEnemy() {
-    // First wave is always gray basics; specials join from the 5th tank on.
-    // Higher sectors field more total tanks via totalForLevel().
+    // 16 tanks per stage, composition by wave (see AGENTS.md section 17).
+    // Carriers are 2 of the basic tanks: slightly faster, flashing, drop a
+    // power-up. Armored tanks take 3 hits.
+    int basic, fast;
+    if (m_level <= 3) { basic = 8; fast = 4; }
+    else if (m_level <= 6) { basic = 6; fast = 6; }
+    else { basic = 4; fast = 6; }
     const int spots[3] = {0, COLS / 2, COLS - 1};
     for (auto &e : m_foes) {
         if (e.alive)
@@ -1005,8 +1038,21 @@ void Backend::spawnEnemy() {
         e.dir = 2;
         e.cooldown = 1.0;
         e.think = 1.0;
-        e.kind = (m_spawned < 4) ? 0 : ((m_spawned % 2 == 0) ? 1 : 2);
-        e.hp = (e.kind == 2) ? 2 + (m_level >= 3 ? 1 : 0) + (m_level >= 5 ? 1 : 0) : 1;
+        // Carriers are 2 of the basic tanks, interleaved (not at the start).
+        const int carrierPos1 = basic / 3;
+        const int carrierPos2 = (2 * basic) / 3;
+        int kind;
+        if (m_spawned == carrierPos1 || m_spawned == carrierPos2) {
+            kind = 3; // carrier
+        } else if (m_spawned < basic) {
+            kind = 0; // basic
+        } else if (m_spawned < basic + fast) {
+            kind = 1; // fast (green)
+        } else {
+            kind = 2; // armored
+        }
+        e.kind = kind;
+        e.hp = (kind == 2) ? 3 : 1;
         ++m_spawned;
         return;
     }
@@ -1221,9 +1267,16 @@ void Backend::crushTanksIn(int cx, int cy) {
         if (!e.alive || !cellHitsTank(cx, cy, e.x, e.y))
             continue;
         e.alive = false;
+        pushExplosion(e.x, e.y);
         if (m_soundEnabled)
             emit playSound("explode");
     }
+}
+
+void Backend::pushExplosion(double x, double y) {
+    m_explosions.push_back(Explosion{x, y, 0.0});
+    if (m_explosions.size() > 8)
+        m_explosions.erase(m_explosions.begin(), m_explosions.begin() + (m_explosions.size() - 8));
 }
 
 // PICK armours the wall around the base, like the shovel in Battle City:
@@ -1344,6 +1397,7 @@ void Backend::applyPickup(int player) {
             if (!e.alive)
                 continue;
             e.alive = false;
+            pushExplosion(e.x, e.y);
             const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
             t.score += pts;
             m_floaters.push_back(Floater{e.x, e.y, pts, 0});
@@ -1390,4 +1444,12 @@ void Backend::updateFloaters(double dt) {
     m_floaters.erase(std::remove_if(m_floaters.begin(), m_floaters.end(),
                                     [](const Floater &f) { return f.age > 1.2; }),
                      m_floaters.end());
+}
+
+void Backend::updateExplosions(double dt) {
+    for (auto &e : m_explosions)
+        e.age += dt;
+    m_explosions.erase(std::remove_if(m_explosions.begin(), m_explosions.end(),
+                                     [](const Explosion &e) { return e.age > 0.5; }),
+                       m_explosions.end());
 }

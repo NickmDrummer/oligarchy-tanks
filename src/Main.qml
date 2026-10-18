@@ -684,24 +684,98 @@ ApplicationWindow {
                         y: e.y * win.cell - height / 2
                         width: win.cell * 0.94
                         height: win.cell * 0.94
+                        // Armored tanks shift colour with each hit:
+                        // purple (full) -> cyan (1 hit) -> gray (vulnerable).
+                        // Carriers flash red <-> gray.
+                        property color enemyBody: {
+                            if (e.kind === 3) {
+                                return (Math.floor(backend.frameTick / 6) % 2 === 0) ? "#b03a2e" : "#8d8d94"
+                            }
+                            if (e.kind === 2) {
+                                if (e.hp >= 3) return "#9b7ebd"
+                                if (e.hp === 2) return "#7eb8c4"
+                                return "#8d8d94"
+                            }
+                            if (e.kind === 1) return "#5da24a"
+                            return "#8d8d94"
+                        }
+                        property color enemyDark: {
+                            if (e.kind === 3) {
+                                return (Math.floor(backend.frameTick / 6) % 2 === 0) ? "#5e1f18" : "#4a4d55"
+                            }
+                            if (e.kind === 2) {
+                                if (e.hp >= 3) return "#5a4a6e"
+                                if (e.hp === 2) return "#3a5a60"
+                                return "#4a4d55"
+                            }
+                            if (e.kind === 1) return "#2e5b26"
+                            return "#4a4d55"
+                        }
+                        property color enemyLight: {
+                            if (e.kind === 3) {
+                                return (Math.floor(backend.frameTick / 6) % 2 === 0) ? "#e8a49c" : "#d5d9de"
+                            }
+                            if (e.kind === 2) {
+                                if (e.hp >= 3) return "#d4c4e8"
+                                if (e.hp === 2) return "#c4e4ea"
+                                return "#d5d9de"
+                            }
+                            if (e.kind === 1) return "#bfe3b4"
+                            return "#d5d9de"
+                        }
+                        // Frost while time is frozen: a big iced patch under
+                        // the tank plus one smaller patch in the ground the
+                        // tank does not cover. Built only while frozen.
+                        Loader {
+                            active: backend.frozen
+                            anchors.fill: parent
+                            z: -1
+                            sourceComponent: Component {
+                                Item {
+                                    anchors.fill: parent
+                                    FrostSprite {
+                                        anchors.centerIn: parent
+                                        width: parent.width * 1.9
+                                        height: parent.height * 1.9
+                                    }
+                                    FrostSprite {
+                                        anchors.centerIn: parent
+                                        anchors.horizontalCenterOffset: parent.width * 0.8
+                                        anchors.verticalCenterOffset: parent.height * 0.65
+                                        width: parent.width * 0.8
+                                        height: parent.height * 0.8
+                                        opacity: 0.8
+                                        rotation: 270
+                                    }
+                                }
+                            }
+                        }
                         TankSprite {
                             anchors.fill: parent
                             dir: e.dir
                             frame: e.moving ? win.treadFrame : 0
-                            body: e.kind === 2 ? "#6a6e76" : e.kind === 1 ? "#5da24a" : "#8d8d94"
-                            dark: e.kind === 2 ? "#2c2e34" : e.kind === 1 ? "#2e5b26" : "#4a4d55"
-                            light: e.kind === 2 ? "#c9ced6" : e.kind === 1 ? "#bfe3b4" : "#d5d9de"
+                            body: enemyBody
+                            dark: enemyDark
+                            light: enemyLight
                         }
-                        // Armor pips for gray tanks.
-                        Row {
-                            visible: e.kind === 2
-                            anchors.bottom: parent.bottom
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            spacing: 2
-                            Repeater {
-                                model: Math.max(0, e.hp)
-                                Rectangle { width: 6; height: 6; color: "#ffffff"; border.color: "black"; border.width: 1 }
-                            }
+                    }
+                }
+
+                // Death explosions: a big white/gray spark flash that turns
+                // into a black/gray smoke cloud with fire burning inside it.
+                Repeater {
+                    model: 8
+                    Item {
+                        property var ex: index < backend.explosions.length ? backend.explosions[index] : null
+                        visible: ex !== null
+                        x: ex ? ex.x * win.cell - width / 2 : 0
+                        y: ex ? ex.y * win.cell - height / 2 : 0
+                        property real boom: ex ? Math.min(1.0, ex.age / 0.5) : 0
+                        width: win.cell * (1.3 + 1.0 * boom)
+                        height: width
+                        ExplosionSprite {
+                            anchors.fill: parent
+                            progress: parent.boom
                         }
                     }
                 }
@@ -724,14 +798,19 @@ ApplicationWindow {
                             dark: index === 0 ? win.p1dark : win.p2dark
                             light: index === 0 ? win.p1light : win.p2light
                         }
-                        // Shield bubble while protected.
-                        Rectangle {
-                            visible: p.shield
+                        // Shield: static crackling around the hull as two
+                        // alternating frames of a jagged, rounded ring of
+                        // lightning (see ShieldSprite.qml).
+                        Loader {
+                            active: p.shield
                             anchors.fill: parent
-                            anchors.margins: -4
-                            color: "transparent"
-                            border.color: win.treadFrame === 0 ? "#ffffff" : "#8d8d94"
-                            border.width: 3
+                            anchors.margins: -Math.round(parent.width * 0.35)
+                            sourceComponent: Component {
+                                ShieldSprite {
+                                    anchors.fill: parent
+                                    frame: Math.floor(backend.frameTick / 6)
+                                }
+                            }
                         }
                     }
                 }
