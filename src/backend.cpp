@@ -881,8 +881,6 @@ void Backend::updateBullets(double dt) {
             if (ccx >= 0 && ccy >= 0 && ccx < COLS && ccy < ROWS
                 && tileAt(ccx, ccy) == Brick && solidAt(b.x, b.y, 0.25)) {
                 chipBrick(ccx, ccy, b.dir);
-                if (m_soundEnabled)
-                    emit playSound("hit");
                 b.active = false;
                 continue;
             }
@@ -916,8 +914,6 @@ void Backend::updateBullets(double dt) {
                 // The shot shears off the strip facing the direction it came
                 // from.
                 chipBrick(cx, cy, b.dir);
-                if (m_soundEnabled)
-                    emit playSound("hit");
             } else if (tile == Base) {
                 m_grid[cy * COLS + cx] = BaseDead;
                 bumpBoard();
@@ -1057,8 +1053,8 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     b.speed = speed;
     b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
     m_bullets.push_back(b);
-    if (m_soundEnabled)
-        emit playSound(owner == 2 ? "eshoot" : "shoot");
+    if (owner < 2 && m_soundEnabled)
+        emit playSound("shoot");
 }
 
 // Solid terrain stops a single point. Brick is special: under half

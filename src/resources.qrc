@@ -12,11 +12,11 @@
         <file alias="fonts/Silkscreen-Bold.ttf">fonts/Silkscreen-Bold.ttf</file>
         <file alias="fonts/DepartureMono-Regular.otf">fonts/DepartureMono-Regular.otf</file>
         <file alias="sounds/shoot.wav">sounds/shoot.wav</file>
-        <file alias="sounds/eshoot.wav">sounds/eshoot.wav</file>
         <file alias="sounds/hit.wav">sounds/hit.wav</file>
         <file alias="sounds/explode.wav">sounds/explode.wav</file>
         <file alias="sounds/power.wav">sounds/power.wav</file>
         <file alias="sounds/engine.wav">sounds/engine.wav</file>
+        <file alias="sounds/engine_move.wav">sounds/engine_move.wav</file>
         <file alias="sounds/nuke.wav">sounds/nuke.wav</file>
     </qresource>
 </RCC>
