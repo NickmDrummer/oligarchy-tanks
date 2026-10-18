@@ -34,9 +34,23 @@ ApplicationWindow {
     property color p1body: "#c8a028"
     property color p1dark: "#6e5410"
     property color p1light: "#f0d878"
-    property color p2body: "#b03a2e"
-    property color p2dark: "#5e1f18"
-    property color p2light: "#e8a49c"
+    property color p2body: "#5da24a"
+    property color p2dark: "#2e5b26"
+    property color p2light: "#bfe3b4"
+
+    // Enemy palette. The basic tank is grey and the carrier flashes that same
+    // grey with red. The fast tank shares the basic one's chassis family but is
+    // a pastel metallic yellow. The armoured tank walks purple -> cyan -> grey
+    // as it takes hits, so its last stage is the grey of the basic one.
+    readonly property color foeGray: "#a8adb8"
+    readonly property color foeGrayDark: "#5d626c"
+    readonly property color foeGrayLight: "#e4e8ee"
+    readonly property color foeYellow: "#d8c878"
+    readonly property color foeYellowDark: "#8c7a3c"
+    readonly property color foeYellowLight: "#f6f2d8"
+    readonly property color foeRed: "#b03a2e"
+    readonly property color foeRedDark: "#5e1f18"
+    readonly property color foeRedLight: "#e8a49c"
 
     // Tile kinds, matching the non-empty entries of Backend::Tile. An empty
     // cell matches none of them and simply draws nothing.
@@ -202,9 +216,10 @@ ApplicationWindow {
         }
     }
 
-    // Tread animation clock. Sprites advance a chevron only while moving.
+    // Tread animation clock: two frames, so a tread cell lights up on one and
+    // its neighbour on the next.
     Timer {
-        interval: 140
+        interval: 90
         running: true
         repeat: true
         onTriggered: win.treadFrame = (win.treadFrame + 1) % 2
@@ -281,7 +296,7 @@ ApplicationWindow {
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             visible: backend.players.length > 0
-                                     && backend.players[0].lives === 0
+                                     && backend.players[0].lives <= 0
                             text: "KILLED"
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 2
                             color: "#e85050"
@@ -364,7 +379,7 @@ ApplicationWindow {
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             visible: backend.players.length > 1
-                                     && backend.players[1].lives === 0
+                                     && backend.players[1].lives <= 0
                             text: "KILLED"
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 2
                             color: "#e85050"
@@ -447,7 +462,7 @@ ApplicationWindow {
                             TankSprite {
                                 width: 20; height: 20
                                 dir: 0; frame: 0
-                                body: "#8d8d8d"; dark: "#4a4a4a"; light: "#b5b5b5"
+                                body: win.foeGray; dark: win.foeGrayDark; light: win.foeGrayLight
                                 visible: index < backend.enemiesLeft
                             }
                         }
@@ -687,42 +702,47 @@ ApplicationWindow {
                         // Armored tanks shift colour with each hit:
                         // purple (full) -> cyan (1 hit) -> gray (vulnerable).
                         // Carriers flash red <-> gray.
+                        property bool carrierFlash: e.kind === 3
+                                                    && Math.floor(backend.frameTick / 6) % 2 === 0
                         property color enemyBody: {
-                            if (e.kind === 3) {
-                                return (Math.floor(backend.frameTick / 6) % 2 === 0) ? "#b03a2e" : "#8d8d94"
-                            }
+                            if (e.kind === 3)
+                                return carrierFlash ? win.foeRed : win.foeGray
                             if (e.kind === 2) {
                                 if (e.hp >= 3) return "#9b7ebd"
                                 if (e.hp === 2) return "#7eb8c4"
-                                return "#8d8d94"
+                                return win.foeGray
                             }
-                            if (e.kind === 1) return "#5da24a"
-                            return "#8d8d94"
+                            if (e.kind === 1)
+                                return win.foeYellow
+                            return win.foeGray
                         }
                         property color enemyDark: {
-                            if (e.kind === 3) {
-                                return (Math.floor(backend.frameTick / 6) % 2 === 0) ? "#5e1f18" : "#4a4d55"
-                            }
+                            if (e.kind === 3)
+                                return carrierFlash ? win.foeRedDark : win.foeGrayDark
                             if (e.kind === 2) {
                                 if (e.hp >= 3) return "#5a4a6e"
                                 if (e.hp === 2) return "#3a5a60"
-                                return "#4a4d55"
+                                return win.foeGrayDark
                             }
-                            if (e.kind === 1) return "#2e5b26"
-                            return "#4a4d55"
+                            if (e.kind === 1)
+                                return win.foeYellowDark
+                            return win.foeGrayDark
                         }
                         property color enemyLight: {
-                            if (e.kind === 3) {
-                                return (Math.floor(backend.frameTick / 6) % 2 === 0) ? "#e8a49c" : "#d5d9de"
-                            }
+                            if (e.kind === 3)
+                                return carrierFlash ? win.foeRedLight : win.foeGrayLight
                             if (e.kind === 2) {
                                 if (e.hp >= 3) return "#d4c4e8"
                                 if (e.hp === 2) return "#c4e4ea"
-                                return "#d5d9de"
+                                return win.foeGrayLight
                             }
-                            if (e.kind === 1) return "#bfe3b4"
-                            return "#d5d9de"
+                            if (e.kind === 1)
+                                return win.foeYellowLight
+                            return win.foeGrayLight
                         }
+                        // Basic and carrier use treads, the fast tank wheels and
+                        // the armoured tank the chunkier plated hull.
+                        property int enemyVariant: e.kind === 1 ? 1 : (e.kind === 2 ? 2 : 0)
                         // Frost while time is frozen: a big iced patch under
                         // the tank plus one smaller patch in the ground the
                         // tank does not cover. Built only while frozen.
@@ -754,6 +774,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             dir: e.dir
                             frame: e.moving ? win.treadFrame : 0
+                            variant: enemyVariant
                             body: enemyBody
                             dark: enemyDark
                             light: enemyLight
@@ -780,7 +801,7 @@ ApplicationWindow {
                     }
                 }
 
-                // Players told apart by color only: P1 yellow, P2 red.
+                // Players told apart by colour: P1 yellow, P2 green.
                 Repeater {
                     model: 2
                     Item {

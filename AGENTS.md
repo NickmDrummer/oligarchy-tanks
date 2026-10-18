@@ -59,9 +59,9 @@ Omarchy desktop app: **Qt 6 / C++ backend + QML frontend, single binary**, built
 with `qmake6` + `make`.
 
 - 15x15 random map per game; brick / steel / forest / base tiles.
-- 2 player tanks (P1 yellow, P2 red) and four enemy kinds: gray basic, green
-  fast, armored (pastel purple -> cyan -> gray as it takes hits) and the
-  red-flashing carrier.
+- 2 player tanks (P1 yellow, P2 green) and four enemy kinds: gray basic and
+  pastel-metallic-yellow wheeled fast, armored (pastel purple ->
+  cyan -> gray as it takes hits, with treads) and the red-flashing carrier.
 - **16 enemies per sector, always**; what changes with the sector is the mix
   (more fast and more armored). See section 17.
 - 7 bonuses, dropping only from carriers (the red-flashing basics).
@@ -801,6 +801,12 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
 19. **Phase 2 of the overhaul**: the manual (`?`) first, then the in-game
     interface, both from the user's notes, one at a time — and each one with the
     same gate: user plays, then commit.
+20. **The round of section 18** (the user's new list): the two reported bugs (§
+    18.1, § 18.2) and the tank sprites and palette (§ 18.3) are implemented and
+    verified with `bin/test` (52 slots) and the two throwaway probes. **Waiting
+    for the user to play, then commit.** Still to come from the same list: the
+    power-up sprites and durations, CANNON breaking steel by strip, the LEVELUP
+    five tiers, the BLAST MISSILE, and the `GAME` section of the manual.
 
 ---
 
@@ -1359,15 +1365,17 @@ section is the record of what shipped.
 - **Mix by level** (in `spawnEnemy()`): levels 1-3 = 8 basic + 4 fast + 4
   armored; 4-6 = 6 fast + 6 basic + 4 armored; 7+ = 4 basic + 6 fast + 6
   armored. Armored is the remainder, so the three always sum to 16.
-- **Four kinds.** `0` basic gray (hp 1, `ENEMY_SPEED`); `1` fast green (hp 1,
-  `ENEMY_SPEED * 1.35 * mult`); `2` armored (**fixed hp 3**, `ENEMY_SPEED *
-  mult`); `3` carrier (**hp 1, `ENEMY_SPEED * 1.15`**).
+- **Four kinds.** `0` basic gray, treads (hp 1, `ENEMY_SPEED`); `1` fast, a
+  wheeled chassis (hp 1, `ENEMY_SPEED * 1.35 * mult`), recoloured from the basic
+  tank's grey to a pastel metallic yellow in section 18.3; `2`
+  armored, plated hull and a thicker cannon (**fixed hp 3**, `ENEMY_SPEED *
+  mult`); `3` carrier, treads (**hp 1, `ENEMY_SPEED * 1.15`**).
 - **Armoured colour is by hits left, not by sector:** 3 = pastel purple, 2 =
   cyan, 1 = gray. No more armour pips.
 - **Carriers are 2 of the basic pool**, not extra tanks, and they are
   **interleaved** at roughly 1/3 and 2/3 of that pool (`basic/3` and
   `2*basic/3`), never both at the start. They flash **red <-> gray** and are the
-  **only** power-up droppers — green no longer drops anything.
+  **only** power-up droppers.
 - **Max concurrent** scales gradually: `min(4 + (level-1), 6)`.
 - **Spawn/respawn grace:** every player is shielded for **3 s** on spawn and on
   respawn (`shieldUntil`), so nothing is killed the instant it appears.
@@ -1429,3 +1437,152 @@ read as coloured circles; that is the mistake the pixel grids fix.
 - The explosion/floater/frost all hang off `frameChanged`, like everything else;
   `Explosion` is a plain `{x, y, age}` on the heap-owning `m_explosions` vector,
   capped at 8.
+
+---
+
+## 18. Stuck enemies, the eliminated player and the tank sprites
+
+**Why.** Three things the user reported after playing phase C: enemies that
+stand still at the top-left corner, the top-right corner and the top centre with
+nothing touching them; a two-player game where P1 runs out of lives, P2 finishes
+the sector, both tanks come back and P1's panel shows neither spare tanks nor
+`KILLED`; and a list of look changes — P2 has to be green, the fast tank cannot
+be, the treads have to read as treads, and the armoured tank has to look more
+like one. The rule work is sections 18.1-18.3.
+
+### 18.1 Enemies getting stuck (measured, not reasoned)
+
+The first guess (a corner-specific rule in the AI) was wrong. A throwaway probe
+(`/tmp/opencode/stuck`, 200 seeded maps x 60 s with the players removed) showed
+the real causes, and the probe was kept as the gate: **0 stuck spans over 1000
+maps** after the fix, against 4% of maps before it.
+
+- **Two tanks on one cell.** `spawnEnemy()` picked the entry lane from the spawn
+  counter without checking whether another tank was standing there. Two enemies
+  on the same spot were then pushed apart by `separateTanks()` with **no terrain
+  check**, so one landed inside a whole tile or off the board (y = 0.22). A hull
+  of 0.8 can never step out of that with the 0.1 nudge, so the tank froze for the
+  rest of the sector. That is most of the reports, and it is exactly "the
+  corners", because the corner lanes are the ones that were busy.
+- **`blockedByTank()` was a position test.** Two tanks within a hull of each
+  other were each other's wall in all four directions and could never back away.
+  It is now a movement test: a target inside the other hull is allowed when the
+  move does not close the gap (`blockedByTank(x, y, size, self, isEnemy, curX,
+  curY)`).
+- **AI thrash.** A blocked frame re-rolled the direction immediately, and the
+  rules (50% down, 40% drift to the base) kept choosing the wall just hit, so the
+  tank jittered on the spot. A blocked enemy now takes `bestDir()` (most free
+  run, random tie-break) and **commits to it for 0.8-2.3 s**; the escape nudge no
+  longer counts as progress either.
+- **Sealed entry pockets.** The scatter could brick a lane shut (2 of 14 spans in
+  one sample, `reachable=9`), leaving an enemy pacing a three-cell pocket.
+  `openSpawnLanes()` flood-fills each of the three lanes and, **only when it does
+  not reach row 6**, carves it straight down. The clear entry pad also grew from
+  3x2 to 3x3, so two tanks that do come out of the same gate have somewhere to be
+  pushed.
+- **Last-resort rescue.** `buriedInSolid()` + `nearestFreeSpot()` snap a tank
+  that somehow ends up inside solid ground (or off the board) to the nearest free
+  cell, so a stuck tank recovers instead of standing there.
+- `spawnEnemy()` now returns `bool`: a busy lane means "wait 0.5 s and try
+  again" instead of stacking.
+
+Tests: `twoTanksInContactCanAlwaysBackAway`, `aTankBuriedInMasonryIsFreed`,
+`enemySpawnsNeverStackOnOneCell`, `theEntryLanesAreNeverSealed` (50 maps),
+`enemiesLeaveTheTopOfTheBoardOnEveryMap` (12 seeded maps, 8 s each, the enemy
+must move more than 1.5 cells from its spawn).
+
+### 18.2 A player who is out of lives
+
+**Cause.** `resetTanks(false)` (what `nextLevel()` calls) preserves the life
+count but does `m_p[i] = Tank{}`, whose default is `alive = true`. A player who
+was out with 0 lives therefore came back as a **phantom**: a tank on the board
+with no spares. Dying again took him to `-1`, and the panel draws an icon per
+`index < lives` and `KILLED` only at `lives === 0`, so at `-1` it showed neither
+— the blank placeholder the user saw.
+
+**Fix, and the rule behind it (user spec).** A player with no lives **stays out
+until his partner picks up a LIFE**; the LIFE revives the eliminated player
+instead of topping up the one who took it.
+
+- `resetTanks(false)` leaves a player with `lives <= 0` **not alive**, and clamps
+  `lives` at 0.
+- `killPlayer()` clamps at 0 too: losing the last life takes the player out, it
+  never counts below zero.
+- The panels show `KILLED` for `lives <= 0` (defensive; the clamp is what really
+  fixes it).
+- `applyPickup(Life)` on a two-player game revives an eliminated partner via
+  `revivePlayer()` — alive, `lives = 1`, at his own spawn point, with the usual
+  3 s grace — and only tops up (`min(lives + 1, 5)`) when both players are in.
+  A one-player run has nobody to revive, so it is the old +1.
+
+Tests: `anEliminatedPlayerStaysOutInsteadOfReturning` (P1 out, sector advances,
+still out, and dying again cannot go below 0), `aLifeFromThePartnerRevivesThe
+EliminatedPlayer`, `aLifeTopsUpThePickerWhileBothAreIn`.
+
+### 18.3 The tank sprites and the palette
+
+- **P2 is green** (`#5da24a` / `#2e5b26` / `#bfe3b4`, the old fast-tank green)
+  and P1 stays yellow. Every panel, pad label and board sprite follows
+  `win.p2body`, so nothing was recoloured by hand.
+- **The fast tank can no longer be green**, so it is told apart from the basic
+  one by **chassis and colour**: `TankSprite.variant` is `0` treads (players,
+  basic, carrier), `1` **wheels** and `2` the **armoured** hull (double plates, a
+  4-wide cannon, one row longer — longer only, never wider, so it still fits the
+  same lanes). The basic tank is grey (`#a8adb8` / `#5d626c` / `#e4e8ee`,
+  lighter than the old `#8d8d8d`) and the fast one is a **pastel metallic
+  yellow** (`win.foeYellow*`, `#d8c878` / `#8c7a3c` / `#f6f2d8` — the user's
+  ask, after the wheeled hull was signed off; it is paler and flatter than P1's
+  saturated gold `#c8a028`, and the chassis tells them apart anyway).
+- **The wheels are three a side**, each a **one cell column three rows tall that
+  swells into a three cell bar on its middle row** (the hub is the light cell of
+  that bar), with an empty row between one wheel and the next. The **gaps
+  matter**: a version that ran wheels down the middle rows with the tread-style
+  per-row animation was read as a broken tread, so the gaps stay and the wheels
+  do not animate. An earlier, chunkier version (three cell blocks at columns
+  0-2/13-15) was replaced by the user's own drawing.
+- **The wheeled hull is the user's drawing, kept cell for cell.** It was the
+  third iteration and the only rule is: **that grid is the sprite**. A flared
+  cannon (light tip, two dark rows, a 5-wide dark row, a light collar), a light
+  front plate, a dark hull outline with the body colour inside, a **hatch window
+  with a raised centre** (rows 8-12: two body cells, a gap, a centre cell, a gap,
+  two body cells) and a dark bottom (a full-width row and a 3-cell block below
+  it). Two things about it: it is **centred on column 8**, so column 0 is margin
+  and column 15 carries the right wheel - do not "centre" it, that would move
+  every feature half a cell; and a first attempt of ours compressed a 19-column
+  sketch into the 16 the grid allows, which is **not** what shipped. The `D`
+  character means the hull's own dark shade, the same as `S`/`G`/`C`; `W` (the
+  old wheel body cell) is gone. `D` used to be **unmapped**, so the old hatch
+  rendered as transparent holes - i.e. as the black board showing through - and
+  it stays mapped for that reason.
+- **The armoured colours on hit are unchanged** (purple -> cyan -> grey); its
+  last stage is now the same grey as the basic tank, told apart by the shape.
+- **The treads are always cells.** The old grid lit the whole tread band on one
+  frame only, which read as a flicker and as "the cells only show while moving".
+  A tread row is now a cell on **every** row: frame 0 lights the even rows and
+  frame 1 the odd ones, so the two frames interleave and the band always reads as
+  a track. The clock is the same 2-state `win.treadFrame`, now at 90 ms (was
+  140). Only the treads animate; the wheels are static by design.
+- **The tank's contour is neutral grey** — `TankSprite.outline`, `#6b7280` — and
+  not a darkened hull colour. The tread trace was `Qt.darker(dark, 1.3)`, which
+  on the near-black board (`#050507`) reads as black: `#23461d` for P2's green,
+  `#371712` for the carrier. That trace is most of the silhouette, so the tank
+  came out as a coloured body floating on black wings and the body's outline
+  could not be told from the background (user report). The trace column and the
+  dark half of the animated tread cells now use that one grey, which reads on
+  black for every hull (yellow, green, grey, purple, cyan, red) and is lighter
+  than any hull's own dark shade, so the body still separates from it. The
+  hull's own dark tone still draws the body's shading (`S`, `G`, `C`) and the
+  cannon; only the trace changed. The wheeled chassis has no trace and is
+  untouched.
+- The side panel's enemy queue was a hardcoded grey; it now uses the same palette
+  properties as the board (`win.foeGray*`).
+
+**Verified with a throwaway probe** (`/tmp/opencode/tank`, outside the repo): one
+case per variant/colour rendered in isolation at 6 px a cell and printed as a
+letter grid (`B` body, `D` dark, `L` light, `E` outline, `.` empty), one PNG
+per case for the user, **and** a second phase that loads the real `qrc:/Main.qml`,
+puts one tank of each kind on the board and prints the properties of every board
+`TankSprite` — which is what proves the delegate wiring (kind -> variant and
+palette) and not just the sprite file. That second phase is what caught the
+queue's hardcoded grey.
+

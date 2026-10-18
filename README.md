@@ -2,7 +2,7 @@
 
 Retro local tank battle vs AI, in the style of classic Battle City on Sega.
 
-Defend the star base alone or with a friend. 8 enemies per sector, random map
+Defend the star base alone or with a friend. 16 enemies per sector, random map
 every game.
 
 ## Start
