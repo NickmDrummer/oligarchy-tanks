@@ -205,6 +205,8 @@ private:
     bool tileBlocksPoint(double x, double y) const;
     bool hitsTank(double bx, double by, double tx, double ty) const;
     bool blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const;
+    // Nudge overlapping tanks apart so they cannot stay locked together.
+    void separateTanks();
     int tileAt(int cx, int cy) const;
     // Shears one strip off a brick tile, on the face the shot came from.
     void chipBrick(int cx, int cy, int dir);

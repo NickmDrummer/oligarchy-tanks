@@ -669,6 +669,10 @@ void Backend::tick() {
     m_time += dt;
     ++m_frameTick;
 
+    // Keep tanks from locking together: nudge any overlapping pair apart before
+    // movement is resolved.
+    separateTanks();
+
     for (auto &t : m_p)
         if (t.cooldown > 0)
             t.cooldown -= dt;
@@ -749,13 +753,40 @@ void Backend::updateTank(Tank &t, bool up, bool down, bool left, bool right, dou
     if (dir == 2) ny += speed * dt;
     if (dir == 3) nx -= speed * dt;
     if (dir == 1) nx += speed * dt;
+    // Try the full move first; if it is blocked, slide along the free axis so a
+    // tank that grazes a wall or another tank does not freeze in place (and can
+    // escape a 1/4 brick gap instead of being locked into it).
+    bool moved = false;
     if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &t, false)) {
-        t.x = nx;
-        t.y = ny;
-        t.moving = true;
+        t.x = nx; t.y = ny; moved = true;
+    } else if (dir == 0 || dir == 2) {
+        // vertical intent: try sliding horizontally
+        if (!solidAt(t.x, ny, TANK_SIZE) && !blockedByTank(t.x, ny, TANK_SIZE, &t, false)) {
+            t.y = ny; moved = true;
+        }
     } else {
-        t.moving = false;
+        // horizontal intent: try sliding vertically
+        if (!solidAt(nx, t.y, TANK_SIZE) && !blockedByTank(nx, t.y, TANK_SIZE, &t, false)) {
+            t.x = nx; moved = true;
+        }
     }
+    // Unstuck: if the tank is sitting inside solid masonry, nudge it out along
+    // the axis of least penetration so it cannot stay locked in a 1/4 strip.
+    if (!moved && solidAt(t.x, t.y, TANK_SIZE)) {
+        const double nudge = 0.1;
+        int esc[4] = { 0, 1, 2, 3 };
+        for (int k = 0; k < 4 && !moved; ++k) {
+            double nx2 = t.x, ny2 = t.y;
+            if (esc[k] == 0) ny2 -= nudge;
+            if (esc[k] == 2) ny2 += nudge;
+            if (esc[k] == 3) nx2 -= nudge;
+            if (esc[k] == 1) nx2 += nudge;
+            if (!solidAt(nx2, ny2, TANK_SIZE) && !blockedByTank(nx2, ny2, TANK_SIZE, &t, false)) {
+                t.x = nx2; t.y = ny2; moved = true;
+            }
+        }
+    }
+    t.moving = moved;
 }
 
 void Backend::updateEnemies(double dt) {
@@ -787,9 +818,33 @@ void Backend::updateEnemies(double dt) {
         if (e.dir == 2) ny += speed * dt;
         if (e.dir == 3) nx -= speed * dt;
         if (e.dir == 1) nx += speed * dt;
+        bool moved = false;
         if (!solidAt(nx, ny, TANK_SIZE) && !blockedByTank(nx, ny, TANK_SIZE, &e, true)) {
-            e.x = nx;
-            e.y = ny;
+            e.x = nx; e.y = ny; moved = true;
+        } else if (e.dir == 0 || e.dir == 2) {
+            if (!solidAt(e.x, ny, TANK_SIZE) && !blockedByTank(e.x, ny, TANK_SIZE, &e, true)) {
+                e.y = ny; moved = true;
+            }
+        } else {
+            if (!solidAt(nx, e.y, TANK_SIZE) && !blockedByTank(nx, e.y, TANK_SIZE, &e, true)) {
+                e.x = nx; moved = true;
+            }
+        }
+        if (!moved && solidAt(e.x, e.y, TANK_SIZE)) {
+            const double nudge = 0.1;
+            int esc[4] = { 0, 1, 2, 3 };
+            for (int k = 0; k < 4 && !moved; ++k) {
+                double nx2 = e.x, ny2 = e.y;
+                if (esc[k] == 0) ny2 -= nudge;
+                if (esc[k] == 2) ny2 += nudge;
+                if (esc[k] == 3) nx2 -= nudge;
+                if (esc[k] == 1) nx2 += nudge;
+                if (!solidAt(nx2, ny2, TANK_SIZE) && !blockedByTank(nx2, ny2, TANK_SIZE, &e, true)) {
+                    e.x = nx2; e.y = ny2; moved = true;
+                }
+            }
+        }
+        if (moved) {
             e.moving = true;
         } else {
             e.moving = false;
@@ -818,6 +873,20 @@ void Backend::updateBullets(double dt) {
     for (auto &b : m_bullets) {
         if (!b.active)
             continue;
+        // If a shot spawns (or lands) inside a surviving brick strip, chip it
+        // instead of letting the first step carry it out of the cell. This is
+        // what lets a tank pressed against a 1/4 strip break it and escape.
+        {
+            const int ccx = int(std::floor(b.x)), ccy = int(std::floor(b.y));
+            if (ccx >= 0 && ccy >= 0 && ccx < COLS && ccy < ROWS
+                && tileAt(ccx, ccy) == Brick && solidAt(b.x, b.y, 0.25)) {
+                chipBrick(ccx, ccy, b.dir);
+                if (m_soundEnabled)
+                    emit playSound("hit");
+                b.active = false;
+                continue;
+            }
+        }
         // Capped so a fast shot cannot skip over a quarter-cell gap.
         const double step = std::min(b.speed * dt, BULLET_MAX_STEP);
         double nx = b.x, ny = b.y;
@@ -833,6 +902,12 @@ void Backend::updateBullets(double dt) {
         }
         const int cx = int(std::floor(nx)), cy = int(std::floor(ny));
         const int tile = tileAt(cx, cy);
+        // A damaged brick tile is a hole only when it is fully open on the
+        // shot's own axis: a horizontal shot flies through only when all the
+        // vertical strips are gone, a vertical shot only when all the horizontal
+        // strips are gone. Checking both axes (the old test) let a shot slip
+        // through a gap on the perpendicular axis and skip the surviving strip
+        // it was meant to chip — which left the tank stuck against it.
         // A damaged brick tile whose strips in the shot's way are already
         // gone is a hole: the shot flies straight through it.
         const bool through = (tile == Brick) && !tileBlocksPoint(nx, ny);
@@ -959,6 +1034,16 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
         bx = x;
         by = y;
     }
+    // If the barrel tip lands in a different, empty cell (e.g. the tank is
+    // pressed against a 1/4 brick strip and the tip overshoots into the open
+    // space behind it), pull back to the tank centre so the shot still hits
+    // the strip it was aimed at instead of sailing past it.
+    if (int(std::floor(bx)) != int(std::floor(x)) || int(std::floor(by)) != int(std::floor(y))) {
+        const int tcx = int(std::floor(x)), tcy = int(std::floor(y));
+        const int bcx = int(std::floor(bx)), bcy = int(std::floor(by));
+        if (tileAt(bcx, bcy) == Empty && tileAt(tcx, tcy) == Brick)
+            bx = x, by = y;
+    }
     if (solidAt(bx, by, 0.25)) {
         bx = x;
         by = y;
@@ -1014,7 +1099,9 @@ bool Backend::hitsTank(double bx, double by, double tx, double ty) const {
 // Tanks block each other, so allies and enemies can no longer drive
 // or phase through one another.
 bool Backend::blockedByTank(double x, double y, double size, const void *self, bool isEnemy) const {
-    const double minDist = size * 0.9;
+    // Use the full hull size as the collision distance: anything smaller lets
+    // two tanks overlap visually and "stick" to each other.
+    const double minDist = size;
     auto blocks = [&](double tx, double ty, const void *other) {
         if (other == self)
             return false;
@@ -1040,6 +1127,46 @@ bool Backend::blockedByTank(double x, double y, double size, const void *self, b
     }
     (void)isEnemy;
     return false;
+}
+
+void Backend::separateTanks() {
+    const double minDist = TANK_SIZE;
+    // Collect alive tanks (players + enemies) into one list of (x,y) refs.
+    std::vector<std::pair<double*, double*>> tanks;
+    for (int i = 0; i < m_playerCount; ++i)
+        if (m_p[i].alive)
+            tanks.push_back({&m_p[i].x, &m_p[i].y});
+    for (auto &e : m_foes)
+        if (e.alive)
+            tanks.push_back({&e.x, &e.y});
+
+    for (size_t a = 0; a < tanks.size(); ++a) {
+        for (size_t b = a + 1; b < tanks.size(); ++b) {
+            double &ax = *tanks[a].first;
+            double &ay = *tanks[a].second;
+            double &bx = *tanks[b].first;
+            double &by = *tanks[b].second;
+            const double dx = bx - ax;
+            const double dy = by - ay;
+            const double adx = std::fabs(dx);
+            const double ady = std::fabs(dy);
+            if (adx < minDist && ady < minDist && (adx > 0 || ady > 0)) {
+                // Push apart along the shallowest penetration axis.
+                const double penX = minDist - adx;
+                const double penY = minDist - ady;
+                const double half = 0.5;
+                if (penX < penY) {
+                    const double push = penX * half * (dx >= 0 ? 1.0 : -1.0);
+                    ax -= push;
+                    bx += push;
+                } else {
+                    const double push = penY * half * (dy >= 0 ? 1.0 : -1.0);
+                    ay -= push;
+                    by += push;
+                }
+            }
+        }
+    }
 }
 
 int Backend::tileAt(int cx, int cy) const {
