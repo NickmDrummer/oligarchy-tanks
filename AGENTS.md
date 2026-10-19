@@ -1756,10 +1756,11 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
 
 ### 19.5 Verification
 
-- `bin/build` clean, `bin/test` **56/56** (+4 slots: the blast starts where the
-  bonus was picked up, the blast grows and goes away, the freeze only blinks
-  while it is ending, PICK and CANNON last 15 s), offscreen smoke with no QML
-  warnings.
+- `bin/build` clean, `bin/test` **56/56 at the time of this batch's commits**
+  (it is 58/58 after the section-20 fix round; +4 slots: the blast starts where
+  the bonus was picked up, the blast grows and goes away, the freeze only
+  blinks while it is ending, PICK and CANNON last 15 s), offscreen smoke with
+  no QML warnings.
 - `/tmp/opencode/pick` (throwaway): phase 1 renders every icon in isolation at
   the legend size and the board size, prints the bounding box, the per-cell
   letter grid and the count of blended pixels, and saves a PNG per case; phase 2
@@ -1767,7 +1768,8 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
   its real pickup box, and the enemy delegates' opacity while frozen, while the
   freeze ends and after it. That phase is what caught the corner-centring bug and
   the LIFE sprite's dead `width` binding.
-- Not yet played by the user: everything in this section.
+- Played by the user in full. That session is what surfaced bugs 1-4; they
+  are all fixed and committed — see section 20.
 
 
 ## 20. The post-play-test fix round (bugs 1-4 from the user's session)
@@ -1832,9 +1834,10 @@ The trailing bullet is now gated on `blastShots <= 0`: BLAST fully replaces the
 shot and never stacks with tiers (commit `74e486b`).
 
 ### 20.6 Verification state
-`bin/build` clean, `bin/test` **56/56**, offscreen smoke with no QML output.
-Played and approved by the user: the shield visuals, the tier-2/BLAST fix
-and the air-support owner/recharge fix are committed.
+`bin/build` clean, `bin/test` **58/58**, offscreen smoke with no output.
+Played and approved by the user: the whole section-19 batch, the shield
+visuals, the tier-2/BLAST fix, the fullscreen/F11 window and the
+air-support owner/recharge fix are committed.
 
 ### 20.7 Window: fullscreen by default, F11 toggles
 The window was hard-coded 1040x800 and had no native fullscreen, so Hyprland
@@ -1844,3 +1847,15 @@ the pixel-art blurry until the user maxed it. It now opens
 fullscreen <-> windowed; windowed keeps the 1040x800 design size so the pixel
 layout reads the same in both states. This is also why chat screenshots of the
 game must be taken in fullscreen to be pixel-representative.
+
+### 20.8 Pending: no shot spawns while the tank is pressed against a block or an enemy
+Reported by the user right after the tier-2 double-bullet work, explicitly
+deferred to a later fix. Repro: drive the tank flush against a block (or an
+enemy) and fire — no visible shot comes out. Suspects, unverified: the
+fireBullet() spawn (barrel tip 0.6 ahead, pulled back to the tank centre when
+the tip lands on something solid) may still land inside the blocker when the
+tank itself is flush against it, so the bullet dies on its first
+updateBullets() step; the `live >= 2` cap could also eat the tier-2 trailing
+bullet if the first one is stuck active. May actually pre-date the
+double-bullet change — needs a reproduction and a bisect-style check before
+any fix. Not started.
