@@ -1971,3 +1971,50 @@ from the host. Reviewed over three user captures:
 - the tile's accent border is gone (user request; it read as UI chrome).
 The dead variant keeps its muted reds (`#7a3535` plate on `#3d1010`). Approved
 by the user over the final capture.
+
+### 21.7 Aesthetics round: the centred display block and the CRT tube
+
+**Phase A — display centring (approved on screen).** The board and the side
+panel form **one centred cabinet screen**: `cell` = the largest value >= 30 the
+real space of the block allows (window area minus panel `160`, the `14` gap and
+an `8` border allowance, measured on both axes), the panel sits at
+`board.x + board.width + displayGap` with the board's own height, and the board
+shifts left by `(panelW + displayGap) / 2`, so the leftover space splits evenly
+around the block.
+
+**Phase B — the CRT tube (approved on screen).** The picture is drawn through a
+layer and reshaped by a shader:
+
+- `playfield` (the board's content item, margins 4) is **visible** and draws
+  entirely through `layer { enabled: true; smooth: false; effect: ShaderEffect }`.
+  The layer texture is captured fresh every frame, which is exactly what the old
+  `ShaderEffectSource`-over-a-hidden-item arrangement silently did not do: that
+  texture froze at the first frame (tiles in, tanks out). Keep the layer path.
+- The shaders live in `src/shaders/crt.vert` / `crt.frag` and are **precompiled
+  to `.qsb` with the qsb tool** — Qt 6 no longer accepts inline GLSL strings in
+  ShaderEffect (it treats them as file names and renders nothing, silently).
+  They are compiled into the binary through `resources.qrc`; regenerating:
+  `qsb --qt6 -o shaders/crt.vert.qsb shaders/crt.vert` (same for `.frag`). The
+  GLSL is the Vulkan-style form (`layout()` declarations, `texture()`).
+- The effect: barrel curvature (`off = abs(uv.yx) / vec2(4.5, 4.0)`, squared),
+  everything outside the curved mask painted the board colour, chroma split
+  growing toward the edges (`0.004 * dot(v,v) * 4.0`), screen-space scanlines
+  (one dark device line every 3 px, strength 0.18) and a vignette (0.5 at the
+  corners, clear in the middle).
+- `layer.smooth: false` keeps the texture NEAREST, so the pixel art is not
+  blurred before the curving.
+- The `tube` group is down to the glass Canvas. The state overlay (z 20) stays
+  a direct board child, above the tube, crisp.
+- Software rendering (offscreen/package smoke) draws the straight picture: the
+  effect needs the OpenGL scene graph. No warnings either way.
+- **Stderr cleanup found along the way:** `bulletAt()`'s empty-slot return (no
+  bullets alive) was missing the `blast` key, so every bullet delegate's
+  `visible: b.blast` bound `[undefined]` to bool roughly 9 000 times a session.
+  It now returns `blast: false`. Never return dicts missing the keys QML reads.
+
+**Verification:** `bin/build` clean, `bin/test` **60/60**, offscreen smoke
+silent, a GL run probed end to end (start game, join P1, grab) showing tanks,
+enemies, the curve, the scanlines and the fringing, and the user played a full
+session ("quedó increíble"), with one follow-up: the straight glass frame line
+(board border + glass Canvas stroke) does not follow the curve — the curved-rim
+round is next.

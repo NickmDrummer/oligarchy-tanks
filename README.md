@@ -118,3 +118,7 @@ Jason Kottke, bundled under the SIL Open Font License (see
 `src/fonts/OFL.txt`). Descriptive text in the manual uses
 [Departure Mono](https://departuremono.com/) by Helena Zhang, also SIL OFL
 (see `src/fonts/OFL-DepartureMono.txt`).
+
+The 8-bit sound set is original project material — no third-party samples.
+Some sounds were synthesised specifically for the game, and the rest was
+produced by hand in FL Studio Mobile ("the explosions are ours too").
