@@ -563,7 +563,9 @@ ApplicationWindow {
                     anchors.verticalCenterOffset: 4
                     width: hudRow.width - 2 * (120 + 240 + 32)
                     text: "OLIGARCHY TANKS"
-                    font.bold: true; font.pixelSize: 62; font.letterSpacing: 5
+                    // The Omarchy wordmark font: the block-built letters of
+                    // the official logo, for the cabinet marquee only.
+                    font.family: "Omarchy Font"; font.pixelSize: 56
                     fontSizeMode: Text.HorizontalFit; minimumPixelSize: 22
                     horizontalAlignment: Text.AlignHCenter
                     color: "#000000"
@@ -574,7 +576,7 @@ ApplicationWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     width: titleShadow.width
                     text: "OLIGARCHY TANKS"
-                    font.bold: true; font.pixelSize: 62; font.letterSpacing: 5
+                    font.family: "Omarchy Font"; font.pixelSize: 56
                     fontSizeMode: Text.HorizontalFit; minimumPixelSize: 22
                     horizontalAlignment: Text.AlignHCenter
                     color: theme.accent

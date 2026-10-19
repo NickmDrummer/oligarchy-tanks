@@ -2058,3 +2058,33 @@ display is now a monitor set into a full arcade cabinet:
 **Verification:** `bin/build` clean, `bin/test` **60/60** (backend untouched),
 offscreen smoke silent, GL probe render checked end to end, and the user
 approved the full-screen result (with one fix: the title alignment above).
+
+### 21.8 The publication polish round: green accent, victory message, marquee font
+
+Three items from the user's pending list, one commit after they seen and
+approved the result (`16c748d` is the mural round, committed first):
+
+- **The accent is the Omarchy green, fixed.** `Theme` no longer reads the
+  desktop theme's `colors.toml` — the user's blue accent must never leak into
+  the UI. `theme.h/.cpp` are now a minimal class: `m_accent = "#9ece6a"` hard
+  coded (the same green the base tile's plate already uses, section 21.5) and
+  `accentForeground()` unchanged (black reads on it). The file-watching
+  machinery is gone with the reading.
+- **The victory message** is `Sector N Clear! Score: X` — the trailing
+  "— press R for sector N…" is gone (the `>> NEXT SECTOR <<" button under it
+  already says the way on).
+- **The marquee is set in the Omarchy wordmark font**
+  (`github.com/markcuda/Omarchy-Font`, MIT by Mark Cuda, vendored as
+  `src/fonts/OmarchyFont.ttf` + `OmarchyFont-LICENSE.txt`, compiled into the
+  binary through `resources.qrc` and registered in `main.cpp` on demand).
+  **Only** the cabinet marquee names `font.family: "Omarchy Font"` — Silkscreen
+  stays the global font, and no other `Text` names a family. The marquee
+  dropped bold + letterSpacing (the font is block-built enough on its own) and
+  sits at 56 px (62 px Silkscreen-size overflowed the plate).
+- Housekeeping: the PKGBUILD installs the font's MIT licence, the README
+  credits it, the theme probe in `/tmp/opencode/crt` registers the font so the
+  probe renders the real thing.
+
+The two theme test slots (`themeFallsBack`, `themeReadsAccent`) became one:
+`accentIsTheOmarchyGreen` asserts `#9ece6a` + `black`. `bin/test` is **59/59**,
+`bin/build` clean, offscreen smoke silent, GL probe run.

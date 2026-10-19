@@ -13,6 +13,7 @@
              Bundled so the UI looks the same on any machine. -->
         <file alias="fonts/Silkscreen-Regular.ttf">fonts/Silkscreen-Regular.ttf</file>
         <file alias="fonts/Silkscreen-Bold.ttf">fonts/Silkscreen-Bold.ttf</file>
+        <file alias="fonts/OmarchyFont.ttf">fonts/OmarchyFont.ttf</file>
         <file alias="fonts/DepartureMono-Regular.otf">fonts/DepartureMono-Regular.otf</file>
         <!-- The CRT shaders live here as .qsb files, precompiled from
              shaders/crt.vert and shaders/crt.frag with the qsb tool

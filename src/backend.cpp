@@ -1787,10 +1787,7 @@ void Backend::checkEnd() {
         return;
     }
     if (m_spawned >= totalForLevel() && aliveEnemies() == 0) {
-        if (m_pads.empty())
-            setState("victory", QString("Sector %1 clear! Score %2 — press R for sector %3").arg(m_level).arg(total).arg(m_level + 1));
-        else
-            setState("victory", QString("Sector %1 clear! Score %2 — press START for sector %3").arg(m_level).arg(total).arg(m_level + 1));
+        setState("victory", QString("Sector %1 Clear! Score: %2").arg(m_level).arg(total));
     }
 }
 

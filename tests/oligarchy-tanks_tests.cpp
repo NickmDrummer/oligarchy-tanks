@@ -1121,24 +1121,13 @@ private slots:
         QCOMPARE(TanksTestAccess::playerX(b, 1), 6.5);
     }
 
-    void themeFallsBack() {
-        QTemporaryDir dir;
-        Theme theme(dir.path());
-        QCOMPARE(theme.accent(), QString("#FFD60A"));
+    void accentIsTheOmarchyGreen() {
+        // The user's decision: the accent is the Omarchy logo green no matter
+        // what the desktop theme carries (commit of the aesthetics round) —
+        // #9ece6a, the same the base tile's plate uses.
+        Theme theme;
+        QCOMPARE(theme.accent(), QString("#9ece6a"));
         QCOMPARE(theme.accentForeground(), QString("black"));
-    }
-
-    void themeReadsAccent() {
-        QTemporaryDir dir;
-        QDir(dir.path()).mkpath("theme");
-        QFile colors(dir.path() + "/theme/colors.toml");
-        QVERIFY(colors.open(QIODevice::WriteOnly));
-        colors.write("accent = \"#112233\"\n");
-        colors.close();
-
-        Theme theme(dir.path());
-        QCOMPARE(theme.accent(), QString("#112233"));
-        QCOMPARE(theme.accentForeground(), QString("white"));
     }
 
     // An air strike credits its explosion to the player who launched it,

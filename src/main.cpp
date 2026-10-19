@@ -44,6 +44,9 @@ int main(int argc, char *argv[]) {
     // Silkscreen stays the global font (titles and key caps inherit it); body
     // text opts into this one explicitly (see the manual).
     QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/DepartureMono-Regular.otf"));
+    // The Omarchy wordmark font (MIT, see fonts/OmarchyFont-LICENSE.txt),
+    // available on demand; only the cabinet marquee opts into it.
+    QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/OmarchyFont.ttf"));
     if (fontId >= 0) {
         const QStringList families = QFontDatabase::applicationFontFamilies(fontId);
         if (!families.isEmpty()) {
