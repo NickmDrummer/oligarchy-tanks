@@ -167,6 +167,20 @@ private:
         double shieldUntil = -1;
         double speedUntil = -1;
         double cannonUntil = -1;
+        // Offensive tier from LEVELUP: 0 default, 1..4. Resets on death,
+        // survives a sector change.
+        int tier = 0;
+        // Armour layers: 3 at tier 3+, plus 1 while CANNON is active (max).
+        int armorHP = 0;
+        // Armored tanks killed by this player, feeding the air-support
+        // recharge at tier 4.
+        int armoredKills = 0;
+        // Air support (tier 4): missiles left in the current salvo and the
+        // timer to the next one. -1 means no salvo running.
+        int airMissiles = 0;
+        double airTimer = -1;
+        // True while air support is on cooldown waiting for 10 armored kills.
+        bool airRecharging = false;
     };
     struct Enemy {
         double x = 0, y = 0;
@@ -203,7 +217,7 @@ private:
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
-    enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Nuke = 4, Cannon = 5, Freeze = 6 };
+    enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Nuke = 4, Cannon = 5, Freeze = 6, LevelUp = 7 };
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
@@ -272,6 +286,13 @@ private:
     void spawnPickupAt(double x, double y);
     void applyPickup(int player);
     void updatePickups(double dt);
+    // Armour layers granted by the current tier (3 at tier 3+, else 0).
+    int tierArmor(const Tank &t) const { return t.tier >= 3 ? 3 : 0; }
+    // Effective armour: tier armour or the CANNON one-shot, whichever is
+    // higher (they do not stack).
+    int armorLayers(const Tank &t) const {
+        return std::max(tierArmor(t), (m_time < t.cannonUntil) ? 1 : 0);
+    }
     // The NUKE blast that QML draws: it grows out of the spot where the bonus
     // was picked up and is gone NUKE_FLASH_TIME later.
     void updateNuke(double dt);

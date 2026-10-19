@@ -19,6 +19,7 @@ Item {
     property var nuke: ["..DDDDDDDDD..", "..DGGGGGGGD..", "....DGGGD....", "..DGGGGGGGD..", ".DLGGGGGGGGD.", "DLGGGGGGGGGGD", "DLGGGGGGGGGGD", "GLGGYKKKYGGGG", "GGGYYKKKYYGGG", "GGGYKKYKKYGGG", "GGGGYKKKYGGGD", "DDLGGGGGGGGDD", "DDLGGGGGGGGDD", ".DDLGGGGGGDD.", "...DDGGGDD..."]
     property var cannon: [".........", "...BBBBD.", "..BBBBBDD", ".BBBBBBDD", "BBWWWWWDD", ".BBBBBBDD", "..BBBBBDD", "...BBBBD.", "........."]
     property var snow: ["....X....", "...XXX...", "..X.W.X..", ".X..W..X.", "XXXWWWXXX", ".X..W..X.", "..X.W.X..", "...XXX...", "....X...."]
+    property var levelup: ["....U....", "...UUU...", "..UUUUU..", ".UUUUUUU.", "...UUU...", "...UUU...", "...UUU...", "...UUU...", "...UUU..."]
 
     // Whole-pixel origin for every sprite: a half-pixel one antialiases the
     // grid, and a blurred pixel icon is exactly what "barely legible" looks
@@ -222,6 +223,34 @@ Item {
                         width: Math.max(1, Math.floor(root.side / 10))
                         height: Math.max(1, Math.floor(root.side / 10))
                         color: ch === "X" ? "#9fd8ff" : ch === "W" ? "#ffffff" : "transparent"
+                    }
+                }
+            }
+        }
+    }
+    // 7 LEVELUP: an up arrow. Raises the player's offensive tier (bullet
+    // speed, double shot, armour layers, air support).
+    Loader {
+        anchors.fill: parent
+        active: root.kind === 7
+        sourceComponent: levelupPart
+    }
+    Component {
+        id: levelupPart
+        Item {
+            Grid {
+                x: Math.round((parent.width - width) / 2)
+                y: Math.round((parent.height - height) / 2)
+                columns: 9
+                Repeater {
+                    model: 81
+                    Rectangle {
+                        property int r: Math.floor(index / 9)
+                        property int c: index % 9
+                        property string ch: root.levelup[r][c]
+                        width: Math.max(1, Math.floor(root.side / 9))
+                        height: Math.max(1, Math.floor(root.side / 9))
+                        color: ch === "U" ? "#ffd700" : ch === "W" ? "#fff3bd" : "transparent"
                     }
                 }
             }

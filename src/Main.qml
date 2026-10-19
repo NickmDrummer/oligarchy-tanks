@@ -288,7 +288,8 @@ ApplicationWindow {
                             text: backend.players.length > 0
                                   ? ((backend.players[0].shield ? "SHIELD " : "")
                                      + (backend.players[0].speed ? "SPEED " : "")
-                                     + (backend.players[0].cannon ? "CANNON " : ""))
+                                     + (backend.players[0].cannon ? "CANNON " : "")
+                                     + (backend.players[0].tier > 0 ? ("LV " + backend.players[0].tier + " ") : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
                             color: "#ffd60a"
@@ -371,7 +372,8 @@ ApplicationWindow {
                             text: backend.players.length > 1
                                   ? ((backend.players[1].shield ? "SHIELD " : "")
                                      + (backend.players[1].speed ? "SPEED " : "")
-                                     + (backend.players[1].cannon ? "CANNON " : ""))
+                                     + (backend.players[1].cannon ? "CANNON " : "")
+                                     + (backend.players[1].tier > 0 ? ("LV " + backend.players[1].tier + " ") : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
                             color: "#ffd60a"
@@ -637,6 +639,23 @@ ApplicationWindow {
                                         }
                                     }
                                 }
+                                // Sheared steel strips: same 4+4 mask as brick,
+                                // so a CANNON shell leaves the same kind of gap.
+                                Repeater {
+                                    model: 8
+                                    Rectangle {
+                                        property bool vertical: index < 4
+                                        property int slot: index % 4
+                                        property real e0: Math.round(slot * win.cell / 4)
+                                        property real e1: Math.round((slot + 1) * win.cell / 4)
+                                        visible: win.brickGone(tileItem.cx, tileItem.cy, index)
+                                        x: vertical ? e0 : 0
+                                        y: vertical ? 0 : e0
+                                        width: vertical ? e1 - e0 : win.cell
+                                        height: vertical ? win.cell : e1 - e0
+                                        color: "#050507"
+                                    }
+                                }
                             }
                         }
                         Loader {
@@ -859,8 +878,8 @@ ApplicationWindow {
                     property var k: backend.pickupAt(backend.frameTick)
                     visible: k.active
                     property real s: win.cell * 1.1
-                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff"]
-                    property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE"]
+                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff", "#ffd700"]
+                    property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE", "LEVELUP"]
                     x: k.x * win.cell - s / 2
                     y: k.y * win.cell - (s + 18) / 2
                     width: s; height: s + 18
@@ -1376,7 +1395,8 @@ ApplicationWindow {
                             ["LIFE", "#e8e8e8", "+1 LIFE (CAP 5), OR REVIVES A PARTNER WHO IS OUT"],
                             ["NUKE", "#ffd93b", "KILLS ALL ENEMIES"],
                             ["CANNON", "#c8963c", "ONE-SHOT ARMOUR (BIG SHELL) FOR 15 S"],
-                            ["FREEZE", "#9fd8ff", "ENEMIES STOP FOR 8 S, BLINKING AS THEY THAW"]
+                            ["FREEZE", "#9fd8ff", "ENEMIES STOP FOR 8 S, BLINKING AS THEY THAW"],
+                            ["LEVELUP", "#ffd700", "RAISES OFFENSIVE TIER (SPEED, DOUBLE SHOT, ARMOUR, AIR SUPPORT)"]
                         ]
                         Row {
                             spacing: 16

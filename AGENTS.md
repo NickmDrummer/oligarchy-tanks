@@ -211,8 +211,9 @@ Only **carriers (kind 3)** drop a bonus, where they die (`spawnPickupAt`). A
 carrier is one of the basic tanks: slightly faster, flashing red<->gray, and two
 per stage (section 17). Green runners no longer drop anything.
 Exactly **one pickup at a time**; it expires after 15 s.
-`PickupKind`: `Speed=0, Shield=1, Pick=2, Life=3, Nuke=4, Cannon=5, Freeze=6`
-(`Grenade` was renamed to `Nuke` in section 19; the sound is still `nuke.wav`).
+`PickupKind`: `Speed=0, Shield=1, Pick=2, Life=3, Nuke=4, Cannon=5, Freeze=6,
+LevelUp=7` (`Grenade` was renamed to `Nuke` in section 19; the sound is still
+`nuke.wav`).
 
 | # | Name | Effect | Duration |
 |---|---|---|---|
@@ -223,6 +224,7 @@ Exactly **one pickup at a time**; it expires after 15 s.
 | 4 | NUKE | kills all enemies, awards their score, nuke sound, board-wide blast drawn by QML | instant |
 | 5 | CANNON | one-shot armour (big shell) | 15 s |
 | 6 | FREEZE | enemies stop, and blink through their last 2 s | 8 s |
+| 7 | LEVELUP | raises offensive tier (bullet speed, double shot, armour, air support) | instant |
 
 **PICK is the Battle City shovel, not a steel breaker.** It **rebuilds the whole
 wall around the base — all five guard tiles, whatever state they were left in**
@@ -237,11 +239,19 @@ an enemy dies with **no score for anyone** (the wall is not the player's doing),
 a player loses a life through the normal `killPlayer()` path and respawns. The
 same crush runs on the revert, so nobody is ever sealed inside concrete.
 `cellHitsTank()` is the overlap test (the 0.8 hull against the cell).
-**Nothing in the game destroys `Steel`.** The old "bullets smash steel while PICK
-is active" behaviour, the per-player `Tank::pickUntil` and the `Bullet::pick`
-flag are **gone** — do not reintroduce them. Implementation:
-`setBaseGuard(bool)`, `crushTanksIn()`, `m_baseGuardUntil`, `m_baseGuard`,
-`updateBaseGuard()`, called from `tick()`.
+
+**Steel is no longer indestructible, but only CANNON shells chip it.** A CANNON
+bullet (big shell) shears steel by the same 4-strip + 50% law as brick; a
+normal shot is stopped by it. The base wall (the five guard tiles granted by
+PICK) is concrete: it never chips and never passes, no matter what hits it.
+The old "bullets smash steel while PICK is active" behaviour, the per-player
+`Tank::pickUntil` and the `Bullet::pick` flag are **gone** — do not
+reintroduce them. Implementation: `m_brickQ` now carries a strip mask for steel
+tiles too (0xFF whole, 0 when fully chipped), `tileBlocksPoint()` applies the
+strip law to steel unless the cell is in `m_baseGuard`, `chipBrick()` chips
+steel unless it is a guard tile, and `updateBullets()` only chips steel on a
+`big` bullet. `setBaseGuard(bool)`, `crushTanksIn()`, `m_baseGuardUntil`,
+`m_baseGuard`, `updateBaseGuard()`, called from `tick()`.
 
 ### 4.3 Determinism
 
@@ -865,9 +875,9 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
 21. **The power-ups, round 1** (section 19): the sprites, the two durations and
     the two new effects. Implemented and verified with `bin/test` (56 slots) and
     the `/tmp/opencode/pick` probe. **Waiting for the user to play, then
-    commit.** Still to come from the same list: CANNON breaking steel by strip
-    (section 19.4), the LEVELUP five tiers, the BLAST MISSILE, and the `GAME`
-    section of the manual.
+    commit.** Landed with the same batch: CANNON breaking steel by strip
+    (section 19.4, now done). Still to come from the same list: the LEVELUP
+    five tiers, the BLAST MISSILE, and the `GAME` section of the manual.
 
 ---
 
@@ -1713,18 +1723,23 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
 
 ### 19.4 Still to do from the same list
 
-- **CANNON breaks `Steel` by strip** (never the base wall). This **contradicts
-  section 4.2** ("Nothing in the game destroys `Steel`") on purpose — the user
-  asked for it — so section 4.2 must be rewritten with the strip-mask rule when
-  it lands: `tileBlocksPoint()` returns `true` for any `Steel` today, and a steel
-  strip mask would mirror `m_brickQ`. **Not implemented yet.**
+- **CANNON breaks `Steel` by strip** (never the base wall). **Done** (C5):
+  steel tiles now carry a strip mask in `m_brickQ`, `tileBlocksPoint()`
+  applies the 4-strip + 50% law to steel unless the cell is a base-guard tile,
+  `chipBrick()` chips steel unless it is a guard tile, and `updateBullets()`
+  only chips steel on a `big` (CANNON) bullet. The base wall stays concrete.
+  Section 4.2 has been rewritten accordingly.
 - **The CANNON's "one-shot armour" is not implemented either**: `cannonUntil`
   only marks bullets `big`. The plan is `tierArmor` + `armorLayers() = max(
   tierArmor, m_time < cannonUntil ? 1 : 0)` in the LEVELUP round, an enemy hit
   spending the tier layer first and then clearing `cannonUntil`.
-- **LEVELUP** (five tiers: +30% bullet speed, two bullets, 3 armour layers, air
-  support with 3 missiles, recharge by killing 10 armoured tanks) and the
-  **BLAST MISSILE** (25% slower than a bullet, area damage of two bullets,
+- **LEVELUP** (implemented, C6): raises offensive tier. Tier 1 = bullets +30%
+  speed; tier 2 = two bullets fired at once; tier 3 = 3 armour layers; tier 4 =
+  air support (3 missiles near the player, one every 1.5 s, tanks only, never
+  blocks, recharges after 10 armored kills). Tiers survive a sector change and
+  reset on death. CANNON one-shot armour is max(tierArmor, cannon ? 1 : 0).
+  Level indicator shown in the player panel when tier > 0.
+- **BLAST MISSILE** (25% slower than a bullet, area damage of two bullets,
   enemies only, never blocks; **needs the user's `.wav`**).
 
 ### 19.5 Verification

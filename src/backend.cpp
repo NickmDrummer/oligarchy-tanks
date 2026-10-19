@@ -88,8 +88,14 @@ bool Backend::brickStripGone(int x, int y, int strip, int rev) const {
     Q_UNUSED(rev);
     if (x < 0 || y < 0 || x >= COLS || y >= ROWS || strip < 0 || strip > 7)
         return false;
-    if (m_grid[y * COLS + x] != Brick)
+    const int t = m_grid[y * COLS + x];
+    if (t != Brick && t != Steel)
         return false;
+    // The base wall is indestructible concrete: never shows strips.
+    if (t == Steel)
+        for (int i : m_baseGuard)
+            if (i == y * COLS + x)
+                return false;
     return (m_brickQ[y * COLS + x] & (1u << strip)) == 0;
 }
 
@@ -101,6 +107,7 @@ QVariantList Backend::players() const {
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
             {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
+            {"tier", t.tier}, {"armorHP", t.armorHP},
             {"active", playerActive(i)}, {"joined", m_joined[i]},
         });
     }
@@ -254,6 +261,9 @@ void Backend::fireP1() {
         return;
     m_p[0].cooldown = FIRE_GAP;
     fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
+    // LEVELUP tier 2: a second bullet right behind the first.
+    if (m_p[0].tier >= 2)
+        fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
 }
 
 void Backend::fireP2() {
@@ -654,7 +664,7 @@ void Backend::generateMap() {
     // Every surviving brick tile starts whole; pads cleared above stay empty.
     m_brickQ.assign(COLS * ROWS, 0);
     for (int i = 0; i < COLS * ROWS; ++i)
-        if (m_grid[i] == Brick)
+        if (m_grid[i] == Brick || m_grid[i] == Steel)
             m_brickQ[i] = 0xFF;
     bumpBoard();
 }
@@ -707,12 +717,26 @@ void Backend::resetTanks(bool fullStats) {
     const int lives1 = fullStats ? 3 : m_p[1].lives;
     const int score0 = fullStats ? 0 : m_p[0].score;
     const int score1 = fullStats ? 0 : m_p[1].score;
+    // Tiers survive a sector change (user spec: "tiers survive the sector
+    // change, reset on death"), so keep them unless this is a full reset.
+    const int tier0 = fullStats ? 0 : m_p[0].tier;
+    const int tier1 = fullStats ? 0 : m_p[1].tier;
+    const int armor0 = fullStats ? 0 : m_p[0].armorHP;
+    const int armor1 = fullStats ? 0 : m_p[1].armorHP;
+    const int kills0 = fullStats ? 0 : m_p[0].armoredKills;
+    const int kills1 = fullStats ? 0 : m_p[1].armoredKills;
     m_p[0] = Tank{};
     m_p[1] = Tank{};
     m_p[0].lives = std::max(0, lives0);
     m_p[1].lives = std::max(0, lives1);
     m_p[0].score = score0;
     m_p[1].score = score1;
+    m_p[0].tier = tier0;
+    m_p[1].tier = tier1;
+    m_p[0].armorHP = armor0;
+    m_p[1].armorHP = armor1;
+    m_p[0].armoredKills = kills0;
+    m_p[1].armoredKills = kills1;
     // Cell centers, so tanks never start straddling two tiles.
     m_p[0].x = 3.5;
     m_p[0].y = ROWS - 1.5;
@@ -757,6 +781,12 @@ void Backend::tick() {
     for (auto &t : m_p)
         if (t.cooldown > 0)
             t.cooldown -= dt;
+    // CANNON armour expires: drop the extra layer it granted.
+    for (auto &t : m_p)
+        if (t.cannonUntil > 0 && m_time >= t.cannonUntil) {
+            t.cannonUntil = -1;
+            t.armorHP = std::min(t.armorHP, tierArmor(t));
+        }
 
     for (int i = 0; i < m_playerCount; ++i) {
         const double boost = (m_time < m_p[i].speedUntil) ? 1.35 : 1.0;
@@ -767,6 +797,58 @@ void Backend::tick() {
         const bool left = (i == 0 ? m_p1Left : m_p2Left) || m_padHeld[i][3];
         const bool right = (i == 0 ? m_p1Right : m_p2Right) || m_padHeld[i][1];
         updateTank(m_p[i], up, down, left, right, dt, PLAYER_SPEED * boost);
+    }
+
+    // Air support (LEVELUP tier 4): fire missiles near the player.
+    for (int i = 0; i < m_playerCount; ++i) {
+        Tank &t = m_p[i];
+        if (t.tier < 4 || !t.alive)
+            continue;
+        if (t.airRecharging) {
+            if (t.armoredKills >= 10) {
+                t.armoredKills -= 10;
+                t.airMissiles = 3;
+                t.airTimer = 0;
+                t.airRecharging = false;
+            }
+            continue;
+        }
+        if (t.airMissiles <= 0)
+            continue;
+        t.airTimer -= dt;
+        if (t.airTimer > 0)
+            continue;
+        // Fire one missile at a random spot within ~3 cells.
+        std::uniform_real_distribution<double> off(-3.0, 3.0);
+        double mx = t.x + off(m_rng);
+        double my = t.y + off(m_rng);
+        mx = std::max(0.5, std::min((double)(COLS - 0.5), mx));
+        my = std::max(0.5, std::min((double)(ROWS - 0.5), my));
+        // Damage enemies near the missile.
+        for (auto &e : m_foes) {
+            if (!e.alive)
+                continue;
+            if (std::abs(e.x - mx) < 1.5 && std::abs(e.y - my) < 1.5) {
+                e.hp = 0;
+                e.alive = false;
+                pushExplosion(e.x, e.y);
+                const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
+                t.score += pts;
+                m_floaters.push_back(Floater{e.x, e.y, pts, 0});
+                if (e.kind == 2)
+                    t.armoredKills++;
+            }
+        }
+        if (m_floaters.size() > 8)
+            m_floaters.erase(m_floaters.begin(), m_floaters.begin() + (m_floaters.size() - 8));
+        pushExplosion(mx, my);
+        if (m_soundEnabled)
+            emit playSound("explode");
+        t.airMissiles--;
+        if (t.airMissiles <= 0)
+            t.airRecharging = true;
+        else
+            t.airTimer = 1.5;
     }
 
     // Respawn dead players that still have lives.
@@ -996,11 +1078,19 @@ void Backend::updateBullets(double dt) {
         // what lets a tank pressed against a 1/4 strip break it and escape.
         {
             const int ccx = int(std::floor(b.x)), ccy = int(std::floor(b.y));
-            if (ccx >= 0 && ccy >= 0 && ccx < COLS && ccy < ROWS
-                && tileAt(ccx, ccy) == Brick && solidAt(b.x, b.y, 0.25)) {
-                chipBrick(ccx, ccy, b.dir);
-                b.active = false;
-                continue;
+            if (ccx >= 0 && ccy >= 0 && ccx < COLS && ccy < ROWS) {
+                const int t0 = tileAt(ccx, ccy);
+                if (t0 == Brick && solidAt(b.x, b.y, 0.25)) {
+                    chipBrick(ccx, ccy, b.dir);
+                    b.active = false;
+                    continue;
+                }
+                if (t0 == Steel && b.big && solidAt(b.x, b.y, 0.25)) {
+                    // CANNON can dig out of steel the same way.
+                    chipBrick(ccx, ccy, b.dir);
+                    b.active = false;
+                    continue;
+                }
             }
         }
         // Capped so a fast shot cannot skip over a quarter-cell gap.
@@ -1024,14 +1114,18 @@ void Backend::updateBullets(double dt) {
         // strips are gone. Checking both axes (the old test) let a shot slip
         // through a gap on the perpendicular axis and skip the surviving strip
         // it was meant to chip — which left the tank stuck against it.
-        // A damaged brick tile whose strips in the shot's way are already
+        // A damaged brick/steel tile whose strips in the shot's way are already
         // gone is a hole: the shot flies straight through it.
-        const bool through = (tile == Brick) && !tileBlocksPoint(nx, ny);
+        const bool through = (tile == Brick || tile == Steel) && !tileBlocksPoint(nx, ny);
         if (!through && (tile == Brick || tile == Steel || tile == Base || tile == BaseDead)) {
             if (tile == Brick) {
                 // The shot shears off the strip facing the direction it came
                 // from.
                 chipBrick(cx, cy, b.dir);
+            } else if (tile == Steel) {
+                // Only CANNON shells chip steel; normal shots are stopped.
+                if (b.big)
+                    chipBrick(cx, cy, b.dir);
             } else if (tile == Base) {
                 m_grid[cy * COLS + cx] = BaseDead;
                 bumpBoard();
@@ -1047,6 +1141,13 @@ void Backend::updateBullets(double dt) {
             if (m_p[i].alive && hitsTank(nx, ny, m_p[i].x, m_p[i].y)) {
                 if (b.owner == 2) {
                     if (m_time < m_p[i].shieldUntil) {
+                        b.active = false;
+                        consumed = true;
+                        break;
+                    }
+                    // Armour layers absorb a hit without losing a life.
+                    if (m_p[i].armorHP > 0) {
+                        m_p[i].armorHP--;
                         b.active = false;
                         consumed = true;
                         break;
@@ -1071,6 +1172,8 @@ void Backend::updateBullets(double dt) {
                         pushExplosion(e.x, e.y);
                         const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
                         m_p[b.owner].score += pts;
+                        if (e.kind == 2)
+                            m_p[b.owner].armoredKills++;
                         m_floaters.push_back(Floater{e.x, e.y, pts, 0});
                         if (m_floaters.size() > 8)
                             m_floaters.erase(m_floaters.begin());
@@ -1202,6 +1305,9 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     b.owner = owner;
     b.active = true;
     b.speed = speed;
+    // LEVELUP tier 1: bullets travel 30% faster.
+    if (owner < 2 && m_p[owner].tier >= 1)
+        b.speed *= 1.3;
     b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
     m_bullets.push_back(b);
     if (owner < 2 && m_soundEnabled)
@@ -1217,8 +1323,21 @@ bool Backend::tileBlocksPoint(double x, double y) const {
     if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
         return true;
     const int t = m_grid[cy * COLS + cx];
-    if (t == Steel || t == Base || t == BaseDead)
+    if (t == Base || t == BaseDead)
         return true;
+    if (t == Steel) {
+        // The base wall is indestructible concrete: never chip, never pass.
+        for (int i : m_baseGuard)
+            if (i == cy * COLS + cx)
+                return true;
+        // Otherwise steel follows the same strip + 50% law as brick.
+        const unsigned m = m_brickQ[cy * COLS + cx];
+        if (goneStrips(m) < BRICK_BLOCKS_BELOW)
+            return true;
+        const int vi = std::min(3, int((x - cx) * 4));
+        const int hi = std::min(3, int((y - cy) * 4));
+        return (m & (1u << vi)) != 0 && (m & (1u << (4 + hi))) != 0;
+    }
     if (t != Brick)
         return false;
     const unsigned m = m_brickQ[cy * COLS + cx];
@@ -1439,8 +1558,14 @@ int Backend::tileAt(int cx, int cy) const {
 void Backend::chipBrick(int cx, int cy, int dir) {
     if (cx < 0 || cy < 0 || cx >= COLS || cy >= ROWS)
         return;
-    if (m_grid[cy * COLS + cx] != Brick)
+    const int t = m_grid[cy * COLS + cx];
+    if (t != Brick && t != Steel)
         return;
+    // The base wall is concrete: CANNON never chips it.
+    if (t == Steel)
+        for (int i : m_baseGuard)
+            if (i == cy * COLS + cx)
+                return;
     uint8_t &m = m_brickQ[cy * COLS + cx];
     // dir: 0 up, 1 right, 2 down, 3 left. A shot travelling horizontally
     // eats a vertical strip; one travelling vertically eats a horizontal one.
@@ -1535,6 +1660,12 @@ void Backend::killPlayer(int idx) {
     // Never below zero: a negative count is neither a spare tank nor a KILLED
     // panel, it is a blank one. Losing the last life takes the player out.
     t.lives = std::max(0, t.lives - 1);
+    // Death resets the offensive tier and all its armour.
+    t.tier = 0;
+    t.armorHP = 0;
+    t.airMissiles = 0;
+    t.airTimer = -1;
+    t.airRecharging = false;
     t.respawn = 2.0;
     if (m_soundEnabled)
         emit playSound("explode");
@@ -1596,7 +1727,7 @@ int Backend::aliveEnemies() const {
 
 // Bonuses only drop from carriers, at the spot where they die.
 void Backend::spawnPickupAt(double x, double y) {
-    std::uniform_int_distribution<int> kind(0, 6);
+    std::uniform_int_distribution<int> kind(0, 7);
     const int cx = int(x), cy = int(y);
     for (int dy = -1; dy <= 1; ++dy)
         for (int dx = -1; dx <= 1; ++dx) {
@@ -1660,6 +1791,20 @@ void Backend::applyPickup(int player) {
         if (m_soundEnabled)
             emit playSound("power");
         break;
+    case LevelUp: {
+        if (t.tier < 4)
+            t.tier++;
+        // Armour layers from tier 3.
+        t.armorHP = armorLayers(t);
+        // Air support at tier 4: fire 3 missiles, 1.5 s apart.
+        if (t.tier >= 4 && !t.airRecharging) {
+            t.airMissiles = 3;
+            t.airTimer = 0;
+        }
+        if (m_soundEnabled)
+            emit playSound("power");
+        break;
+    }
     }
     if (m_pickup.kind != Freeze && m_pickup.kind != Nuke && m_soundEnabled)
         emit playSound("power");
