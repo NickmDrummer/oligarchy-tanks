@@ -264,9 +264,16 @@ void Backend::fireP1() {
         return;
     m_p[0].cooldown = FIRE_GAP;
     fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
-    // LEVELUP tier 2: a second bullet right behind the first.
-    if (m_p[0].tier >= 2)
-        fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
+    // LEVELUP tier 2: a second bullet trailing behind the first, so the
+    // two do not overlap and cancel each other out on the first frame.
+    if (m_p[0].tier >= 2) {
+        double x2 = m_p[0].x, y2 = m_p[0].y;
+        if (m_p[0].dir == 0) y2 += 0.4;
+        if (m_p[0].dir == 2) y2 -= 0.4;
+        if (m_p[0].dir == 1) x2 -= 0.4;
+        if (m_p[0].dir == 3) x2 += 0.4;
+        fireBullet(x2, y2, m_p[0].dir, 0, BULLET_SPEED, false);
+    }
 }
 
 void Backend::fireP2() {
@@ -284,6 +291,15 @@ void Backend::fireP2() {
         return;
     m_p[1].cooldown = FIRE_GAP;
     fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1, BULLET_SPEED);
+    // LEVELUP tier 2: a second bullet trailing behind the first.
+    if (m_p[1].tier >= 2) {
+        double x2 = m_p[1].x, y2 = m_p[1].y;
+        if (m_p[1].dir == 0) y2 += 0.4;
+        if (m_p[1].dir == 2) y2 -= 0.4;
+        if (m_p[1].dir == 1) x2 -= 0.4;
+        if (m_p[1].dir == 3) x2 += 0.4;
+        fireBullet(x2, y2, m_p[1].dir, 1, BULLET_SPEED, false);
+    }
 }
 
 // --- Gamepads ----------------------------------------------------------------
@@ -1307,7 +1323,7 @@ bool Backend::spawnEnemy() {
     return false; // no free slot: only maxConcurrent tanks are ever alive
 }
 
-void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
+void Backend::fireBullet(double x, double y, int dir, int owner, double speed, bool playSnd) {
     int live = 0;
     for (const auto &b : m_bullets)
         if (b.active && b.owner == owner)
@@ -1357,7 +1373,7 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     }
     b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
     m_bullets.push_back(b);
-    if (owner < 2 && m_soundEnabled) {
+    if (playSnd && owner < 2 && m_soundEnabled) {
         if (b.blast)
             emit playSound("blast_missile-shoot");
         else

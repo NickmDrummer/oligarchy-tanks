@@ -254,7 +254,7 @@ private:
     // wall).
     bool spawnEnemy();
     bool cellBusy(double x, double y) const;
-    void fireBullet(double x, double y, int dir, int owner, double speed);
+    void fireBullet(double x, double y, int dir, int owner, double speed, bool playSnd = true);
     double enemySpeedMult() const { return 1.0 + 0.1 * (m_level - 1); }
     bool solidAt(double x, double y, double size) const;
     // Solid terrain test for a single point. Brick is special: under half
