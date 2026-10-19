@@ -212,8 +212,8 @@ carrier is one of the basic tanks: slightly faster, flashing red<->gray, and two
 per stage (section 17). Green runners no longer drop anything.
 Exactly **one pickup at a time**; it expires after 15 s.
 `PickupKind`: `Speed=0, Shield=1, Pick=2, Life=3, Nuke=4, Cannon=5, Freeze=6,
-LevelUp=7` (`Grenade` was renamed to `Nuke` in section 19; the sound is still
-`nuke.wav`).
+LevelUp=7, BlastMissile=8` (`Grenade` was renamed to `Nuke` in section 19; the
+sound is still `nuke.wav`).
 
 | # | Name | Effect | Duration |
 |---|---|---|---|
@@ -225,6 +225,7 @@ LevelUp=7` (`Grenade` was renamed to `Nuke` in section 19; the sound is still
 | 5 | CANNON | one-shot armour (big shell) | 15 s |
 | 6 | FREEZE | enemies stop, and blink through their last 2 s | 8 s |
 | 7 | LEVELUP | raises offensive tier (bullet speed, double shot, armour, air support) | instant |
+| 8 | BLAST | blast missile for 5 s: slower shot, area damage, passes through blocks | 5 s |
 
 **PICK is the Battle City shovel, not a steel breaker.** It **rebuilds the whole
 wall around the base — all five guard tiles, whatever state they were left in**
@@ -1744,8 +1745,15 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
   explosion. The sound must start first; the visual explosion (with a radius
   effect) appears 1 s later. Currently the air support plays `explode.wav`
   per missile with no delay.
-- **BLAST MISSILE** (25% slower than a bullet, area damage of two bullets,
-  enemies only, never blocks; **needs the user's `.wav`**).
+- **BLAST MISSILE** (implemented, C7): pickup that replaces the normal shot for
+  5 bullets (not 5 seconds). The missile is 25% slower than a normal bullet,
+  deals area damage (2 HP to enemies within 1.5 cells), affects only enemies
+  and never blocks. Plays `blast_missile-shoot.wav` on fire (volume 0.805) and
+  `blast_missile-hit.wav` on impact (volume 0.96). The impact shows a small
+  orange radio circle (0.4 s) plus an explosion (without sound). The bullet is
+  rendered as a longer dark-gray missile with a tip and a fire trail, rotated
+  to the fire direction. Still to do: air-support sound wiring
+  (air-support.wav, 2 s).
 
 ### 19.5 Verification
 

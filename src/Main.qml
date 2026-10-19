@@ -116,6 +116,8 @@ ApplicationWindow {
     SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 1.0 }
     SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
     SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 1.0 }
+    SoundEffect { id: sndBlastShoot; source: "qrc:/sounds/blast_missile-shoot.wav"; volume: 0.805 }
+    SoundEffect { id: sndBlastHit; source: "qrc:/sounds/blast_missile-hit.wav"; volume: 0.96 }
     // 8-bit engine putter, loops only while a player tank is rolling.
     // Note: SoundEffect.playing is read-only, so a timer drives play/stop.
     SoundEffect {
@@ -171,6 +173,10 @@ ApplicationWindow {
                 sndPower.play()
             else if (name === "nuke")
                 sndNuke.play()
+            else if (name === "blast_missile-shoot")
+                sndBlastShoot.play()
+            else if (name === "blast_missile-hit")
+                sndBlastHit.play()
         }
         function onStateChanged() { keys.forceActiveFocus() }
         // SELECT / Share on a pad opens the manual, exactly like "?".
@@ -289,6 +295,7 @@ ApplicationWindow {
                                   ? ((backend.players[0].shield ? "SHIELD " : "")
                                      + (backend.players[0].speed ? "SPEED " : "")
                                      + (backend.players[0].cannon ? "CANNON " : "")
+                                     + (backend.players[0].blast ? "BLAST " : "")
                                      + (backend.players[0].tier > 0 ? ("LV " + backend.players[0].tier + " ") : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
@@ -373,6 +380,7 @@ ApplicationWindow {
                                   ? ((backend.players[1].shield ? "SHIELD " : "")
                                      + (backend.players[1].speed ? "SPEED " : "")
                                      + (backend.players[1].cannon ? "CANNON " : "")
+                                     + (backend.players[1].blast ? "BLAST " : "")
                                      + (backend.players[1].tier > 0 ? ("LV " + backend.players[1].tier + " ") : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
@@ -855,15 +863,49 @@ ApplicationWindow {
                     Item {
                         property var b: backend.bulletAt(index, backend.frameTick)
                         visible: b.active
-                        property real s: b.big ? Math.max(12, win.cell * 0.38) : Math.max(8, win.cell * 0.24)
-                        x: b.x * win.cell - s / 2
-                        y: b.y * win.cell - s / 2
-                        width: s; height: s
+                        property real s: b.blast ? Math.max(14, win.cell * 0.4) : (b.big ? Math.max(12, win.cell * 0.38) : Math.max(8, win.cell * 0.24))
+                        property real mw: b.blast ? s * 0.4 : s
+                        property real mh: b.blast ? s * 1.8 : s
+                        x: b.x * win.cell - mw / 2
+                        y: b.y * win.cell - mh / 2
+                        width: mw; height: mh
+                        rotation: b.blast ? (b.dir === 0 ? 0 : b.dir === 1 ? 90 : b.dir === 2 ? 180 : 270) : 0
+                        // Missile body (dark gray).
                         Rectangle {
                             anchors.fill: parent
-                            color: b.big ? "#c8963c" : b.owner === 2 ? "#ff705a" : "#ffd60a"
+                            color: b.blast ? "#4a4a4a" : (b.big ? "#c8963c" : (b.owner === 2 ? "#ff705a" : "#ffd60a"))
+                        }
+                        // Missile tip (diamond).
+                        Rectangle {
+                            visible: b.blast
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.top: parent.top
+                            anchors.topMargin: -width / 2
+                            width: parent.width * 1.4
+                            height: width
+                            rotation: 45
+                            color: "#7a7a7a"
+                        }
+                        // Fire trail behind the missile.
+                        Rectangle {
+                            visible: b.blast
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.top: parent.bottom
+                            width: parent.width * 0.8
+                            height: parent.height * 0.5
+                            color: "#ff6b35"
                         }
                         Rectangle {
+                            visible: b.blast
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.top: parent.bottom
+                            anchors.topMargin: parent.height * 0.3
+                            width: parent.width * 0.5
+                            height: parent.height * 0.4
+                            color: "#ffd700"
+                        }
+                        Rectangle {
+                            visible: !b.blast
                             anchors.centerIn: parent
                             width: parent.width / 2; height: parent.height / 2
                             color: "#ffffff"
@@ -878,8 +920,8 @@ ApplicationWindow {
                     property var k: backend.pickupAt(backend.frameTick)
                     visible: k.active
                     property real s: win.cell * 1.1
-                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff", "#ffd700"]
-                    property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE", "LEVELUP"]
+                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff", "#ffd700", "#ff6b6b"]
+                    property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE", "LEVELUP", "BLAST"]
                     x: k.x * win.cell - s / 2
                     y: k.y * win.cell - (s + 18) / 2
                     width: s; height: s + 18
@@ -1074,6 +1116,26 @@ ApplicationWindow {
                         radius: width / 2
                         color: "#ffd93b"
                         opacity: 0.45 * Math.min(1, (1 - nukeFlash.p) / 0.3)
+                    }
+                }
+
+                // BLAST MISSILE impact: a small orange circle that grows out of
+                // the hit spot (Backend::blastImpact()).
+                Item {
+                    id: blastFlash
+                    property var b: backend.blastImpact
+                    property real p: b.active ? b.progress : 0
+                    visible: b.active
+                    z: 12
+                    x: b.active ? b.x * win.cell : 0
+                    y: b.active ? b.y * win.cell : 0
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: win.cell * 3 * blastFlash.p
+                        height: width
+                        radius: width / 2
+                        color: "#ff6b35"
+                        opacity: 0.5 * Math.min(1, (1 - blastFlash.p) / 0.5)
                     }
                 }
 
@@ -1396,7 +1458,8 @@ ApplicationWindow {
                             ["NUKE", "#ffd93b", "KILLS ALL ENEMIES"],
                             ["CANNON", "#c8963c", "ONE-SHOT ARMOUR (BIG SHELL) FOR 15 S"],
                             ["FREEZE", "#9fd8ff", "ENEMIES STOP FOR 8 S, BLINKING AS THEY THAW"],
-                            ["LEVELUP", "#ffd700", "RAISES OFFENSIVE TIER (SPEED, DOUBLE SHOT, ARMOUR, AIR SUPPORT)"]
+                            ["LEVELUP", "#ffd700", "RAISES OFFENSIVE TIER (SPEED, DOUBLE SHOT, ARMOUR, AIR SUPPORT)"],
+                            ["BLAST", "#ff6b6b", "BLAST MISSILE (5 SHOTS): SLOWER SHOT, AREA DAMAGE (2 HP), PASSES THROUGH BLOCKS"]
                         ]
                         Row {
                             spacing: 16

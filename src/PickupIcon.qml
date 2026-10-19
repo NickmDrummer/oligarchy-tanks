@@ -20,6 +20,7 @@ Item {
     property var cannon: [".........", "...BBBBD.", "..BBBBBDD", ".BBBBBBDD", "BBWWWWWDD", ".BBBBBBDD", "..BBBBBDD", "...BBBBD.", "........."]
     property var snow: ["....X....", "...XXX...", "..X.W.X..", ".X..W..X.", "XXXWWWXXX", ".X..W..X.", "..X.W.X..", "...XXX...", "....X...."]
     property var levelup: ["....U....", "...UUU...", "..UUUUU..", ".UUUUUUU.", "...UUU...", "...UUU...", "...UUU...", "...UUU...", "...UUU..."]
+    property var blast: ["....R....", "...RRR...", "..RRRRR..", ".RRRRRRR.", "...RRR...", "...RRR...", "...RRR...", "..F.F.F..", ".F.....F."]
 
     // Whole-pixel origin for every sprite: a half-pixel one antialiases the
     // grid, and a blurred pixel icon is exactly what "barely legible" looks
@@ -251,6 +252,34 @@ Item {
                         width: Math.max(1, Math.floor(root.side / 9))
                         height: Math.max(1, Math.floor(root.side / 9))
                         color: ch === "U" ? "#ffd700" : ch === "W" ? "#fff3bd" : "transparent"
+                    }
+                }
+            }
+        }
+    }
+    // 8 BLAST: a rocket. Blast missile for 5 s: slower shot, area damage,
+    // passes through blocks.
+    Loader {
+        anchors.fill: parent
+        active: root.kind === 8
+        sourceComponent: blastPart
+    }
+    Component {
+        id: blastPart
+        Item {
+            Grid {
+                x: Math.round((parent.width - width) / 2)
+                y: Math.round((parent.height - height) / 2)
+                columns: 9
+                Repeater {
+                    model: 81
+                    Rectangle {
+                        property int r: Math.floor(index / 9)
+                        property int c: index % 9
+                        property string ch: root.blast[r][c]
+                        width: Math.max(1, Math.floor(root.side / 9))
+                        height: Math.max(1, Math.floor(root.side / 9))
+                        color: ch === "R" ? "#ff6b6b" : ch === "F" ? "#cc3333" : ch === "W" ? "#ffaaaa" : "transparent"
                     }
                 }
             }

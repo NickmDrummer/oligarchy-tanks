@@ -107,7 +107,7 @@ QVariantList Backend::players() const {
             {"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
             {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
-            {"tier", t.tier}, {"armorHP", t.armorHP},
+            {"blast", t.blastShots > 0}, {"tier", t.tier}, {"armorHP", t.armorHP},
             {"active", playerActive(i)}, {"joined", m_joined[i]},
         });
     }
@@ -155,7 +155,7 @@ QVariantMap Backend::bulletAt(int i, int tick) const {
     if (i < 0 || i >= int(m_bullets.size()))
         return {{"x", 0.0}, {"y", 0.0}, {"dir", 0}, {"owner", 2}, {"active", false}, {"big", false}};
     const Bullet &b = m_bullets[i];
-    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}};
+    return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}, {"blast", b.blast}};
 }
 
 QVariantMap Backend::floaterAt(int i, int tick) const {
@@ -451,6 +451,7 @@ void Backend::startGame() {
     m_explosions.clear();
     m_pickup = Pickup{};
     m_nukeAge = -1;
+    m_blastAge = -1;
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
     m_freezeUntil = -1;
@@ -484,6 +485,7 @@ void Backend::nextLevel() {
     m_explosions.clear();
     m_pickup = Pickup{};
     m_nukeAge = -1;
+    m_blastAge = -1;
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
     m_spawned = 0;
@@ -576,6 +578,7 @@ void Backend::clearRun() {
     m_explosions.clear();
     m_pickup = Pickup{};
     m_nukeAge = -1;
+    m_blastAge = -1;
     m_spawned = 0;
     m_spawnTimer = 0;
     m_freezeUntil = -1;
@@ -871,6 +874,7 @@ void Backend::tick() {
     updatePickups(dt);
     // The NUKE blast runs on its own clock and only feeds the overlay.
     updateNuke(dt);
+    updateBlast(dt);
     updateFloaters(dt);
     updateExplosions(dt);
     updateBaseGuard();
@@ -1080,12 +1084,12 @@ void Backend::updateBullets(double dt) {
             const int ccx = int(std::floor(b.x)), ccy = int(std::floor(b.y));
             if (ccx >= 0 && ccy >= 0 && ccx < COLS && ccy < ROWS) {
                 const int t0 = tileAt(ccx, ccy);
-                if (t0 == Brick && solidAt(b.x, b.y, 0.25)) {
+                if (!b.blast && t0 == Brick && solidAt(b.x, b.y, 0.25)) {
                     chipBrick(ccx, ccy, b.dir);
                     b.active = false;
                     continue;
                 }
-                if (t0 == Steel && b.big && solidAt(b.x, b.y, 0.25)) {
+                if (!b.blast && t0 == Steel && b.big && solidAt(b.x, b.y, 0.25)) {
                     // CANNON can dig out of steel the same way.
                     chipBrick(ccx, ccy, b.dir);
                     b.active = false;
@@ -1116,8 +1120,8 @@ void Backend::updateBullets(double dt) {
         // it was meant to chip — which left the tank stuck against it.
         // A damaged brick/steel tile whose strips in the shot's way are already
         // gone is a hole: the shot flies straight through it.
-        const bool through = (tile == Brick || tile == Steel) && !tileBlocksPoint(nx, ny);
-        if (!through && (tile == Brick || tile == Steel || tile == Base || tile == BaseDead)) {
+        const bool through = b.blast || ((tile == Brick || tile == Steel) && !tileBlocksPoint(nx, ny));
+        if (!b.blast && !through && (tile == Brick || tile == Steel || tile == Base || tile == BaseDead)) {
             if (tile == Brick) {
                 // The shot shears off the strip facing the direction it came
                 // from.
@@ -1166,24 +1170,55 @@ void Backend::updateBullets(double dt) {
         for (auto &e : m_foes) {
             if (e.alive && hitsTank(nx, ny, e.x, e.y)) {
                 if (b.owner < 2) {
-                    e.hp = std::max(0, e.hp - (b.big ? 99 : 1));
-                    if (e.hp <= 0) {
-                        e.alive = false;
-                        pushExplosion(e.x, e.y);
-                        const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
-                        m_p[b.owner].score += pts;
-                        if (e.kind == 2)
-                            m_p[b.owner].armoredKills++;
-                        m_floaters.push_back(Floater{e.x, e.y, pts, 0});
+                    if (b.blast) {
+                        // Area damage: 2 HP to the target and nearby enemies.
+                        // The impact point drives the radio circle.
+                        m_blastX = nx;
+                        m_blastY = ny;
+                        m_blastAge = 0;
+                        for (auto &e2 : m_foes) {
+                            if (!e2.alive)
+                                continue;
+                            if (std::abs(e2.x - nx) < 1.5 && std::abs(e2.y - ny) < 1.5) {
+                                e2.hp = std::max(0, e2.hp - 2);
+                                if (e2.hp <= 0) {
+                                    e2.alive = false;
+                                    pushExplosion(e2.x, e2.y);
+                                    const int pts = (e2.kind == 2) ? 300 : (e2.kind == 1) ? 200 : 100;
+                                    m_p[b.owner].score += pts;
+                                    if (e2.kind == 2)
+                                        m_p[b.owner].armoredKills++;
+                                    m_floaters.push_back(Floater{e2.x, e2.y, pts, 0});
+                                    if (e2.kind == 3 && !m_pickup.active)
+                                        spawnPickupAt(e2.x, e2.y);
+                                }
+                            }
+                        }
+                        pushExplosion(nx, ny);
                         if (m_floaters.size() > 8)
-                            m_floaters.erase(m_floaters.begin());
-                        // Green runners carry the bonus: one drops where it dies.
-                        if (e.kind == 3 && !m_pickup.active)
-                            spawnPickupAt(e.x, e.y);
+                            m_floaters.erase(m_floaters.begin(), m_floaters.begin() + (m_floaters.size() - 8));
                         if (m_soundEnabled)
-                            emit playSound("explode");
-                    } else if (m_soundEnabled) {
-                        emit playSound("hit");
+                            emit playSound("blast_missile-hit");
+                    } else {
+                        e.hp = std::max(0, e.hp - (b.big ? 99 : 1));
+                        if (e.hp <= 0) {
+                            e.alive = false;
+                            pushExplosion(e.x, e.y);
+                            const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
+                            m_p[b.owner].score += pts;
+                            if (e.kind == 2)
+                                m_p[b.owner].armoredKills++;
+                            m_floaters.push_back(Floater{e.x, e.y, pts, 0});
+                            if (m_floaters.size() > 8)
+                                m_floaters.erase(m_floaters.begin());
+                            // Green runners carry the bonus: one drops where it dies.
+                            if (e.kind == 3 && !m_pickup.active)
+                                spawnPickupAt(e.x, e.y);
+                            if (m_soundEnabled)
+                                emit playSound("explode");
+                        } else if (m_soundEnabled) {
+                            emit playSound("hit");
+                        }
                     }
                     b.active = false;
                     consumed = true;
@@ -1308,10 +1343,20 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed) {
     // LEVELUP tier 1: bullets travel 30% faster.
     if (owner < 2 && m_p[owner].tier >= 1)
         b.speed *= 1.3;
+    // BLAST MISSILE: 25% slower than a normal bullet, 5 shots per pickup.
+    b.blast = (owner < 2 && m_p[owner].blastShots > 0);
+    if (b.blast) {
+        m_p[owner].blastShots--;
+        b.speed = BULLET_SPEED * 0.75;
+    }
     b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
     m_bullets.push_back(b);
-    if (owner < 2 && m_soundEnabled)
-        emit playSound("shoot");
+    if (owner < 2 && m_soundEnabled) {
+        if (b.blast)
+            emit playSound("blast_missile-shoot");
+        else
+            emit playSound("shoot");
+    }
 }
 
 // Solid terrain stops a single point. Brick is special: under half
@@ -1666,6 +1711,8 @@ void Backend::killPlayer(int idx) {
     t.airMissiles = 0;
     t.airTimer = -1;
     t.airRecharging = false;
+    t.blastUntil = -1;
+    t.blastShots = 0;
     t.respawn = 2.0;
     if (m_soundEnabled)
         emit playSound("explode");
@@ -1727,7 +1774,7 @@ int Backend::aliveEnemies() const {
 
 // Bonuses only drop from carriers, at the spot where they die.
 void Backend::spawnPickupAt(double x, double y) {
-    std::uniform_int_distribution<int> kind(0, 7);
+    std::uniform_int_distribution<int> kind(0, 8);
     const int cx = int(x), cy = int(y);
     for (int dy = -1; dy <= 1; ++dy)
         for (int dx = -1; dx <= 1; ++dx) {
@@ -1805,6 +1852,12 @@ void Backend::applyPickup(int player) {
             emit playSound("power");
         break;
     }
+    case BlastMissile:
+        t.blastShots = 5;
+        t.blastUntil = m_time + 9999; // kept for compat; blastShots drives the count
+        if (m_soundEnabled)
+            emit playSound("power");
+        break;
     }
     if (m_pickup.kind != Freeze && m_pickup.kind != Nuke && m_soundEnabled)
         emit playSound("power");
@@ -1828,6 +1881,24 @@ void Backend::updateNuke(double dt) {
     m_nukeAge += dt;
     if (m_nukeAge > NUKE_FLASH_TIME)
         m_nukeAge = -1;
+}
+
+QVariantMap Backend::blastImpact() const {
+    if (m_blastAge < 0)
+        return {{"active", false}};
+    const double t = 0.4;
+    return {{"x", m_blastX},
+            {"y", m_blastY},
+            {"progress", std::min(1.0, m_blastAge / t)},
+            {"active", true}};
+}
+
+void Backend::updateBlast(double dt) {
+    if (m_blastAge < 0)
+        return;
+    m_blastAge += dt;
+    if (m_blastAge > 0.4)
+        m_blastAge = -1;
 }
 
 void Backend::updatePickups(double dt) {

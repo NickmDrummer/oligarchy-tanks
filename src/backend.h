@@ -41,6 +41,9 @@ class Backend : public QObject {
     // The NUKE blast: a circle that grows out of the spot where the bonus was
     // picked up until it covers the board. {x, y, progress, active}.
     Q_PROPERTY(QVariantMap nuke READ nuke NOTIFY frameChanged)
+    // The BLAST MISSILE impact: a small circle that grows out of the hit spot.
+    // {x, y, progress, active}.
+    Q_PROPERTY(QVariantMap blastImpact READ blastImpact NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
     // Connected pads and the player each one drives (-1 until it joins).
     Q_PROPERTY(QVariantList pads READ pads NOTIFY padsChanged)
@@ -88,6 +91,7 @@ public:
     bool frozen() const { return m_time < m_freezeUntil; }
     bool freezeEnding() const { return m_time < m_freezeUntil && m_freezeUntil - m_time <= 2.0; }
     QVariantMap nuke() const;
+    QVariantMap blastImpact() const;
     int totalForLevel() const { return TOTAL_ENEMIES; }
 
     // Stable per-slot getters for QML. Delegates are created once with a
@@ -167,6 +171,9 @@ private:
         double shieldUntil = -1;
         double speedUntil = -1;
         double cannonUntil = -1;
+        double blastUntil = -1;
+        // BLAST MISSILE: number of blast shots remaining (5 per pickup).
+        int blastShots = 0;
         // Offensive tier from LEVELUP: 0 default, 1..4. Resets on death,
         // survives a sector change.
         int tier = 0;
@@ -214,10 +221,11 @@ private:
         bool active = false;
         double speed = 0;
         bool big = false;
+        bool blast = false;
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
-    enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Nuke = 4, Cannon = 5, Freeze = 6, LevelUp = 7 };
+    enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Nuke = 4, Cannon = 5, Freeze = 6, LevelUp = 7, BlastMissile = 8 };
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
@@ -296,6 +304,8 @@ private:
     // The NUKE blast that QML draws: it grows out of the spot where the bonus
     // was picked up and is gone NUKE_FLASH_TIME later.
     void updateNuke(double dt);
+    // The BLAST MISSILE impact circle.
+    void updateBlast(double dt);
     void updateFloaters(double dt);
     void updateExplosions(double dt);
 
@@ -354,6 +364,9 @@ private:
     // running. A negative age means no blast is on screen.
     double m_nukeX = 0, m_nukeY = 0;
     double m_nukeAge = -1;
+    // BLAST MISSILE impact circle.
+    double m_blastX = 0, m_blastY = 0;
+    double m_blastAge = -1;
     // Concrete wall around the base, granted by PICK. Negative means off.
     double m_baseGuardUntil = -1;
     std::vector<int> m_baseGuard;
