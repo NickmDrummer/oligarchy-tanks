@@ -1941,3 +1941,21 @@ installs binaries), so an app cannot be listed there. The chosen route:
 - **Arcade stickers** (bezel art) around the display perimeter, covering the
   board's frame like a coin-op cabinet.
 - **The manual needs corrections** (the user's list, pending).
+
+### 21.5 Fixed round: the base draws the Omarchy mark
+
+The base tile now renders the **square Omarchy logo** instead of the 3x5
+"omarchy" wordmark: the official mark (`/usr/share/omarchy/icon.txt`) collapsed
+2x2 into a 27x13 block grid, hard coded in `Main.qml` so the game needs nothing
+from the host. Reviewed over three user captures:
+
+- white glyph out: the glyph is transparent and shows the board, so the mark
+  reads as the green square alone,
+- the plate is hard-coded **`#9ece6a`**, not `theme.accent` — the user wants
+  the Omarchy green regardless of the desktop theme,
+- the mark is 2:1 by design, so uniform blocks left the tile half-empty and
+  read squashed; the vertical block is stretched (`cell/17` vs `cell/29`) to
+  fill the tile,
+- the tile's accent border is gone (user request; it read as UI chrome).
+The dead variant keeps its muted reds (`#7a3535` plate on `#3d1010`). Approved
+by the user over the final capture.
