@@ -1739,6 +1739,11 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
   blocks, recharges after 10 armored kills). Tiers survive a sector change and
   reset on death. CANNON one-shot armour is max(tierArmor, cannon ? 1 : 0).
   Level indicator shown in the player panel when tier > 0.
+  **Air-support sound** (to be wired, file at `~/Documents/sonidosTanks/air-support.wav`):
+  2 s total — first 1 s is the missile falling, the second 1 s is the
+  explosion. The sound must start first; the visual explosion (with a radius
+  effect) appears 1 s later. Currently the air support plays `explode.wav`
+  per missile with no delay.
 - **BLAST MISSILE** (25% slower than a bullet, area damage of two bullets,
   enemies only, never blocks; **needs the user's `.wav`**).
 
