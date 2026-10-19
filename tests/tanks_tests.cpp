@@ -124,6 +124,10 @@ struct TanksTestAccess {
             for (int x = x0; x <= x1; ++x)
                 putTile(b, x, y, Empty);
     }
+    static void stepBullets(Backend &b, double dt) { b.updateBullets(dt); }
+    static unsigned brickMaskAt(const Backend &b, int x, int y) {
+        return b.m_brickQ[y * Backend::COLS + x];
+    }
     // ---- enemies getting stuck (section 17.5) ----
     static void seed(Backend &b, unsigned s) { b.m_rng.seed(s); }
     static void remap(Backend &b) { b.generateMap(); }
@@ -1157,6 +1161,49 @@ private slots:
         QCOMPARE(TanksTestAccess::armouredKills(b, 1), 1);
         QCOMPARE(b.players().at(0).toMap().value("score").toInt(), p0score);
         QCOMPARE(b.players().at(1).toMap().value("score").toInt(), p1score + 300);
+    }
+
+    // With the tank pressed against a block the shot used to be pulled back
+    // all the way to the tank centre, hiding it under the sprite and reading
+    // as "the shot never came out" (section 20.8).
+    void shotLeavesTheMuzzleAgainstABlock() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::clearArea(b, 1, 9, 6, 12);
+        TanksTestAccess::putTile(b, 4, 10, TanksTestAccess::Brick);
+        TanksTestAccess::putPlayer(b, 0, 3.5, 10.5);
+        TanksTestAccess::tank(b, 0).dir = 1; // firing right, at the brick
+        const unsigned intact = TanksTestAccess::brickMaskAt(b, 4, 10);
+        b.fireP1();
+        QCOMPARE(b.bullets().size(), 1);
+        // The shot must spawn at the muzzle, not under the tank centre.
+        const double x0 = b.bullets().at(0).toMap().value("x").toDouble();
+        QVERIFY2(x0 >= 3.7, qPrintable(QString("spawn x0=%1").arg(x0)));
+        QVERIFY2(x0 <= 3.9, qPrintable(QString("spawn on the hull edge x0=%1").arg(x0)));
+        // It then dies on the wall and takes at least one strip with it.
+        for (int i = 0; i < 12 && b.bullets().size() == 1; ++i)
+            TanksTestAccess::stepBullets(b, 1.0 / 60.0);
+        QVERIFY2(TanksTestAccess::brickMaskAt(b, 4, 10) != intact, "wall not chipped");
+        QCOMPARE(b.bullets().size(), 0);
+    }
+
+    // Same story at the arena border: the tip is past the edge, so the shot
+    // must still come out of the muzzle instead of being born at the centre.
+    void shotFiresAtTheArenaEdge() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::clearArea(b, 10, 9, 14, 12);
+        TanksTestAccess::putPlayer(b, 0, 14.45, 10.5); // flush-ish vs the right edge
+        TanksTestAccess::tank(b, 0).dir = 1;
+        b.fireP1();
+        QCOMPARE(b.bullets().size(), 1);
+        const double x0 = b.bullets().at(0).toMap().value("x").toDouble();
+        QVERIFY2(x0 >= 14.2, qPrintable(QString("spawn x0=%1").arg(x0)));
+        QVERIFY2(x0 < 15.0, qPrintable(QString("inside the arena x0=%1").arg(x0)));
+        // It flies out of the arena within a few frames.
+        for (int i = 0; i < 8 && b.bullets().size() == 1; ++i)
+            TanksTestAccess::stepBullets(b, 1.0 / 60.0);
+        QCOMPARE(b.bullets().size(), 0);
     }
 
     // The tier-4 air support recharges once the player has 10 armoured kills.

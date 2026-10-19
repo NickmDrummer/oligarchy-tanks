@@ -1333,16 +1333,25 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed, b
             ++live;
     if (live >= 2)
         return;
+    // Spawn at the barrel tip (0.6 ahead, clear of the hull). If the tip is
+    // past the arena edge or inside solid terrain — usually the tank is
+    // pressed against a block — walk back along the barrel to the last clear
+    // point instead of jumping to the tank centre: a shot born in the middle
+    // of the hull never becomes visible and reads as "the shot never came
+    // out". Only when nothing on the barrel is clear (rare: the tank sits
+    // inside blocked terrain) does the old centre spawn remain, which
+    // updateBullets() still handles via its first-update chip.
+    const double ux = (dir == 1) ? 1.0 : (dir == 3) ? -1.0 : 0.0;
+    const double uy = (dir == 2) ? 1.0 : (dir == 0) ? -1.0 : 0.0;
     double bx = x, by = y;
-    // Start at the barrel tip so shots do not collide with the shooter.
-    if (dir == 0) by -= 0.6;
-    if (dir == 2) by += 0.6;
-    if (dir == 3) bx -= 0.6;
-    if (dir == 1) bx += 0.6;
-    // Never spawn outside the arena or inside a wall; pull back to center.
-    if (bx < 0.15 || by < 0.15 || bx >= COLS - 0.15 || by >= ROWS - 0.15) {
-        bx = x;
-        by = y;
+    for (double d = 0.6; d > 0.15; d -= 0.05) {
+        const double tx = x + ux * d, ty = y + uy * d;
+        const bool inBounds = tx >= 0.15 && ty >= 0.15 && tx < COLS - 0.15 && ty < ROWS - 0.15;
+        if (inBounds && !solidAt(tx, ty, 0.25)) {
+            bx = tx;
+            by = ty;
+            break;
+        }
     }
     // If the barrel tip lands in a different, empty cell (e.g. the tank is
     // pressed against a 1/4 brick strip and the tip overshoots into the open
@@ -1353,10 +1362,6 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed, b
         const int bcx = int(std::floor(bx)), bcy = int(std::floor(by));
         if (tileAt(bcx, bcy) == Empty && tileAt(tcx, tcy) == Brick)
             bx = x, by = y;
-    }
-    if (solidAt(bx, by, 0.25)) {
-        bx = x;
-        by = y;
     }
     Bullet b;
     b.x = bx;
