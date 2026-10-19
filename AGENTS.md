@@ -1834,10 +1834,10 @@ The trailing bullet is now gated on `blastShots <= 0`: BLAST fully replaces the
 shot and never stacks with tiers (commit `74e486b`).
 
 ### 20.6 Verification state
-`bin/build` clean, `bin/test` **58/58**, offscreen smoke with no output.
+`bin/build` clean, `bin/test` **60/60**, offscreen smoke with no output.
 Played and approved by the user: the whole section-19 batch, the shield
-visuals, the tier-2/BLAST fix, the fullscreen/F11 window and the
-air-support owner/recharge fix are committed.
+visuals, the tier-2/BLAST fix, the fullscreen/F11 window, the air-support
+owner/recharge fix and the pressed-against-block shot fix are committed.
 
 ### 20.7 Window: fullscreen by default, F11 toggles
 The window was hard-coded 1040x800 and had no native fullscreen, so Hyprland
@@ -1848,14 +1848,17 @@ fullscreen <-> windowed; windowed keeps the 1040x800 design size so the pixel
 layout reads the same in both states. This is also why chat screenshots of the
 game must be taken in fullscreen to be pixel-representative.
 
-### 20.8 Pending: no shot spawns while the tank is pressed against a block or an enemy
-Reported by the user right after the tier-2 double-bullet work, explicitly
-deferred to a later fix. Repro: drive the tank flush against a block (or an
-enemy) and fire — no visible shot comes out. Suspects, unverified: the
-fireBullet() spawn (barrel tip 0.6 ahead, pulled back to the tank centre when
-the tip lands on something solid) may still land inside the blocker when the
-tank itself is flush against it, so the bullet dies on its first
-updateBullets() step; the `live >= 2` cap could also eat the tier-2 trailing
-bullet if the first one is stuck active. May actually pre-date the
-double-bullet change — needs a reproduction and a bisect-style check before
-any fix. Not started.
+### 20.8 Fixed: no shot spawned while the tank was pressed against a block
+The `solidAt()` pull-back spawned the bullet at the tank centre whenever the
+barrel tip landed inside solid terrain, so a tank flush against a block fired
+a shot that was hidden under the hull, walked ~3 frames and died on the wall —
+it read as "the shot never came out". Enemies did not trigger it because
+`solidAt()` only sees tiles, so the tip stayed clear and the shot was born at
+the muzzle. `fireBullet()` now walks the barrel back from the tip (0.6) in
+0.05 steps to the last clear point, and only falls back to the centre when
+nothing on the barrel is clear (the tank sits inside blocked terrain; the
+first-update chip in `updateBullets()` still handles a blocked-centre spawn).
+The same walk replaced the old out-of-bounds-to-centre rule, so firing along
+the arena edge also shows the shot leaving the muzzle. Tests:
+`shotLeavesTheMuzzleAgainstABlock` (hull-edge spawn + the wall chips) and
+`shotFiresAtTheArenaEdge`; `bin/test` is 60/60.
