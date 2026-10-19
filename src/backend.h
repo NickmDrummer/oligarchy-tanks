@@ -400,6 +400,8 @@ private:
     int m_spawned = 0;
     double m_spawnTimer = 0;
     bool m_soundEnabled = true;
+    // Debug: TANKS_TIER=N starts the player at that tier (air support testing).
+    int m_debugTier = -1;
     QTimer m_timer;
     std::mt19937 m_rng{std::random_device{}()};
 };

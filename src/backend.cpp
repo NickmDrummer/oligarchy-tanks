@@ -37,6 +37,9 @@ Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) 
     // Fixed seed for deterministic tests via TANKS_SEED.
     if (const char *seed = std::getenv("TANKS_SEED"))
         m_rng.seed(unsigned(std::atoi(seed)));
+    // Debug tier for testing air support: TANKS_TIER=4 starts at tier 4.
+    if (const char *t = std::getenv("TANKS_TIER"))
+        m_debugTier = std::atoi(t);
     generateMap();
     resetTanks(true);
     // The select screen is up, so no tank is on the board yet: startGame()
@@ -446,6 +449,18 @@ void Backend::startGame() {
     m_freezeUntil = -1;
     generateMap();
     resetTanks(true);
+    // Debug: start at a given tier for testing air support etc.
+    if (m_debugTier >= 0 && m_debugTier <= 4) {
+        for (int i = 0; i < m_playerCount; ++i) {
+            m_p[i].tier = m_debugTier;
+            m_p[i].armorHP = (m_debugTier >= 3) ? 3 : 0;
+            if (m_debugTier >= 4) {
+                m_p[i].airMissiles = 3;
+                m_p[i].airTimer = 0;
+                m_p[i].airRecharging = false;
+            }
+        }
+    }
     m_bullets.clear();
     m_floaters.clear();
     m_explosions.clear();
