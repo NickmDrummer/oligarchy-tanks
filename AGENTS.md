@@ -878,7 +878,8 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
     the `/tmp/opencode/pick` probe. **Waiting for the user to play, then
     commit.** Landed with the same batch: CANNON breaking steel by strip
     (section 19.4, now done). Still to come from the same list: the LEVELUP
-    five tiers, the BLAST MISSILE, and the `GAME` section of the manual.
+    five tiers and the BLAST MISSILE. The `GAME` section of the manual is
+    now implemented (C8).
 
 ---
 
