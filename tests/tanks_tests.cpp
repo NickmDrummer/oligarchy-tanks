@@ -140,6 +140,26 @@ struct TanksTestAccess {
         b.m_pickup.active = true;
         b.applyPickup(player);
     }
+    // ---- power-up effects (section 19) ----
+    static constexpr int PickKind = 2;   // PickupKind::Pick
+    static constexpr int NukeKind = 4;   // PickupKind::Nuke
+    static constexpr int CannonKind = 5; // PickupKind::Cannon
+    // A bonus lying on the board, at a known spot.
+    static void putPickup(Backend &b, int kind, double x, double y) {
+        b.m_pickup = Backend::Pickup{x, y, kind, 0, true};
+    }
+    static void takePickupAt(Backend &b, int player) { b.applyPickup(player); }
+    static bool blastActive(const Backend &b) { return b.nuke()["active"].toBool(); }
+    static double blastX(const Backend &b) { return b.nuke()["x"].toDouble(); }
+    static double blastY(const Backend &b) { return b.nuke()["y"].toDouble(); }
+    static double blastProgress(const Backend &b) { return b.nuke()["progress"].toDouble(); }
+    static void stepBlast(Backend &b, double dt) { b.updateNuke(dt); }
+    static bool frozen(const Backend &b) { return b.frozen(); }
+    static bool freezeEnding(const Backend &b) { return b.freezeEnding(); }
+    static void freezeFor(Backend &b, double seconds) { b.m_freezeUntil = b.m_time + seconds; }
+    // What is left of the two effects the user shortened, in seconds.
+    static double guardLeft(const Backend &b) { return b.m_baseGuardUntil - b.m_time; }
+    static double cannonLeft(const Backend &b, int i) { return b.m_p[i].cannonUntil - b.m_time; }
 };
 
 // Records what the mapper made of a pad, so the mapping rules can be asserted
@@ -605,6 +625,65 @@ private slots:
         TanksTestAccess::givePickup(b, 1, TanksTestAccess::LifeKind);
         QCOMPARE(TanksTestAccess::playerLives(b, 1), 4);
         QCOMPARE(TanksTestAccess::playerLives(b, 0), 3);
+    }
+
+    // --- Power-ups (section 19) ---------------------------------------------
+
+    // The NUKE blast grows out of the spot where the bonus was picked up, not
+    // out of the board's centre and not out of the picking player.
+    void theNukeBlastStartsWhereTheBonusWasPickedUp() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::putEnemy(b, 9.5, 9.5);
+        QVERIFY(!TanksTestAccess::blastActive(b)); // nothing runs on its own
+        TanksTestAccess::putPickup(b, TanksTestAccess::NukeKind, 6.5, 10.5);
+        TanksTestAccess::takePickupAt(b, 0);
+        QVERIFY(TanksTestAccess::blastActive(b));
+        QCOMPARE(TanksTestAccess::blastX(b), 6.5);
+        QCOMPARE(TanksTestAccess::blastY(b), 10.5);
+        QCOMPARE(TanksTestAccess::blastProgress(b), 0.0);
+        QCOMPARE(TanksTestAccess::enemiesAlive(b), 0); // and the board is swept
+    }
+
+    void theNukeBlastGrowsAndThenGoesAway() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::putPickup(b, TanksTestAccess::NukeKind, 2.5, 2.5);
+        TanksTestAccess::takePickupAt(b, 0);
+        TanksTestAccess::stepBlast(b, 0.3);
+        QVERIFY(TanksTestAccess::blastActive(b));           // half way
+        QCOMPARE(TanksTestAccess::blastProgress(b), 0.5);
+        TanksTestAccess::stepBlast(b, 0.4);                 // past the 0.6 s
+        QVERIFY(!TanksTestAccess::blastActive(b));
+    }
+
+    // The freeze blinks only in its last two seconds, and stops the moment the
+    // timer runs out.
+    void theFreezeOnlyBlushesWhileItIsEnding() {
+        Backend b;
+        TanksTestAccess::freezeFor(b, 8.0);
+        QVERIFY(TanksTestAccess::frozen(b));
+        QVERIFY(!TanksTestAccess::freezeEnding(b)); // 8 s left is not the end
+        TanksTestAccess::freezeFor(b, 1.5);
+        QVERIFY(TanksTestAccess::frozen(b));
+        QVERIFY(TanksTestAccess::freezeEnding(b));
+        TanksTestAccess::freezeFor(b, -0.1);
+        QVERIFY(!TanksTestAccess::frozen(b));
+        QVERIFY(!TanksTestAccess::freezeEnding(b));
+    }
+
+    // PICK and CANNON were 20 s and are 15 s now. Asserted against the clock
+    // the effects themselves read, so a wrong constant cannot hide.
+    void pickAndCannonNowLastFifteenSeconds() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::putPickup(b, TanksTestAccess::PickKind, 7.5, 13.5);
+        TanksTestAccess::takePickupAt(b, 0);
+        QVERIFY(TanksTestAccess::baseGuardActive(b));
+        QCOMPARE(TanksTestAccess::guardLeft(b), 15.0);
+        TanksTestAccess::putPickup(b, TanksTestAccess::CannonKind, 5.5, 5.5);
+        TanksTestAccess::takePickupAt(b, 0);
+        QCOMPARE(TanksTestAccess::cannonLeft(b, 0), 15.0);
     }
 
     // --- Gamepads -----------------------------------------------------------

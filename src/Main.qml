@@ -688,7 +688,7 @@ ApplicationWindow {
                     }
                 }
 
-                // Enemies: 0 gray basic, 1 green fast, 2 steel armored.
+                // Enemies: 0 gray basic, 1 yellow wheeled fast, 2 steel armored.
                 // Fixed model: delegates persist, only properties update.
                 Repeater {
                     model: 6
@@ -699,6 +699,10 @@ ApplicationWindow {
                         y: e.y * win.cell - height / 2
                         width: win.cell * 0.94
                         height: win.cell * 0.94
+                        // FREEZE blinks while it is about to run out, so the
+                        // thaw is not a surprise.
+                        opacity: (backend.freezeEnding
+                                  && Math.floor(backend.frameTick / 20) % 2 === 0) ? 0.25 : 1
                         // Armored tanks shift colour with each hit:
                         // purple (full) -> cyan (1 hit) -> gray (vulnerable).
                         // Carriers flash red <-> gray.
@@ -743,9 +747,8 @@ ApplicationWindow {
                         // Basic and carrier use treads, the fast tank wheels and
                         // the armoured tank the chunkier plated hull.
                         property int enemyVariant: e.kind === 1 ? 1 : (e.kind === 2 ? 2 : 0)
-                        // Frost while time is frozen: a big iced patch under
-                        // the tank plus one smaller patch in the ground the
-                        // tank does not cover. Built only while frozen.
+                        // Frost while time is frozen: a single big iced patch
+                        // under the tank. Built only while frozen.
                         Loader {
                             active: backend.frozen
                             anchors.fill: parent
@@ -757,15 +760,6 @@ ApplicationWindow {
                                         anchors.centerIn: parent
                                         width: parent.width * 1.9
                                         height: parent.height * 1.9
-                                    }
-                                    FrostSprite {
-                                        anchors.centerIn: parent
-                                        anchors.horizontalCenterOffset: parent.width * 0.8
-                                        anchors.verticalCenterOffset: parent.height * 0.65
-                                        width: parent.width * 0.8
-                                        height: parent.height * 0.8
-                                        opacity: 0.8
-                                        rotation: 270
                                     }
                                 }
                             }
@@ -865,8 +859,8 @@ ApplicationWindow {
                     property var k: backend.pickupAt(backend.frameTick)
                     visible: k.active
                     property real s: win.cell * 1.1
-                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#4e8a42", "#c8963c", "#9fd8ff"]
-                    property var labels: ["SPEED", "SHIELD", "PICK", "1UP", "GRENADE", "CANNON", "FREEZE"]
+                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff"]
+                    property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE"]
                     x: k.x * win.cell - s / 2
                     y: k.y * win.cell - (s + 18) / 2
                     width: s; height: s + 18
@@ -1037,6 +1031,31 @@ ApplicationWindow {
                     border.color: "#000000"
                     border.width: 6
                     opacity: 0.55
+                }
+
+                // NUKE: a semi-transparent yellow blast that grows out of the
+                // spot where the bonus was picked up until it covers the whole
+                // board, then fades (Backend::nuke()).
+                Item {
+                    id: nukeFlash
+                    property var n: backend.nuke
+                    property real p: n.active ? n.progress : 0
+                    visible: n.active
+                    z: 12
+                    x: n.active ? n.x * win.cell : 0
+                    y: n.active ? n.y * win.cell : 0
+                    // A radius of one board diagonal reaches every corner from
+                    // any spot on the board.
+                    property real reach: win.cell * Math.sqrt(backend.cols * backend.cols
+                                                             + backend.rows * backend.rows)
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: nukeFlash.reach * 2 * nukeFlash.p
+                        height: width
+                        radius: width / 2
+                        color: "#ffd93b"
+                        opacity: 0.45 * Math.min(1, (1 - nukeFlash.p) / 0.3)
+                    }
                 }
 
                 // State overlay: pixel panel, no Material.
@@ -1353,11 +1372,11 @@ ApplicationWindow {
                         model: [
                             ["SPEED", "#edc400", "+35% MOVEMENT FOR 20 S"],
                             ["SHIELD", "#c9ced6", "BLOCKS SHOTS FOR 10 S"],
-                            ["PICK", "#b9c0c9", "BASE WALL BECOMES CONCRETE FOR 20 S"],
-                            ["1UP", "#e8e8e8", "+1 LIFE (CAP 5)"],
-                            ["GRENADE", "#4e8a42", "KILLS ALL ENEMIES"],
-                            ["CANNON", "#c8963c", "ONE-SHOT ARMOUR (BIG SHELL) FOR 20 S"],
-                            ["FREEZE", "#9fd8ff", "ENEMIES STOP FOR 8 S"]
+                            ["PICK", "#b9c0c9", "BASE WALL BECOMES CONCRETE FOR 15 S"],
+                            ["LIFE", "#e8e8e8", "+1 LIFE (CAP 5), OR REVIVES A PARTNER WHO IS OUT"],
+                            ["NUKE", "#ffd93b", "KILLS ALL ENEMIES"],
+                            ["CANNON", "#c8963c", "ONE-SHOT ARMOUR (BIG SHELL) FOR 15 S"],
+                            ["FREEZE", "#9fd8ff", "ENEMIES STOP FOR 8 S, BLINKING AS THEY THAW"]
                         ]
                         Row {
                             spacing: 16

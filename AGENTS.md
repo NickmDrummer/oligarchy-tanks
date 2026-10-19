@@ -10,17 +10,18 @@
 > Keep it current: update the state sections (`Current tree state`, `Feature
 > inventory`, `Next move`) whenever the state of the build changes.
 >
-> Snapshot: `HEAD` is the **enemy overhaul, phase C** (section 17) — *"Overhaul
-> the enemies: 16 a stage, carriers, and the death/freeze/shield visuals"* — on
-> top of the UI overhaul, phase 1 (section 16), the player-count select screen
-> (commit **C**, section 12.2), the two gamepad commits (section 12.1 **A** and
-> **B**) and the brick/PICK/frame-rate commit. Nothing pushed. It builds and
-> `bin/test` passes 44/44; the user played the visuals (explosion, frost,
-> shield) across several rounds and asked for this commit. **One part of it was
-> not played: the fixed 16 tanks a stage** (the tree still had
-> `8 + 2*(level-1)` and the new composition assumed 16; it was corrected at
-> commit time, section 17). If the sector size feels wrong in play, that is the
-> one-line follow-up.
+> Snapshot: `HEAD` is the **power-ups, round 1** (section 19) on top of the
+> **section 18 round** — `0399f60` *Fix enemies getting stuck and a player who is
+> out on the next sector* and `b41a9f6` *Recolour the tanks and redraw the
+> wheeled chassis with a grey contour* — which in turn sits on the **enemy
+> overhaul, phase C** (section 17) — *"Overhaul the enemies: 16 a stage,
+> carriers, and the death/freeze/shield visuals"* — the UI overhaul, phase 1
+> (section 16), the player-count select screen (commit **C**, section 12.2), the
+> two gamepad commits (section 12.1 **A** and **B**) and the brick/PICK/frame-rate
+> commit. **Nothing pushed.** It builds and `bin/test` passes **56/56**.
+> **Section 19 is not committed and not played yet**: it is implemented,
+> `bin/test` passes and the `/tmp/opencode/pick` probe checks it, and the gate is
+> the user's play session.
 > **Open:** one unreproducible `QSocketNotifier: Invalid socket 59 and type
 > 'Read', disabling...` during a play session, together with a game that had to
 > be interrupted with `^C` right when the base went down. It is not caused by
@@ -210,17 +211,18 @@ Only **carriers (kind 3)** drop a bonus, where they die (`spawnPickupAt`). A
 carrier is one of the basic tanks: slightly faster, flashing red<->gray, and two
 per stage (section 17). Green runners no longer drop anything.
 Exactly **one pickup at a time**; it expires after 15 s.
-`PickupKind`: `Speed=0, Shield=1, Pick=2, Life=3, Grenade=4, Cannon=5, Freeze=6`.
+`PickupKind`: `Speed=0, Shield=1, Pick=2, Life=3, Nuke=4, Cannon=5, Freeze=6`
+(`Grenade` was renamed to `Nuke` in section 19; the sound is still `nuke.wav`).
 
 | # | Name | Effect | Duration |
 |---|---|---|---|
 | 0 | SPEED | +35% movement | 20 s |
 | 1 | SHIELD | blocks shots | 10 s |
-| 2 | PICK | base wall becomes concrete | 20 s |
-| 3 | 1UP | +1 life (cap 5) | instant |
-| 4 | GRENADE | kills all enemies, awards their score, nuke sound | instant |
-| 5 | CANNON | one-shot armour (big shell) | 20 s |
-| 6 | FREEZE | enemies stop | 8 s |
+| 2 | PICK | base wall becomes concrete | 15 s |
+| 3 | LIFE | +1 life (cap 5), or revives an eliminated partner | instant |
+| 4 | NUKE | kills all enemies, awards their score, nuke sound, board-wide blast drawn by QML | instant |
+| 5 | CANNON | one-shot armour (big shell) | 15 s |
+| 6 | FREEZE | enemies stop, and blink through their last 2 s | 8 s |
 
 **PICK is the Battle City shovel, not a steel breaker.** It **rebuilds the whole
 wall around the base — all five guard tiles, whatever state they were left in**
@@ -287,10 +289,10 @@ flag are **gone** — do not reintroduce them. Implementation:
   way: a shot-away guard tile comes back as `Steel` along with the rest of the
   wall, a tank parked in the gap is crushed (player loses a life, enemy dies with
   no score), and `updateBaseGuard()` puts whole brick back.
-- All tests pass (`bin/test`): 43 slots = `initTestCase` + 41 cases +
+- All tests pass (`bin/test`): **56 slots** = `initTestCase` + 54 cases +
   `cleanupTestCase` (20 before the gamepad work: 3 mapper cases and 8 pad cases
   were added, plus 12 for the select screen, the player count and the game over
-  screen — sections 14 and 15).
+  screen — sections 14 and 15 — then 8 for section 18 and 4 for section 19).
 - **User-confirmed on screen, by playing** (this was the gate for the commit):
   - The sheared strips disappear as *nothing*: no contour line, no lighter fill.
   - As the strips go, the tank pushes further into the block. The user prefers
@@ -310,6 +312,12 @@ flag are **gone** — do not reintroduce them. Implementation:
   no Material style, and the select screen rebuilt out of key caps, pad pictures
   and a tank marker. `bin/test` 43/43 and the QML probe 37/37, and the user
   approved the screenshots — but **nobody has played it yet**.
+- **The round of section 18**: the stuck enemies, the eliminated player, the tank
+  sprites and the palette. Committed after the user approved the wheeled chassis
+  and asked for the fast tank's pastel yellow; the yellow itself was never seen in
+  play.
+- **The power-ups, round 1** (section 19): the sprites, the two durations and the
+  two effects. Not committed, not played.
 - Nothing else. The player-count select screen and the game over screen
   (section 15) were played by the user (1 and 2 players, one and two pads,
   dying alone, `START` to carry on, switching modes with the pad, `R`, pause,
@@ -329,12 +337,47 @@ flag are **gone** — do not reintroduce them. Implementation:
 
 ## 6. Current tree state
 
-`HEAD` is the **enemy overhaul, phase C** (section 17) on top of the **UI
-overhaul, phase 1** (commit **D**, section 16), *"Add a player-count select
-screen and a game over screen"* (commit **C**, section 12.2), *"Read gamepads
-from /dev/input and let one join a player"*, *"Add a gamepad mapping layer and
-per-source movement flags"* (section 12.1 **A** and **B**) and the
-brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
+`HEAD` is **`b41a9f6`** *Recolour the tanks and redraw the wheeled chassis with a
+grey contour* on top of **`0399f60`** *Fix enemies getting stuck and a player who
+is out on the next sector* — the round of section 18 — which sits on the **enemy
+overhaul, phase C** (section 17), the **UI overhaul, phase 1** (commit **D**,
+section 16), *"Add a player-count select screen and a game over screen"* (commit
+**C**, section 12.2), *"Read gamepads from /dev/input and let one join a player"*,
+*"Add a gamepad mapping layer and per-source movement flags"* (section 12.1 **A**
+and **B**) and the brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
+`bin/test` passes **56/56**.
+
+**In the working tree, uncommitted: the power-ups, round 1** (section 19) —
+`src/backend.h/.cpp` (the `Nuke` rename, the 15 s PICK and CANNON, `nuke()`,
+`updateNuke()`, `freezeEnding()`), `src/PickupIcon.qml` (all seven sprites plus
+the wrapper-Item centring fix), `src/Main.qml` (the NUKE blast, the freeze blink,
+the labels and the manual rows), `tests/tanks_tests.cpp` (4 slots) and this file.
+The gate is the user's play session.
+
+### 6.0 The round of section 18, by file
+
+```
+0399f60  Fix enemies getting stuck and a player who is out on the next sector
+   src/backend.cpp         blockedByTank() as a movement test, spawnEnemy() -> bool
+                           + cellBusy(), the 3x3 entry pads, openSpawnLanes(),
+                           buriedInSolid()/nearestFreeSpot(), bestDir() + the 0.8-2.3 s
+                           commitment, separateTanks() terrain check, resetTanks() ->
+                           clamp at 0 and leave an out player out, killPlayer(),
+                           revivePlayer()
+   src/backend.h           the same declarations, freezeEnding() (section 19 adds
+                           nuke()/updateNuke())
+   tests/tanks_tests.cpp   8 cases (stuck enemies, the eliminated player)
+
+b41a9f6  Recolour the tanks and redraw the wheeled chassis with a grey contour
+   src/TankSprite.qml      the outline property (#6b7280), variant 1 = the user's
+                           wheeled chassis, variant 2 = the thicker armoured hull,
+                           the interleaved tread frames (cells on every row)
+   src/Main.qml            P2 green, the fast tank pastel yellow, enemyVariant,
+                           carrierFlash on the new grey, the queue on win.foeGray*,
+                           win.treadFrame at 90 ms
+   README.md               the 16 enemies a sector line
+   AGENTS.md               section 18
+```
 
 Phase C contains exactly these files:
 
@@ -738,19 +781,33 @@ outer lambda's locals **by reference** produced a delayed `SIGSEGV` /
 Grids are string arrays of characters, each mapped to a colour and sized with
 `Math.max(1, Math.floor(root.side / N))` so pixels stay integral.
 
+**Every part is an `Item` wrapping the sprite.** The `Loader` that shows one icon
+(see section 7) resizes the **root** item of the component it loads, so a `Grid`
+as the component's root gets pinned to (0,0) at the loader's size: every icon
+used to sit in the **corner** of its box instead of the middle of it (measured:
+ink 4 px from the left and 19 from the right in a 45 px box). One level down the
+sprite keeps the geometry it declares and the box centres it (10/10/10/10).
+The grid's own origin is `Math.round((parent.width - width) / 2)`: a half-pixel
+origin antialiases the whole sprite (AGENTS.md section 17.2).
+
 | Kind | Grid | Columns | Colours |
 |---|---|---|---|
-| 0 SPEED | `bolt` 9x12 | 9 | `K` #1a1a22 outline, `Y` #ffdf3d body, `O` #f5a623 shade, `W` #ffffff highlight |
+| 0 SPEED | `bolt` 9x12 | 9 | `K` #d9a11b amber rim, `Y` #ffdf3d body, `O` #f5a623 tail shade, `W` #fff3bd edge |
 | 1 SHIELD | `shield` 7x8 | 7 | `X` #8d8d94 body, `W` #d8dbe2 highlight |
 | 2 PICK | `pick` 9x9 | 9 | `P` #c9ced6 steel, `p` #8b9099 shade, `H` #8a5a32 wood handle |
-| 3 LIFE | tank icon | — | whitish-gray tank |
-| 4 GRENADE | `grenade` 7x7 | — | dark green frag body with `X` highlights |
-| 5 CANNON | `cannon` | — | bronze shell |
-| 6 FREEZE | `snow` 7x7 | — | pale snowflake |
+| 3 LIFE | tank icon | — | whitish-gray tank at `side * 0.78` |
+| 4 NUKE | `nuke` 13x15 | 13 | `G` #6d7d4a body, `D` #464f2c shade, `L` #9cb073 highlight, `Y` #e8c53c disc, `K` #1b1c20 trefoil |
+| 5 CANNON | `cannon` 9x9 | 9 | `B` #c8862e brass, `D` #8a5a20 case, `W` #f6e8cc shine |
+| 6 FREEZE | `snow` 9x9 | 9 | `X` #9fd8ff arms, `W` #ffffff core |
 
 The bolt is deliberately a **sharp zigzag with a hard middle step** (a smooth
 curve read as a banana). The pick is an **arched head with downward tips plus a
 wood handle** (a straight bar read as a knife). Legibility was the whole point.
+
+**No icon carries a near-black outline.** The bolt's rim and the CANNON's old
+outline (#1a1a22, #14141a) were what made those two illegible, and the grey
+contour rule of section 18.3 applies to sprites as much as to tanks. The nuke is
+a mushroom cloud, not a device: it reads at 9x9 where a bomb did not.
 
 The icon is still a pickaxe, but its **effect** is the Battle City shovel
 (section 4.2): it armours the base wall. The name "PICK" is the user's and stays.
@@ -801,12 +858,16 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
 19. **Phase 2 of the overhaul**: the manual (`?`) first, then the in-game
     interface, both from the user's notes, one at a time — and each one with the
     same gate: user plays, then commit.
-20. **The round of section 18** (the user's new list): the two reported bugs (§
-    18.1, § 18.2) and the tank sprites and palette (§ 18.3) are implemented and
-    verified with `bin/test` (52 slots) and the two throwaway probes. **Waiting
-    for the user to play, then commit.** Still to come from the same list: the
-    power-up sprites and durations, CANNON breaking steel by strip, the LEVELUP
-    five tiers, the BLAST MISSILE, and the `GAME` section of the manual.
+20. ~~**The round of section 18**~~ **Committed** as `0399f60` (the two bugs,
+    § 18.1-18.2) and `b41a9f6` (the sprites and the palette, § 18.3), after the
+    user approved the wheeled chassis and asked for the fast tank's pastel
+    yellow.
+21. **The power-ups, round 1** (section 19): the sprites, the two durations and
+    the two new effects. Implemented and verified with `bin/test` (56 slots) and
+    the `/tmp/opencode/pick` probe. **Waiting for the user to play, then
+    commit.** Still to come from the same list: CANNON breaking steel by strip
+    (section 19.4), the LEVELUP five tiers, the BLAST MISSILE, and the `GAME`
+    section of the manual.
 
 ---
 
@@ -1396,10 +1457,10 @@ read as coloured circles; that is the mistake the pixel grids fix.
   **the flash -> smoke transition is visible**. The delegate scales it
   `cell * (1.3 + 1.0 * boom)` with `boom = min(1, age/0.5)`.
 - **`FrostSprite.qml`** — celeste + white ice, drawn **under enemies only**,
-  `z: -1`, never on players. A big patch under the tank plus **one** smaller
-  patch to the lower-right; a first version had a second patch at the upper-left
-  and the user called it out as "sobreruido". The whole block sits in a
-  `Loader { active: backend.frozen }`, so nothing is built while time runs.
+  `z: -1`, never on players. A single big patch under the tank; the smaller
+  patch to the lower-right was removed at the user's request ("bocha de hielo").
+  The whole block sits in a `Loader { active: backend.frozen }`, so nothing is
+  built while time runs.
   **The full-board blue overlay is gone and must stay gone.**
 - **`ShieldSprite.qml`** — two hand-drawn 20x20 frames of a jagged ring of
   lightning around the hull, **alternating** every ~96 ms, **4-fold symmetric**
@@ -1585,4 +1646,99 @@ puts one tank of each kind on the board and prints the properties of every board
 `TankSprite` — which is what proves the delegate wiring (kind -> variant and
 palette) and not just the sprite file. That second phase is what caught the
 queue's hardcoded grey.
+
+---
+
+## 19. The power-ups, round 1
+
+**Why.** The user's list, after playing section 18: several bonus sprites were
+hard to read (SPEED looked like a bolt with a black shell, CANNON's outline ate
+its shape, FREEZE barely read as a snowflake), two effects ran longer than they
+wanted, and two effects had no visual of their own. The LEVELUP and BLAST
+MISSILE bonuses from the same list are separate rounds (19.4).
+
+### 19.1 Sprites (section 10 has the grids)
+
+- **SPEED**: all yellow. `K` is an amber rim (#d9a11b) instead of #1a1a22, and
+  the edge highlight is a pale yellow (#fff3bd) instead of white.
+- **CANNON**: redrawn as a brass shell with **no outline at all**, and the grid
+  is now a real 9x9: it *declared* 7 columns while its rows were 8-9 characters,
+  so the sprite wrapped and the cell size came from a different divisor (`/9`).
+  Both bugs are gone; it is `columns: 9` and `Math.floor(side / 10)`.
+- **FREEZE**: redrawn 9x9 in two tones, eight arms (vertical, horizontal and both
+  diagonals) with their branch ticks around a white diamond core, so it reads as
+  a crystal instead of an asterisk.
+- **NUKE** (was GRENADE): a cartoon bomb, 13x15, fat military-green zeppelin
+  body with a green tail and fins (nose down) and a yellow oval disc on the
+  body carrying a black trefoil. The tail is green with a dark-green outline,
+  the body a dark-green outline with a light highlight, and the nose tapers
+  to a point. Two extra body rows make it taller so it no longer reads as
+  flattened. The CANNON points left now, the way the user asked.
+- **LIFE** (was 1UP): the tank at `side * 0.78`, so it reads as an icon and not
+  as a board sprite.
+- **The centring bug (this one was real).** `PickupIcon` shows one icon through a
+  `Loader`, and a `Loader` **resizes the root item of the component it loads**.
+  With a `Grid` as the component's root its `anchors.centerIn` was overridden and
+  the sprite was pinned to the loader's (0,0): every icon sat in the **corner** of
+  its box. Measured on the real scene, PICK's ink was 4 px from the box's left
+  and 19 px from its right in a 45 px box. Every part is now an `Item` wrapping
+  the sprite, which keeps the geometry it declares: 10/10/10/10. **A Grid must
+  never be a Loader's component root.** The same override is why "make the LIFE
+  sprite smaller" did nothing until the wrapper landed.
+- The grids are centred with `Math.round((parent.width - width) / 2)` on purpose:
+  a half-pixel origin antialiases the whole sprite. The probe counts the blended
+  pixels ("soft pixels") for exactly that.
+
+### 19.2 Durations
+
+PICK **20 -> 15 s** and CANNON **20 -> 15 s** (user spec). SPEED, SHIELD, LIFE
+and FREEZE are unchanged. Both are asserted against the clock the effects read
+(`guardLeft()`, `cannonLeft()`), not against the constant.
+
+### 19.3 The two new effects
+
+- **NUKE blast.** The bonus starts a circle where it was **picked up** (not at the
+  board's centre, not on the player): `m_nukeX/m_nukeY` + `m_nukeAge`, exposed as
+  `nuke` (`{x, y, progress, active}`), advanced by `updateNuke(dt)` on a
+  **0.6 s** clock (`NUKE_FLASH_TIME`) and cleared by `clearRun()`, `startGame()`
+  and `nextLevel()`. QML draws one semi-transparent yellow circle whose radius
+  grows from the pickup spot to a whole board diagonal (so it reaches every
+  corner from anywhere) and fades over its last 30%. Verified on screen by pixel:
+  at 0.25 only the middle is tinted, at 0.5 all four corners are, at 1.0 the
+  board is clean again.
+- **FREEZE blink.** `freezeEnding()` is true while less than 2 s of the freeze is
+  left; the enemy delegate's `opacity` then alternates 1 / 0.25 on a ~320 ms
+  clock (`frameTick / 20`). The clock is the frame counter, not `treadFrame`, so
+  the blink does not read as the treads running.
+
+### 19.4 Still to do from the same list
+
+- **CANNON breaks `Steel` by strip** (never the base wall). This **contradicts
+  section 4.2** ("Nothing in the game destroys `Steel`") on purpose — the user
+  asked for it — so section 4.2 must be rewritten with the strip-mask rule when
+  it lands: `tileBlocksPoint()` returns `true` for any `Steel` today, and a steel
+  strip mask would mirror `m_brickQ`. **Not implemented yet.**
+- **The CANNON's "one-shot armour" is not implemented either**: `cannonUntil`
+  only marks bullets `big`. The plan is `tierArmor` + `armorLayers() = max(
+  tierArmor, m_time < cannonUntil ? 1 : 0)` in the LEVELUP round, an enemy hit
+  spending the tier layer first and then clearing `cannonUntil`.
+- **LEVELUP** (five tiers: +30% bullet speed, two bullets, 3 armour layers, air
+  support with 3 missiles, recharge by killing 10 armoured tanks) and the
+  **BLAST MISSILE** (25% slower than a bullet, area damage of two bullets,
+  enemies only, never blocks; **needs the user's `.wav`**).
+
+### 19.5 Verification
+
+- `bin/build` clean, `bin/test` **56/56** (+4 slots: the blast starts where the
+  bonus was picked up, the blast grows and goes away, the freeze only blinks
+  while it is ending, PICK and CANNON last 15 s), offscreen smoke with no QML
+  warnings.
+- `/tmp/opencode/pick` (throwaway): phase 1 renders every icon in isolation at
+  the legend size and the board size, prints the bounding box, the per-cell
+  letter grid and the count of blended pixels, and saves a PNG per case; phase 2
+  loads the real `qrc:/Main.qml` and checks the blast by pixel, the icon inside
+  its real pickup box, and the enemy delegates' opacity while frozen, while the
+  freeze ends and after it. That phase is what caught the corner-centring bug and
+  the LIFE sprite's dead `width` binding.
+- Not yet played by the user: everything in this section.
 

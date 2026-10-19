@@ -35,6 +35,12 @@ class Backend : public QObject {
     Q_PROPERTY(int frameTick READ frameTick NOTIFY frameChanged)
     Q_PROPERTY(int level READ level NOTIFY stateChanged)
     Q_PROPERTY(bool frozen READ frozen NOTIFY frameChanged)
+    // True during the last two seconds of a freeze: QML blinks the frozen
+    // enemies so the player can see the freeze about to lift.
+    Q_PROPERTY(bool freezeEnding READ freezeEnding NOTIFY frameChanged)
+    // The NUKE blast: a circle that grows out of the spot where the bonus was
+    // picked up until it covers the board. {x, y, progress, active}.
+    Q_PROPERTY(QVariantMap nuke READ nuke NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
     // Connected pads and the player each one drives (-1 until it joins).
     Q_PROPERTY(QVariantList pads READ pads NOTIFY padsChanged)
@@ -80,6 +86,8 @@ public:
     int playerCount() const { return m_playerCount; }
     int menuIndex() const { return m_menuIndex; }
     bool frozen() const { return m_time < m_freezeUntil; }
+    bool freezeEnding() const { return m_time < m_freezeUntil && m_freezeUntil - m_time <= 2.0; }
+    QVariantMap nuke() const;
     int totalForLevel() const { return TOTAL_ENEMIES; }
 
     // Stable per-slot getters for QML. Delegates are created once with a
@@ -195,7 +203,7 @@ private:
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
-    enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Grenade = 4, Cannon = 5, Freeze = 6 };
+    enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Nuke = 4, Cannon = 5, Freeze = 6 };
 
     void setState(const QString &s, const QString &msg = {});
     void generateMap();
@@ -264,6 +272,9 @@ private:
     void spawnPickupAt(double x, double y);
     void applyPickup(int player);
     void updatePickups(double dt);
+    // The NUKE blast that QML draws: it grows out of the spot where the bonus
+    // was picked up and is gone NUKE_FLASH_TIME later.
+    void updateNuke(double dt);
     void updateFloaters(double dt);
     void updateExplosions(double dt);
 
@@ -318,6 +329,10 @@ private:
     std::vector<Floater> m_floaters;
     std::vector<Explosion> m_explosions;
     double m_freezeUntil = -1;
+    // The NUKE blast, drawn by QML: where it started and how long it has been
+    // running. A negative age means no blast is on screen.
+    double m_nukeX = 0, m_nukeY = 0;
+    double m_nukeAge = -1;
     // Concrete wall around the base, granted by PICK. Negative means off.
     double m_baseGuardUntil = -1;
     std::vector<int> m_baseGuard;

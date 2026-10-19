@@ -18,6 +18,9 @@ constexpr double BULLET_MAX_STEP = 0.2;
 // blocks, so tanks roll forward to the 50% line and shots fly through the
 // hole they opened.
 constexpr int BRICK_BLOCKS_BELOW = 2;
+// How long the NUKE's blast takes to grow from the spot where the bonus was
+// picked up until it covers the board (QML draws the circle).
+constexpr double NUKE_FLASH_TIME = 0.6;
 
 int goneStrips(unsigned m) {
     int n = 0;
@@ -437,6 +440,7 @@ void Backend::startGame() {
     m_floaters.clear();
     m_explosions.clear();
     m_pickup = Pickup{};
+    m_nukeAge = -1;
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
     m_freezeUntil = -1;
@@ -469,6 +473,7 @@ void Backend::nextLevel() {
     m_floaters.clear();
     m_explosions.clear();
     m_pickup = Pickup{};
+    m_nukeAge = -1;
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
     m_spawned = 0;
@@ -560,6 +565,7 @@ void Backend::clearRun() {
     m_floaters.clear();
     m_explosions.clear();
     m_pickup = Pickup{};
+    m_nukeAge = -1;
     m_spawned = 0;
     m_spawnTimer = 0;
     m_freezeUntil = -1;
@@ -781,6 +787,8 @@ void Backend::tick() {
     updateEnemies(dt);
     updateBullets(dt);
     updatePickups(dt);
+    // The NUKE blast runs on its own clock and only feeds the overlay.
+    updateNuke(dt);
     updateFloaters(dt);
     updateExplosions(dt);
     updateBaseGuard();
@@ -1610,7 +1618,7 @@ void Backend::applyPickup(int player) {
     case Shield: t.shieldUntil = m_time + 10; break;
     case Pick:
         setBaseGuard(true);
-        m_baseGuardUntil = m_time + 20;
+        m_baseGuardUntil = m_time + 15;
         break;
     case Life:
         // A partner who is out has first claim: the LIFE brings him back at
@@ -1625,7 +1633,12 @@ void Backend::applyPickup(int player) {
         }
         t.lives = std::min(t.lives + 1, 5);
         break;
-    case Grenade: {
+    case Nuke: {
+        // The blast starts where the bonus was picked up, so QML can grow a
+        // circle out of it over the whole board.
+        m_nukeX = m_pickup.x;
+        m_nukeY = m_pickup.y;
+        m_nukeAge = 0;
         for (auto &e : m_foes) {
             if (!e.alive)
                 continue;
@@ -1641,15 +1654,35 @@ void Backend::applyPickup(int player) {
             emit playSound("nuke");
         break;
     }
-    case Cannon: t.cannonUntil = m_time + 20; break;
+    case Cannon: t.cannonUntil = m_time + 15; break;
     case Freeze:
         m_freezeUntil = m_time + 8;
         if (m_soundEnabled)
             emit playSound("power");
         break;
     }
-    if (m_pickup.kind != Freeze && m_pickup.kind != Grenade && m_soundEnabled)
+    if (m_pickup.kind != Freeze && m_pickup.kind != Nuke && m_soundEnabled)
         emit playSound("power");
+}
+
+// The NUKE overlay: where the blast started, how far it has grown (0..1) and
+// whether it is running at all.
+QVariantMap Backend::nuke() const {
+    if (m_nukeAge < 0)
+        return {{"active", false}};
+    return {{"x", m_nukeX},
+            {"y", m_nukeY},
+            {"progress", std::min(1.0, m_nukeAge / NUKE_FLASH_TIME)},
+            {"active", true}};
+}
+
+// The blast is a pure visual, so it has its own clock.
+void Backend::updateNuke(double dt) {
+    if (m_nukeAge < 0)
+        return;
+    m_nukeAge += dt;
+    if (m_nukeAge > NUKE_FLASH_TIME)
+        m_nukeAge = -1;
 }
 
 void Backend::updatePickups(double dt) {
