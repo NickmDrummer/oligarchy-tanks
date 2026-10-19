@@ -451,6 +451,8 @@ void Backend::startGame() {
     m_explosions.clear();
     m_pickup = Pickup{};
     m_nukeAge = -1;
+    m_airStrikes.clear();
+    m_airSupportAge = -1;
     m_blastAge = -1;
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
@@ -485,6 +487,8 @@ void Backend::nextLevel() {
     m_explosions.clear();
     m_pickup = Pickup{};
     m_nukeAge = -1;
+    m_airStrikes.clear();
+    m_airSupportAge = -1;
     m_blastAge = -1;
     m_baseGuardUntil = -1;
     m_baseGuard.clear();
@@ -578,6 +582,8 @@ void Backend::clearRun() {
     m_explosions.clear();
     m_pickup = Pickup{};
     m_nukeAge = -1;
+    m_airStrikes.clear();
+    m_airSupportAge = -1;
     m_blastAge = -1;
     m_spawned = 0;
     m_spawnTimer = 0;
@@ -821,32 +827,16 @@ void Backend::tick() {
         t.airTimer -= dt;
         if (t.airTimer > 0)
             continue;
-        // Fire one missile at a random spot within ~3 cells.
+        // Fire one missile at a random spot within ~3 cells. The sound plays
+        // immediately; the explosion and radio circle happen 1 s later.
         std::uniform_real_distribution<double> off(-3.0, 3.0);
         double mx = t.x + off(m_rng);
         double my = t.y + off(m_rng);
         mx = std::max(0.5, std::min((double)(COLS - 0.5), mx));
         my = std::max(0.5, std::min((double)(ROWS - 0.5), my));
-        // Damage enemies near the missile.
-        for (auto &e : m_foes) {
-            if (!e.alive)
-                continue;
-            if (std::abs(e.x - mx) < 1.5 && std::abs(e.y - my) < 1.5) {
-                e.hp = 0;
-                e.alive = false;
-                pushExplosion(e.x, e.y);
-                const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
-                t.score += pts;
-                m_floaters.push_back(Floater{e.x, e.y, pts, 0});
-                if (e.kind == 2)
-                    t.armoredKills++;
-            }
-        }
-        if (m_floaters.size() > 8)
-            m_floaters.erase(m_floaters.begin(), m_floaters.begin() + (m_floaters.size() - 8));
-        pushExplosion(mx, my);
+        m_airStrikes.push_back(AirStrike{mx, my, 1.0, false});
         if (m_soundEnabled)
-            emit playSound("explode");
+            emit playSound("air-support");
         t.airMissiles--;
         if (t.airMissiles <= 0)
             t.airRecharging = true;
@@ -875,6 +865,7 @@ void Backend::tick() {
     // The NUKE blast runs on its own clock and only feeds the overlay.
     updateNuke(dt);
     updateBlast(dt);
+    updateAirStrikes(dt);
     updateFloaters(dt);
     updateExplosions(dt);
     updateBaseGuard();
@@ -1899,6 +1890,62 @@ void Backend::updateBlast(double dt) {
     m_blastAge += dt;
     if (m_blastAge > 0.4)
         m_blastAge = -1;
+}
+
+QVariantMap Backend::airSupportImpact() const {
+    if (m_airSupportAge < 0)
+        return {{"active", false}};
+    const double t = 0.5;
+    return {{"x", m_airSupportX},
+            {"y", m_airSupportY},
+            {"progress", std::min(1.0, m_airSupportAge / t)},
+            {"active", true}};
+}
+
+void Backend::updateAirStrikes(double dt) {
+    for (auto &s : m_airStrikes) {
+        if (s.done)
+            continue;
+        s.timer -= dt;
+        if (s.timer > 0)
+            continue;
+        // 1 s elapsed: fire the explosion and the radio circle.
+        s.done = true;
+        // Damage enemies near the strike.
+        for (auto &e : m_foes) {
+            if (!e.alive)
+                continue;
+            if (std::abs(e.x - s.x) < 1.5 && std::abs(e.y - s.y) < 1.5) {
+                e.hp = 0;
+                e.alive = false;
+                pushExplosion(e.x, e.y);
+                const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
+                // Award to the player who owns this air support (player 0 for now).
+                m_p[0].score += pts;
+                if (e.kind == 2)
+                    m_p[0].armoredKills++;
+                m_floaters.push_back(Floater{e.x, e.y, pts, 0});
+                if (e.kind == 3 && !m_pickup.active)
+                    spawnPickupAt(e.x, e.y);
+            }
+        }
+        if (m_floaters.size() > 8)
+            m_floaters.erase(m_floaters.begin(), m_floaters.begin() + (m_floaters.size() - 8));
+        pushExplosion(s.x, s.y);
+        m_airSupportX = s.x;
+        m_airSupportY = s.y;
+        m_airSupportAge = 0;
+    }
+    // Remove done strikes.
+    m_airStrikes.erase(std::remove_if(m_airStrikes.begin(), m_airStrikes.end(),
+                                     [](const AirStrike &s) { return s.done; }),
+                       m_airStrikes.end());
+    // Advance the radio circle.
+    if (m_airSupportAge >= 0) {
+        m_airSupportAge += dt;
+        if (m_airSupportAge > 0.5)
+            m_airSupportAge = -1;
+    }
 }
 
 void Backend::updatePickups(double dt) {

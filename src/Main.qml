@@ -116,6 +116,7 @@ ApplicationWindow {
     SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 1.0 }
     SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
     SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 1.0 }
+    SoundEffect { id: sndAirSupport; source: "qrc:/sounds/air-support.wav"; volume: 0.8 }
     SoundEffect { id: sndBlastShoot; source: "qrc:/sounds/blast_missile-shoot.wav"; volume: 0.805 }
     SoundEffect { id: sndBlastHit; source: "qrc:/sounds/blast_missile-hit.wav"; volume: 0.96 }
     // 8-bit engine putter, loops only while a player tank is rolling.
@@ -173,6 +174,8 @@ ApplicationWindow {
                 sndPower.play()
             else if (name === "nuke")
                 sndNuke.play()
+            else if (name === "air-support")
+                sndAirSupport.play()
             else if (name === "blast_missile-shoot")
                 sndBlastShoot.play()
             else if (name === "blast_missile-hit")
@@ -1136,6 +1139,26 @@ ApplicationWindow {
                         radius: width / 2
                         color: "#ff6b35"
                         opacity: 0.5 * Math.min(1, (1 - blastFlash.p) / 0.5)
+                    }
+                }
+
+                // Air support (LEVELUP tier 4) impact: a white/blue circle that
+                // grows out of the strike spot, 1 s after the sound starts.
+                Item {
+                    id: airSupportFlash
+                    property var a: backend.airSupportImpact
+                    property real p: a.active ? a.progress : 0
+                    visible: a.active
+                    z: 12
+                    x: a.active ? a.x * win.cell : 0
+                    y: a.active ? a.y * win.cell : 0
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: win.cell * 4 * airSupportFlash.p
+                        height: width
+                        radius: width / 2
+                        color: "#a0d8ff"
+                        opacity: 0.5 * Math.min(1, (1 - airSupportFlash.p) / 0.4)
                     }
                 }
 

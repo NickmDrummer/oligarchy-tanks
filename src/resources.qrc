@@ -23,5 +23,6 @@
         <file alias="sounds/nuke.wav">sounds/nuke.wav</file>
         <file alias="sounds/blast_missile-shoot.wav">sounds/blast_missile-shoot.wav</file>
         <file alias="sounds/blast_missile-hit.wav">sounds/blast_missile-hit.wav</file>
+        <file alias="sounds/air-support.wav">sounds/air-support.wav</file>
     </qresource>
 </RCC>

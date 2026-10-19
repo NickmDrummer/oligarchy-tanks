@@ -1741,11 +1741,10 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
   blocks, recharges after 10 armored kills). Tiers survive a sector change and
   reset on death. CANNON one-shot armour is max(tierArmor, cannon ? 1 : 0).
   Level indicator shown in the player panel when tier > 0.
-  **Air-support sound** (to be wired, file at `~/Documents/sonidosTanks/air-support.wav`):
-  2 s total — first 1 s is the missile falling, the second 1 s is the
-  explosion. The sound must start first; the visual explosion (with a radius
-  effect) appears 1 s later. Currently the air support plays `explode.wav`
-  per missile with no delay.
+  **Air-support sound** (wired): file at `src/sounds/air-support.wav`
+  (2 s — first 1 s missile falling, second 1 s explosion). The sound plays
+  immediately when the missile is launched; the explosion, the score and the
+  radio circle appear 1 s later. Plays `air-support.wav` on launch.
 - **BLAST MISSILE** (implemented, C7): pickup that replaces the normal shot for
   5 bullets (not 5 seconds). The missile is 25% slower than a normal bullet,
   deals area damage (2 HP to enemies within 1.5 cells), affects only enemies
@@ -1753,8 +1752,7 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
   `blast_missile-hit.wav` on impact (volume 0.96). The impact shows a small
   orange radio circle (0.4 s) plus an explosion (without sound). The bullet is
   rendered as a longer dark-gray missile with a tip and a fire trail, rotated
-  to the fire direction. Still to do: air-support sound wiring
-  (air-support.wav, 2 s).
+  to the fire direction. Air-support sound (air-support.wav, 2 s) is now wired.
 
 ### 19.5 Verification
 

@@ -44,6 +44,9 @@ class Backend : public QObject {
     // The BLAST MISSILE impact: a small circle that grows out of the hit spot.
     // {x, y, progress, active}.
     Q_PROPERTY(QVariantMap blastImpact READ blastImpact NOTIFY frameChanged)
+    // Air support (LEVELUP tier 4) impact: a circle that grows out of the
+    // strike spot, 1 s after the sound starts. {x, y, progress, active}.
+    Q_PROPERTY(QVariantMap airSupportImpact READ airSupportImpact NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
     // Connected pads and the player each one drives (-1 until it joins).
     Q_PROPERTY(QVariantList pads READ pads NOTIFY padsChanged)
@@ -92,6 +95,7 @@ public:
     bool freezeEnding() const { return m_time < m_freezeUntil && m_freezeUntil - m_time <= 2.0; }
     QVariantMap nuke() const;
     QVariantMap blastImpact() const;
+    QVariantMap airSupportImpact() const;
     int totalForLevel() const { return TOTAL_ENEMIES; }
 
     // Stable per-slot getters for QML. Delegates are created once with a
@@ -223,6 +227,13 @@ private:
         bool big = false;
         bool blast = false;
     };
+    // Pending air-support strike: the sound plays immediately, the explosion
+    // (and radio circle) happen 1 s later.
+    struct AirStrike {
+        double x = 0, y = 0;
+        double timer = 1.0;
+        bool done = false;
+    };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
     enum PickupKind { Speed = 0, Shield = 1, Pick = 2, Life = 3, Nuke = 4, Cannon = 5, Freeze = 6, LevelUp = 7, BlastMissile = 8 };
@@ -306,6 +317,8 @@ private:
     void updateNuke(double dt);
     // The BLAST MISSILE impact circle.
     void updateBlast(double dt);
+    // Pending air-support strikes: sound first, explosion 1 s later.
+    void updateAirStrikes(double dt);
     void updateFloaters(double dt);
     void updateExplosions(double dt);
 
@@ -367,6 +380,10 @@ private:
     // BLAST MISSILE impact circle.
     double m_blastX = 0, m_blastY = 0;
     double m_blastAge = -1;
+    // Air support pending strikes and impact circle.
+    std::vector<AirStrike> m_airStrikes;
+    double m_airSupportX = 0, m_airSupportY = 0;
+    double m_airSupportAge = -1;
     // Concrete wall around the base, granted by PICK. Negative means off.
     double m_baseGuardUntil = -1;
     std::vector<int> m_baseGuard;
