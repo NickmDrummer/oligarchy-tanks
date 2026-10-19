@@ -157,7 +157,7 @@ QVariantMap Backend::enemyAt(int i, int tick) const {
 QVariantMap Backend::bulletAt(int i, int tick) const {
     Q_UNUSED(tick);
     if (i < 0 || i >= int(m_bullets.size()))
-        return {{"x", 0.0}, {"y", 0.0}, {"dir", 0}, {"owner", 2}, {"active", false}, {"big", false}};
+        return {{"x", 0.0}, {"y", 0.0}, {"dir", 0}, {"owner", 2}, {"active", false}, {"big", false}, {"blast", false}};
     const Bullet &b = m_bullets[i];
     return {{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"active", b.active}, {"big", b.big}, {"blast", b.blast}};
 }

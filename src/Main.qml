@@ -19,7 +19,16 @@ ApplicationWindow {
 
     property bool helpVisible: false
     property bool helpPausedGame: false
-    property int cell: Math.max(30, Math.floor(Math.min(boardArea.width / backend.cols, boardArea.height / backend.rows)))
+    // The display is one centred block: board plus side panel, like the
+    // screen of an arcade cabinet. The cell is sized from what that block
+    // really has (the area minus the panel, the gap between them and the
+    // board's own 4px border on both axes), never from the full area, so the
+    // block fits and the board never leans on the panel.
+    readonly property int panelW: 160
+    readonly property int displayGap: 14
+    property int cell: Math.max(30, Math.floor(Math.min(
+        (boardArea.width - win.panelW - win.displayGap - 8) / backend.cols,
+        (boardArea.height - 8) / backend.rows)))
     property int treadFrame: 0
 
     // Opening the manual pauses the game; closing it resumes only if the
@@ -454,13 +463,15 @@ ApplicationWindow {
             Layout.fillHeight: true
 
             // Battle City style side panel: stage and remaining enemies.
-            // Content is shown only while playing; the panel stays in
-            // place so the board never jumps when a game starts.
+            // It rides with the board inside the centred display block and
+            // matches its height; its content shows only while playing, the
+            // panel itself stays in place so the board never jumps when a
+            // game starts.
             Rectangle {
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: 160
+                x: board.x + board.width + win.displayGap
+                y: board.y
+                width: win.panelW
+                height: board.height
                 color: "#0d0d12"
                 Column {
                     anchors.centerIn: parent
@@ -499,69 +510,123 @@ ApplicationWindow {
                 id: board
                 width: win.cell * backend.cols
                 height: win.cell * backend.rows
+                // Centering the block, not the board: shift left by half the
+                // panel column (panel + gap), so board + panel read as one
+                // centred screen with the leftover space split evenly.
                 anchors.horizontalCenter: parent.horizontalCenter
-                anchors.horizontalCenterOffset: -80
+                anchors.horizontalCenterOffset: -(win.panelW + win.displayGap) / 2
                 anchors.verticalCenter: parent.verticalCenter
                 color: "#050507"
                 border.color: "#3a3a44"
                 border.width: 4
                 clip: true
 
-                // Brick wall, Battle City style: dark mortar courses with
-                // offset bricks, muted clay colors, highlight on top edge.
-                Repeater {
-                    model: backend.cols * backend.rows
-                    Item {
-                        id: tileItem
-                        property int cx: index % backend.cols
-                        property int cy: Math.floor(index / backend.cols)
-                        // Kind comes from an int query keyed on boardRev, so
-                        // it is only recomputed when the map changes.
-                        property int kind: backend.tileKind(cx, cy, backend.boardRev)
-                        x: cx * win.cell
-                        y: cy * win.cell
-                        width: win.cell
-                        height: win.cell
-                        // Only the kind this tile actually is gets instantiated.
-                        // `visible: false` still builds every child, which cost
-                        // tens of thousands of items across the 15x15 board.
-                        Loader {
-                            anchors.fill: parent
-                            active: tileItem.kind === win.tileBrick
-                            sourceComponent: brickPart
+                // The picture the tube shows: everything the playfield
+                // holds is rendered into a texture and drawn back through
+                // the CRT shader below, so the glass can curve, darken and
+                // fringe it. The item itself is not drawn.
+                Item {
+                    id: playfield
+                    anchors.fill: parent
+                    anchors.margins: 4
+                    // The playfield draws through a layer: everything below is
+                    // captured to a texture every frame and redrawn through the
+                    // CRT effect, in place. (A ShaderEffectSource over a hidden
+                    // item froze its texture at the first frame and lost every
+                    // dynamic sprite; layer is the supported path.)
+                    layer {
+                        enabled: true
+                        smooth: false
+                        effect: ShaderEffect {
+                            vertexShader: "qrc:/shaders/crt.vert.qsb"
+                            fragmentShader: "qrc:/shaders/crt.frag.qsb"
                         }
-                        // Brick wall, Battle City style: dark mortar courses
-                        // with offset bricks and a highlight on the top edge.
-                        // A shot shears off the strip on the face it came
-                        // from; the gap shows the board behind, so the
-                        // brickwork keeps exactly its original look.
-                        Component {
-                            id: brickPart
-                            Item {
+                    }
+
+                    // Brick wall, Battle City style: dark mortar courses with
+                    // offset bricks, muted clay colors, highlight on top edge.
+                    Repeater {
+                        model: backend.cols * backend.rows
+                        Item {
+                            id: tileItem
+                            property int cx: index % backend.cols
+                            property int cy: Math.floor(index / backend.cols)
+                            // Kind comes from an int query keyed on boardRev, so
+                            // it is only recomputed when the map changes.
+                            property int kind: backend.tileKind(cx, cy, backend.boardRev)
+                            x: cx * win.cell
+                            y: cy * win.cell
+                            width: win.cell
+                            height: win.cell
+                            // Only the kind this tile actually is gets instantiated.
+                            // `visible: false` still builds every child, which cost
+                            // tens of thousands of items across the 15x15 board.
+                            Loader {
                                 anchors.fill: parent
-                                Rectangle {
+                                active: tileItem.kind === win.tileBrick
+                                sourceComponent: brickPart
+                            }
+                            // Brick wall, Battle City style: dark mortar courses
+                            // with offset bricks and a highlight on the top edge.
+                            // A shot shears off the strip on the face it came
+                            // from; the gap shows the board behind, so the
+                            // brickwork keeps exactly its original look.
+                            Component {
+                                id: brickPart
+                                Item {
                                     anchors.fill: parent
-                                    color: "#2e1a10"
-                                }
-                                Column {
-                                    anchors.fill: parent
-                                    anchors.margins: 1
-                                    spacing: 2
-                                    Repeater {
-                                        model: 4
-                                        Item {
-                                            property bool odd: index % 2 === 1
-                                            width: win.cell - 2
-                                            height: (win.cell - 2 - 6) / 4
-                                            // Even course: two whole bricks.
-                                            Row {
-                                                visible: !odd
-                                                anchors.fill: parent
-                                                spacing: 2
-                                                Repeater {
-                                                    model: 2
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        color: "#2e1a10"
+                                    }
+                                    Column {
+                                        anchors.fill: parent
+                                        anchors.margins: 1
+                                        spacing: 2
+                                        Repeater {
+                                            model: 4
+                                            Item {
+                                                property bool odd: index % 2 === 1
+                                                width: win.cell - 2
+                                                height: (win.cell - 2 - 6) / 4
+                                                // Even course: two whole bricks.
+                                                Row {
+                                                    visible: !odd
+                                                    anchors.fill: parent
+                                                    spacing: 2
+                                                    Repeater {
+                                                        model: 2
+                                                        Rectangle {
+                                                            width: (win.cell - 2 - 2) / 2
+                                                            height: parent.height
+                                                            color: "#9e5230"
+                                                            Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                                            Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
+                                                        }
+                                                    }
+                                                }
+                                                // Odd course: half, whole, half, so the
+                                                // joints are offset like real brickwork.
+                                                Row {
+                                                    visible: odd
+                                                    anchors.fill: parent
+                                                    spacing: 2
                                                     Rectangle {
-                                                        width: (win.cell - 2 - 2) / 2
+                                                        width: (win.cell - 2 - 4) / 4
+                                                        height: parent.height
+                                                        color: "#9e5230"
+                                                        Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                                        Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
+                                                    }
+                                                    Rectangle {
+                                                        width: (win.cell - 2 - 4) / 2
+                                                        height: parent.height
+                                                        color: "#9e5230"
+                                                        Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
+                                                        Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
+                                                    }
+                                                    Rectangle {
+                                                        width: (win.cell - 2 - 4) / 4
                                                         height: parent.height
                                                         color: "#9e5230"
                                                         Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
@@ -569,700 +634,691 @@ ApplicationWindow {
                                                     }
                                                 }
                                             }
-                                            // Odd course: half, whole, half, so the
-                                            // joints are offset like real brickwork.
-                                            Row {
-                                                visible: odd
-                                                anchors.fill: parent
-                                                spacing: 2
-                                                Rectangle {
-                                                    width: (win.cell - 2 - 4) / 4
-                                                    height: parent.height
-                                                    color: "#9e5230"
-                                                    Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
-                                                    Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
-                                                }
-                                                Rectangle {
-                                                    width: (win.cell - 2 - 4) / 2
-                                                    height: parent.height
-                                                    color: "#9e5230"
-                                                    Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
-                                                    Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
-                                                }
-                                                Rectangle {
-                                                    width: (win.cell - 2 - 4) / 4
-                                                    height: parent.height
-                                                    color: "#9e5230"
-                                                    Rectangle { width: parent.width; height: 2; color: "#b96a3e" }
-                                                    Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: "#5e2f18" }
-                                                }
-                                            }
                                         }
                                     }
-                                }
-                                // Sheared strips: 0-3 vertical, left to right;
-                                // 4-7 horizontal, top to bottom. The gap is
-                                // painted over the whole cell slice, edges
-                                // included, so nothing of the wall is left
-                                // behind: no mortar rim, no lighter fill.
-                                Repeater {
-                                    model: 8
-                                    Rectangle {
-                                        property bool vertical: index < 4
-                                        property int slot: index % 4
-                                        // Integer edges, so two neighbouring
-                                        // strips cannot leave a hairline seam.
-                                        property real e0: Math.round(slot * win.cell / 4)
-                                        property real e1: Math.round((slot + 1) * win.cell / 4)
-                                        visible: win.brickGone(tileItem.cx, tileItem.cy, index)
-                                        x: vertical ? e0 : 0
-                                        y: vertical ? 0 : e0
-                                        width: vertical ? e1 - e0 : win.cell
-                                        height: vertical ? win.cell : e1 - e0
-                                        color: "#050507"
-                                    }
-                                }
-                            }
-                        }
-                        Loader {
-                            anchors.fill: parent
-                            active: tileItem.kind === win.tileSteel
-                            sourceComponent: steelPart
-                        }
-                        // Concrete pavers: gray blocks with dark grout joints.
-                        Component {
-                            id: steelPart
-                            Item {
-                                anchors.fill: parent
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: "#3a3a3a"
-                                }
-                                Grid {
-                                    anchors.fill: parent
-                                    anchors.margins: 2
-                                    columns: 2
-                                    rows: 2
-                                    spacing: 2
+                                    // Sheared strips: 0-3 vertical, left to right;
+                                    // 4-7 horizontal, top to bottom. The gap is
+                                    // painted over the whole cell slice, edges
+                                    // included, so nothing of the wall is left
+                                    // behind: no mortar rim, no lighter fill.
                                     Repeater {
-                                        model: 4
+                                        model: 8
                                         Rectangle {
-                                            width: (win.cell - 4 - 2) / 2
-                                            height: (win.cell - 4 - 2) / 2
-                                            color: "#8d8d8d"
-                                            Rectangle {
-                                                width: parent.width; height: 2
-                                                color: "#b5b5b5"
-                                            }
-                                            Rectangle {
-                                                x: parent.width - 8; y: parent.height - 8
-                                                width: 6; height: 6
-                                                color: "#6a6a6a"
-                                            }
+                                            property bool vertical: index < 4
+                                            property int slot: index % 4
+                                            // Integer edges, so two neighbouring
+                                            // strips cannot leave a hairline seam.
+                                            property real e0: Math.round(slot * win.cell / 4)
+                                            property real e1: Math.round((slot + 1) * win.cell / 4)
+                                            visible: win.brickGone(tileItem.cx, tileItem.cy, index)
+                                            x: vertical ? e0 : 0
+                                            y: vertical ? 0 : e0
+                                            width: vertical ? e1 - e0 : win.cell
+                                            height: vertical ? win.cell : e1 - e0
+                                            color: "#050507"
                                         }
                                     }
                                 }
-                                // Sheared steel strips: same 4+4 mask as brick,
-                                // so a CANNON shell leaves the same kind of gap.
-                                Repeater {
-                                    model: 8
-                                    Rectangle {
-                                        property bool vertical: index < 4
-                                        property int slot: index % 4
-                                        property real e0: Math.round(slot * win.cell / 4)
-                                        property real e1: Math.round((slot + 1) * win.cell / 4)
-                                        visible: win.brickGone(tileItem.cx, tileItem.cy, index)
-                                        x: vertical ? e0 : 0
-                                        y: vertical ? 0 : e0
-                                        width: vertical ? e1 - e0 : win.cell
-                                        height: vertical ? win.cell : e1 - e0
-                                        color: "#050507"
-                                    }
-                                }
                             }
-                        }
-                        Loader {
-                            anchors.fill: parent
-                            active: tileItem.kind === win.tileBase || tileItem.kind === win.tileDead
-                            sourceComponent: basePart
-                        }
-                        // Base: the official Omarchy icon — the square mark with
-                        // no wordmark. Defend it.
-                        Component {
-                            id: basePart
-                            Item {
-                                id: baseTile
+                            Loader {
                                 anchors.fill: parent
-                                property bool dead: tileItem.kind === win.tileDead
-                                // The square Omarchy logo, 27x13 blocks: the
-                                // official mark (icon.txt) collapsed 2x2, hard
-                                // coded so the game needs nothing from the host.
-                                // Plate on, glyph cut in.
-                                property var mark: [
-                                    "XXXXXXXXXXXXXXXXXXXXXXXXXXX",
-                                    "XX..........XXX..........XX",
-                                    "XX..XXXXXXXXXXX....XXXX..XX",
-                                    "XX..XX...............XX..XX",
-                                    "XX..XX...............XX..XX",
-                                    "XX..XX...............XX..XX",
-                                    "XXXXXX...............XX..XX",
-                                    "XX..XX...............XX..XX",
-                                    "XX..XX...............XX..XX",
-                                    "XX..XX...............XX..XX",
-                                    "XX..XXXXXXXXXXXXXXXXXXX..XX",
-                                    "XX..........XXX..........XX",
-                                    "XXXXXXXXXXXXXXX..XXXXXXXXXX",
-                                ]
-                                property string plate: dead ? "#7a3535" : "#9ece6a"
-                                property string glyph: "transparent"
-                                // The mark is 2:1 by design, so uniform blocks
-                                // leave half the tile empty and read squashed:
-                                // stretch the vertical block ~1.7x so the plate
-                                // fills the tile without breaking the shape.
-                                property real px: Math.max(1, win.cell / 29)
-                                property real py: Math.max(1.5, win.cell / 17)
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.margins: 1
-                                    color: baseTile.dead ? "#3d1010" : "#0d0d12"
-                                }
-                                Grid {
-                                    anchors.centerIn: parent
-                                    columns: 27
-                                    rows: 13
-                                    Repeater {
-                                        model: 351
-                                        Rectangle {
-                                            property int r: Math.floor(index / 27)
-                                            property int c: index % 27
-                                            property string ch: baseTile.mark[r][c]
-                                            width: baseTile.px
-                                            height: baseTile.py
-                                            color: ch === "X" ? baseTile.plate : baseTile.glyph
-                                        }
-                                    }
-                                }
+                                active: tileItem.kind === win.tileSteel
+                                sourceComponent: steelPart
                             }
-                        }
-                    }
-                }
-
-                // Enemies: 0 gray basic, 1 yellow wheeled fast, 2 steel armored.
-                // Fixed model: delegates persist, only properties update.
-                Repeater {
-                    model: 6
-                    Item {
-                        property var e: backend.enemyAt(index, backend.frameTick)
-                        visible: e.alive
-                        x: e.x * win.cell - width / 2
-                        y: e.y * win.cell - height / 2
-                        width: win.cell * 0.94
-                        height: win.cell * 0.94
-                        // FREEZE blinks while it is about to run out, so the
-                        // thaw is not a surprise.
-                        opacity: (backend.freezeEnding
-                                  && Math.floor(backend.frameTick / 20) % 2 === 0) ? 0.25 : 1
-                        // Armored tanks shift colour with each hit:
-                        // purple (full) -> cyan (1 hit) -> gray (vulnerable).
-                        // Carriers flash red <-> gray.
-                        property bool carrierFlash: e.kind === 3
-                                                    && Math.floor(backend.frameTick / 6) % 2 === 0
-                        property color enemyBody: {
-                            if (e.kind === 3)
-                                return carrierFlash ? win.foeRed : win.foeGray
-                            if (e.kind === 2) {
-                                if (e.hp >= 3) return "#9b7ebd"
-                                if (e.hp === 2) return "#7eb8c4"
-                                return win.foeGray
-                            }
-                            if (e.kind === 1)
-                                return win.foeYellow
-                            return win.foeGray
-                        }
-                        property color enemyDark: {
-                            if (e.kind === 3)
-                                return carrierFlash ? win.foeRedDark : win.foeGrayDark
-                            if (e.kind === 2) {
-                                if (e.hp >= 3) return "#5a4a6e"
-                                if (e.hp === 2) return "#3a5a60"
-                                return win.foeGrayDark
-                            }
-                            if (e.kind === 1)
-                                return win.foeYellowDark
-                            return win.foeGrayDark
-                        }
-                        property color enemyLight: {
-                            if (e.kind === 3)
-                                return carrierFlash ? win.foeRedLight : win.foeGrayLight
-                            if (e.kind === 2) {
-                                if (e.hp >= 3) return "#d4c4e8"
-                                if (e.hp === 2) return "#c4e4ea"
-                                return win.foeGrayLight
-                            }
-                            if (e.kind === 1)
-                                return win.foeYellowLight
-                            return win.foeGrayLight
-                        }
-                        // Basic and carrier use treads, the fast tank wheels and
-                        // the armoured tank the chunkier plated hull.
-                        property int enemyVariant: e.kind === 1 ? 1 : (e.kind === 2 ? 2 : 0)
-                        // Frost while time is frozen: a single big iced patch
-                        // under the tank. Built only while frozen.
-                        Loader {
-                            active: backend.frozen
-                            anchors.fill: parent
-                            z: -1
-                            sourceComponent: Component {
+                            // Concrete pavers: gray blocks with dark grout joints.
+                            Component {
+                                id: steelPart
                                 Item {
                                     anchors.fill: parent
-                                    FrostSprite {
-                                        anchors.centerIn: parent
-                                        width: parent.width * 1.9
-                                        height: parent.height * 1.9
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        color: "#3a3a3a"
                                     }
-                                }
-                            }
-                        }
-                        TankSprite {
-                            anchors.fill: parent
-                            dir: e.dir
-                            frame: e.moving ? win.treadFrame : 0
-                            variant: enemyVariant
-                            body: enemyBody
-                            dark: enemyDark
-                            light: enemyLight
-                        }
-                    }
-                }
-
-                // Death explosions: a big white/gray spark flash that turns
-                // into a black/gray smoke cloud with fire burning inside it.
-                Repeater {
-                    model: 8
-                    Item {
-                        property var ex: index < backend.explosions.length ? backend.explosions[index] : null
-                        visible: ex !== null
-                        x: ex ? ex.x * win.cell - width / 2 : 0
-                        y: ex ? ex.y * win.cell - height / 2 : 0
-                        property real boom: ex ? Math.min(1.0, ex.age / 0.5) : 0
-                        width: win.cell * (1.3 + 1.0 * boom)
-                        height: width
-                        ExplosionSprite {
-                            anchors.fill: parent
-                            progress: parent.boom
-                        }
-                    }
-                }
-
-                // Players told apart by colour: P1 yellow, P2 green.
-                Repeater {
-                    model: 2
-                    Item {
-                        property var p: backend.playerAt(index, backend.frameTick)
-                        visible: p.alive
-                        x: p.x * win.cell - width / 2
-                        y: p.y * win.cell - height / 2
-                        width: win.cell * 0.94
-                        height: win.cell * 0.94
-                        TankSprite {
-                            anchors.fill: parent
-                            dir: p.dir
-                            frame: p.moving ? win.treadFrame : 0
-                            body: index === 0 ? win.p1body : win.p2body
-                            dark: index === 0 ? win.p1dark : win.p2dark
-                            light: index === 0 ? win.p1light : win.p2light
-                        }
-                        // Armour shields: three white pixel outlines drawn
-                        // on the tank sprite boundary, all inscribed in the
-                        // same box so each one reaches the tank's perimeter:
-                        // a square (the boundary itself), a diamond with its
-                        // vertices on the side midpoints, and an inscribed
-                        // circle. On a hit the circle is lost first, then
-                        // the diamond; the square is the last to go.
-                        Canvas {
-                            id: armourCanvas
-                            x: -(width - parent.width) / 2
-                            y: -(height - parent.height) / 2
-                            width: parent.width * 1.2
-                            height: parent.height * 1.2
-                            rotation: [-90, 0, 90, 180][p.dir]
-                            visible: p.armorHP > 0
-                            property int seenArmor: p.armorHP
-                            onSeenArmorChanged: requestPaint()
-                            Component.onCompleted: requestPaint()
-                            onPaint: {
-                                var ctx = getContext("2d");
-                                ctx.reset();
-                                ctx.clearRect(0, 0, width, height);
-                                ctx.fillStyle = "#ffffff";
-                                var ps = Math.max(2, Math.round(parent.width / 20));
-                                var cx = width / 2;
-                                var cy = height / 2;
-                                // Half-size of the tank's bounding box, snapped
-                                // to the pixel grid.
-                                var hw = Math.round(parent.width * 0.5 / ps) * ps;
-                                var layers = Math.min(3, Math.floor(p.armorHP));
-                                // Pixel-stair segment between two points.
-                                function line(x0, y0, x1, y1) {
-                                    var steps = Math.max(1, Math.round(Math.abs(x1 - x0) / ps)
-                                                           + Math.round(Math.abs(y1 - y0) / ps));
-                                    for (var k = 0; k <= steps; ++k) {
-                                        var t = k / steps;
-                                        var x = Math.round((x0 + (x1 - x0) * t) / ps) * ps;
-                                        var y = Math.round((y0 + (y1 - y0) * t) / ps) * ps;
-                                        ctx.fillRect(x, y, ps, ps);
+                                    Grid {
+                                        anchors.fill: parent
+                                        anchors.margins: 2
+                                        columns: 2
+                                        rows: 2
+                                        spacing: 2
+                                        Repeater {
+                                            model: 4
+                                            Rectangle {
+                                                width: (win.cell - 4 - 2) / 2
+                                                height: (win.cell - 4 - 2) / 2
+                                                color: "#8d8d8d"
+                                                Rectangle {
+                                                    width: parent.width; height: 2
+                                                    color: "#b5b5b5"
+                                                }
+                                                Rectangle {
+                                                    x: parent.width - 8; y: parent.height - 8
+                                                    width: 6; height: 6
+                                                    color: "#6a6a6a"
+                                                }
+                                            }
+                                        }
                                     }
-                                }
-                                if (layers >= 1) {
-                                    // Square: outline right on the sprite boundary.
-                                    line(cx - hw, cy - hw, cx + hw, cy - hw);
-                                    line(cx + hw, cy - hw, cx + hw, cy + hw);
-                                    line(cx + hw, cy + hw, cx - hw, cy + hw);
-                                    line(cx - hw, cy + hw, cx - hw, cy - hw);
-                                }
-                                if (layers >= 2) {
-                                    // Diamond: vertices on the midpoints of the
-                                    // tank's sides, so it spans the whole perimeter.
-                                    line(cx, cy - hw, cx + hw, cy);
-                                    line(cx + hw, cy, cx, cy + hw);
-                                    line(cx, cy + hw, cx - hw, cy);
-                                    line(cx - hw, cy, cx, cy - hw);
-                                }
-                                if (layers >= 3) {
-                                    // Circle: inscribed in the same box, drawn as
-                                    // a pixel stair (not a smooth stroke).
-                                    var csteps = Math.max(24, Math.round(6 * hw / ps));
-                                    for (var a = 0; a < csteps; ++a) {
-                                        var ang = 2 * Math.PI * a / csteps;
-                                        var x = Math.round((cx + hw * Math.cos(ang)) / ps) * ps;
-                                        var y = Math.round((cy + hw * Math.sin(ang)) / ps) * ps;
-                                        ctx.fillRect(x, y, ps, ps);
-                                    }
-                                }
-                                ctx.fillStyle = "#ffffff";
-                            }
-                        }
-                        // Shield: static crackling around the hull as two
-                        // alternating frames of a jagged, rounded ring of
-                        // lightning (see ShieldSprite.qml).
-                        Loader {
-                            // Hidden while armour shields are up: the white
-                            // crackling ring would visually collide with the
-                            // armour outlines around the tank.
-                            active: p.shield && p.armorHP <= 0
-                            anchors.fill: parent
-                            anchors.margins: -Math.round(parent.width * 0.35)
-                            sourceComponent: Component {
-                                ShieldSprite {
-                                    anchors.fill: parent
-                                    frame: Math.floor(backend.frameTick / 6)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Pixel bullets, brass cannon shells while powered.
-                Repeater {
-                    model: 16
-                    Item {
-                        property var b: backend.bulletAt(index, backend.frameTick)
-                        visible: b.active
-                        property real s: b.blast ? Math.max(14, win.cell * 0.4) : (b.big ? Math.max(12, win.cell * 0.38) : Math.max(8, win.cell * 0.24))
-                        property real mw: b.blast ? s * 0.4 : s
-                        property real mh: b.blast ? s * 1.8 : s
-                        x: b.x * win.cell - mw / 2
-                        y: b.y * win.cell - mh / 2
-                        width: mw; height: mh
-                        rotation: b.blast ? (b.dir === 0 ? 0 : b.dir === 1 ? 90 : b.dir === 2 ? 180 : 270) : 0
-                        // Missile body (dark gray).
-                        Rectangle {
-                            anchors.fill: parent
-                            color: b.blast ? "#4a4a4a" : (b.big ? "#c8963c" : (b.owner === 2 ? "#ff705a" : "#ffd60a"))
-                        }
-                        // Missile tip (diamond).
-                        Rectangle {
-                            visible: b.blast
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.top: parent.top
-                            anchors.topMargin: -width / 2
-                            width: parent.width * 1.4
-                            height: width
-                            rotation: 45
-                            color: "#7a7a7a"
-                        }
-                        // Fire trail behind the missile.
-                        Rectangle {
-                            visible: b.blast
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.top: parent.bottom
-                            width: parent.width * 0.8
-                            height: parent.height * 0.5
-                            color: "#ff6b35"
-                        }
-                        Rectangle {
-                            visible: b.blast
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.top: parent.bottom
-                            anchors.topMargin: parent.height * 0.3
-                            width: parent.width * 0.5
-                            height: parent.height * 0.4
-                            color: "#ffd700"
-                        }
-                        Rectangle {
-                            visible: !b.blast
-                            anchors.centerIn: parent
-                            width: parent.width / 2; height: parent.height / 2
-                            color: "#ffffff"
-                        }
-                    }
-                }
-
-                // Bonus pickups in the Battle City frame: white border,
-                // blue hard shadow, dark navy interior, word label below.
-                Item {
-                    id: pickupBox
-                    property var k: backend.pickupAt(backend.frameTick)
-                    visible: k.active
-                    property real s: win.cell * 1.1
-                    property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff", "#ffd700", "#ff6b6b"]
-                    property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE", "LEVELUP", "BLAST"]
-                    x: k.x * win.cell - s / 2
-                    y: k.y * win.cell - (s + 18) / 2
-                    width: s; height: s + 18
-                    opacity: (k.age > 12 && win.treadFrame === 0) ? 0.35 : 1
-                    Rectangle {
-                        x: 4; y: 4
-                        width: parent.s; height: parent.s
-                        color: "#2a4a8c"
-                    }
-                    Rectangle {
-                        width: parent.s; height: parent.s
-                        color: "#0a1030"
-                        border.color: "white"
-                        border.width: 2
-                    }
-                    PickupIcon {
-                        y: 4
-                        width: parent.width
-                        height: parent.s - 8
-                        kind: parent.k.kind
-                        side: Math.min(parent.width - 14, parent.s - 16)
-                    }
-                    Text {
-                        y: parent.s + 2
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: parent.labels[parent.k.kind]
-                        font.bold: true
-                        font.pixelSize: 11; font.letterSpacing: 1
-                        color: parent.cols[parent.k.kind]
-                        style: Text.Outline
-                        styleColor: "black"
-                    }
-                }
-
-                // Floating kill scores in pixel type.
-                Repeater {
-                    model: 8
-                    Text {
-                        property var f: backend.floaterAt(index, backend.frameTick)
-                        visible: f.active
-                        x: f.x * win.cell - 24
-                        y: f.y * win.cell - 12 - f.age * 34
-                        width: 72
-                        horizontalAlignment: Text.AlignHCenter
-                        text: f.text
-                        font.bold: true
-                        font.pixelSize: 19
-                        color: "#ffd60a"
-                        style: Text.Outline
-                        styleColor: "black"
-                        opacity: Math.max(0, 1 - f.age / 1.2)
-                        z: 9
-                    }
-                }
-
-                // Forest canopy above everything: hides tanks like the original.
-                // A dithered leaf field keyed on global cell coordinates, so
-                // neighbouring forest tiles join with no visible seams. Clear
-                // cells are real holes you can see through and soft cells are
-                // translucent leaves; the rim of a copse thins out into a
-                // ragged edge instead of a hard square.
-                Repeater {
-                    model: backend.cols * backend.rows
-                    Item {
-                        id: forestTile
-                        property int cx: index % backend.cols
-                        property int cy: Math.floor(index / backend.cols)
-                        property int kind: backend.tileKind(cx, cy, backend.boardRev)
-                        x: cx * win.cell
-                        y: cy * win.cell
-                        width: win.cell
-                        height: win.cell
-                        z: 8
-
-                        // The 8x8 leaf grid is only built on real forest tiles,
-                        // never on the other cells of the board.
-                        Loader {
-                            anchors.fill: parent
-                            active: forestTile.kind === win.tileForest
-                            sourceComponent: canopyPart
-                        }
-
-                        Component {
-                            id: canopyPart
-                            Item {
-                                id: canopyTile
-                                anchors.fill: parent
-                                property bool rimUp: tileAt(forestTile.cx, forestTile.cy - 1) !== win.tileForest
-                                property bool rimDown: tileAt(forestTile.cx, forestTile.cy + 1) !== win.tileForest
-                                property bool rimLeft: tileAt(forestTile.cx - 1, forestTile.cy) !== win.tileForest
-                                property bool rimRight: tileAt(forestTile.cx + 1, forestTile.cy) !== win.tileForest
-
-                                // Int query, not a string one: this is also
-                                // what keeps the canopy from re-reading the
-                                // whole board every frame.
-                                function tileAt(x, y) {
-                                    return backend.tileKind(x, y, backend.boardRev)
-                                }
-                                // Stable per-cell hash on global cell coordinates.
-                                function leafNoise(gx, gy) {
-                                    let h = (gx * 374761393 + gy * 668265263) | 0
-                                    h = h ^ (h >>> 15)
-                                    h = Math.imul(h, 2246822519)
-                                    h = h ^ (h >>> 13)
-                                    return (h >>> 0) % 100
-                                }
-                                function canopy(gx, gy, r, c) {
-                                    const n = leafNoise(gx, gy)
-                                    if (n < 18)
-                                        return "transparent"
-                                    if (r === 0 && rimUp || r === 7 && rimDown || c === 0 && rimLeft || c === 7 && rimRight) {
-                                        if (n < 55)
-                                            return "transparent"
-                                    }
-                                    if (n < 32)
-                                        return "#b0336a29"
-                                    const clump = leafNoise(gx >> 1, gy >> 1)
-                                    if (clump < 20)
-                                        return "#1d3d1a"
-                                    if (clump < 45)
-                                        return "#2f662c"
-                                    if (clump < 80)
-                                        return "#468a35"
-                                    return "#6fae4a"
-                                }
-                                function colorAt(r, c) {
-                                    return canopy(forestTile.cx * 8 + c, forestTile.cy * 8 + r, r, c)
-                                }
-
-                                Grid {
-                                    anchors.fill: parent
-                                    columns: 8
-                                    rows: 8
+                                    // Sheared steel strips: same 4+4 mask as brick,
+                                    // so a CANNON shell leaves the same kind of gap.
                                     Repeater {
-                                        model: 64
+                                        model: 8
                                         Rectangle {
-                                            property int r: Math.floor(index / 8)
-                                            property int c: index % 8
-                                            width: Math.ceil(forestTile.width / 8)
-                                            height: Math.ceil(forestTile.height / 8)
-                                            color: canopyTile.colorAt(r, c)
+                                            property bool vertical: index < 4
+                                            property int slot: index % 4
+                                            property real e0: Math.round(slot * win.cell / 4)
+                                            property real e1: Math.round((slot + 1) * win.cell / 4)
+                                            visible: win.brickGone(tileItem.cx, tileItem.cy, index)
+                                            x: vertical ? e0 : 0
+                                            y: vertical ? 0 : e0
+                                            width: vertical ? e1 - e0 : win.cell
+                                            height: vertical ? win.cell : e1 - e0
+                                            color: "#050507"
+                                        }
+                                    }
+                                }
+                            }
+                            Loader {
+                                anchors.fill: parent
+                                active: tileItem.kind === win.tileBase || tileItem.kind === win.tileDead
+                                sourceComponent: basePart
+                            }
+                            // Base: the official Omarchy icon — the square mark with
+                            // no wordmark. Defend it.
+                            Component {
+                                id: basePart
+                                Item {
+                                    id: baseTile
+                                    anchors.fill: parent
+                                    property bool dead: tileItem.kind === win.tileDead
+                                    // The square Omarchy logo, 27x13 blocks: the
+                                    // official mark (icon.txt) collapsed 2x2, hard
+                                    // coded so the game needs nothing from the host.
+                                    // Plate on, glyph cut in.
+                                    property var mark: [
+                                        "XXXXXXXXXXXXXXXXXXXXXXXXXXX",
+                                        "XX..........XXX..........XX",
+                                        "XX..XXXXXXXXXXX....XXXX..XX",
+                                        "XX..XX...............XX..XX",
+                                        "XX..XX...............XX..XX",
+                                        "XX..XX...............XX..XX",
+                                        "XXXXXX...............XX..XX",
+                                        "XX..XX...............XX..XX",
+                                        "XX..XX...............XX..XX",
+                                        "XX..XX...............XX..XX",
+                                        "XX..XXXXXXXXXXXXXXXXXXX..XX",
+                                        "XX..........XXX..........XX",
+                                        "XXXXXXXXXXXXXXX..XXXXXXXXXX",
+                                    ]
+                                    property string plate: dead ? "#7a3535" : "#9ece6a"
+                                    property string glyph: "transparent"
+                                    // The mark is 2:1 by design, so uniform blocks
+                                    // leave half the tile empty and read squashed:
+                                    // stretch the vertical block ~1.7x so the plate
+                                    // fills the tile without breaking the shape.
+                                    property real px: Math.max(1, win.cell / 29)
+                                    property real py: Math.max(1.5, win.cell / 17)
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.margins: 1
+                                        color: baseTile.dead ? "#3d1010" : "#0d0d12"
+                                    }
+                                    Grid {
+                                        anchors.centerIn: parent
+                                        columns: 27
+                                        rows: 13
+                                        Repeater {
+                                            model: 351
+                                            Rectangle {
+                                                property int r: Math.floor(index / 27)
+                                                property int c: index % 27
+                                                property string ch: baseTile.mark[r][c]
+                                                width: baseTile.px
+                                                height: baseTile.py
+                                                color: ch === "X" ? baseTile.plate : baseTile.glyph
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // CRT scanlines on top, pointer-transparent.
-                Column {
-                    anchors.fill: parent
-                    spacing: 0
-                    z: 10
-                    enabled: false
+                    // Enemies: 0 gray basic, 1 yellow wheeled fast, 2 steel armored.
+                    // Fixed model: delegates persist, only properties update.
                     Repeater {
-                        model: backend.rows * 2
-                        Rectangle { width: board.width; height: 2; color: index % 2 ? "#00000000" : "#14ffffff" }
+                        model: 6
+                        Item {
+                            property var e: backend.enemyAt(index, backend.frameTick)
+                            visible: e.alive
+                            x: e.x * win.cell - width / 2
+                            y: e.y * win.cell - height / 2
+                            width: win.cell * 0.94
+                            height: win.cell * 0.94
+                            // FREEZE blinks while it is about to run out, so the
+                            // thaw is not a surprise.
+                            opacity: (backend.freezeEnding
+                                      && Math.floor(backend.frameTick / 20) % 2 === 0) ? 0.25 : 1
+                            // Armored tanks shift colour with each hit:
+                            // purple (full) -> cyan (1 hit) -> gray (vulnerable).
+                            // Carriers flash red <-> gray.
+                            property bool carrierFlash: e.kind === 3
+                                                        && Math.floor(backend.frameTick / 6) % 2 === 0
+                            property color enemyBody: {
+                                if (e.kind === 3)
+                                    return carrierFlash ? win.foeRed : win.foeGray
+                                if (e.kind === 2) {
+                                    if (e.hp >= 3) return "#9b7ebd"
+                                    if (e.hp === 2) return "#7eb8c4"
+                                    return win.foeGray
+                                }
+                                if (e.kind === 1)
+                                    return win.foeYellow
+                                return win.foeGray
+                            }
+                            property color enemyDark: {
+                                if (e.kind === 3)
+                                    return carrierFlash ? win.foeRedDark : win.foeGrayDark
+                                if (e.kind === 2) {
+                                    if (e.hp >= 3) return "#5a4a6e"
+                                    if (e.hp === 2) return "#3a5a60"
+                                    return win.foeGrayDark
+                                }
+                                if (e.kind === 1)
+                                    return win.foeYellowDark
+                                return win.foeGrayDark
+                            }
+                            property color enemyLight: {
+                                if (e.kind === 3)
+                                    return carrierFlash ? win.foeRedLight : win.foeGrayLight
+                                if (e.kind === 2) {
+                                    if (e.hp >= 3) return "#d4c4e8"
+                                    if (e.hp === 2) return "#c4e4ea"
+                                    return win.foeGrayLight
+                                }
+                                if (e.kind === 1)
+                                    return win.foeYellowLight
+                                return win.foeGrayLight
+                            }
+                            // Basic and carrier use treads, the fast tank wheels and
+                            // the armoured tank the chunkier plated hull.
+                            property int enemyVariant: e.kind === 1 ? 1 : (e.kind === 2 ? 2 : 0)
+                            // Frost while time is frozen: a single big iced patch
+                            // under the tank. Built only while frozen.
+                            Loader {
+                                active: backend.frozen
+                                anchors.fill: parent
+                                z: -1
+                                sourceComponent: Component {
+                                    Item {
+                                        anchors.fill: parent
+                                        FrostSprite {
+                                            anchors.centerIn: parent
+                                            width: parent.width * 1.9
+                                            height: parent.height * 1.9
+                                        }
+                                    }
+                                }
+                            }
+                            TankSprite {
+                                anchors.fill: parent
+                                dir: e.dir
+                                frame: e.moving ? win.treadFrame : 0
+                                variant: enemyVariant
+                                body: enemyBody
+                                dark: enemyDark
+                                light: enemyLight
+                            }
+                        }
+                    }
+
+                    // Death explosions: a big white/gray spark flash that turns
+                    // into a black/gray smoke cloud with fire burning inside it.
+                    Repeater {
+                        model: 8
+                        Item {
+                            property var ex: index < backend.explosions.length ? backend.explosions[index] : null
+                            visible: ex !== null
+                            x: ex ? ex.x * win.cell - width / 2 : 0
+                            y: ex ? ex.y * win.cell - height / 2 : 0
+                            property real boom: ex ? Math.min(1.0, ex.age / 0.5) : 0
+                            width: win.cell * (1.3 + 1.0 * boom)
+                            height: width
+                            ExplosionSprite {
+                                anchors.fill: parent
+                                progress: parent.boom
+                            }
+                        }
+                    }
+
+                    // Players told apart by colour: P1 yellow, P2 green.
+                    Repeater {
+                        model: 2
+                        Item {
+                            property var p: backend.playerAt(index, backend.frameTick)
+                            visible: p.alive
+                            x: p.x * win.cell - width / 2
+                            y: p.y * win.cell - height / 2
+                            width: win.cell * 0.94
+                            height: win.cell * 0.94
+                            TankSprite {
+                                anchors.fill: parent
+                                dir: p.dir
+                                frame: p.moving ? win.treadFrame : 0
+                                body: index === 0 ? win.p1body : win.p2body
+                                dark: index === 0 ? win.p1dark : win.p2dark
+                                light: index === 0 ? win.p1light : win.p2light
+                            }
+                            // Armour shields: three white pixel outlines drawn
+                            // on the tank sprite boundary, all inscribed in the
+                            // same box so each one reaches the tank's perimeter:
+                            // a square (the boundary itself), a diamond with its
+                            // vertices on the side midpoints, and an inscribed
+                            // circle. On a hit the circle is lost first, then
+                            // the diamond; the square is the last to go.
+                            Canvas {
+                                id: armourCanvas
+                                x: -(width - parent.width) / 2
+                                y: -(height - parent.height) / 2
+                                width: parent.width * 1.2
+                                height: parent.height * 1.2
+                                rotation: [-90, 0, 90, 180][p.dir]
+                                visible: p.armorHP > 0
+                                property int seenArmor: p.armorHP
+                                onSeenArmorChanged: requestPaint()
+                                Component.onCompleted: requestPaint()
+                                onPaint: {
+                                    var ctx = getContext("2d");
+                                    ctx.reset();
+                                    ctx.clearRect(0, 0, width, height);
+                                    ctx.fillStyle = "#ffffff";
+                                    var ps = Math.max(2, Math.round(parent.width / 20));
+                                    var cx = width / 2;
+                                    var cy = height / 2;
+                                    // Half-size of the tank's bounding box, snapped
+                                    // to the pixel grid.
+                                    var hw = Math.round(parent.width * 0.5 / ps) * ps;
+                                    var layers = Math.min(3, Math.floor(p.armorHP));
+                                    // Pixel-stair segment between two points.
+                                    function line(x0, y0, x1, y1) {
+                                        var steps = Math.max(1, Math.round(Math.abs(x1 - x0) / ps)
+                                                               + Math.round(Math.abs(y1 - y0) / ps));
+                                        for (var k = 0; k <= steps; ++k) {
+                                            var t = k / steps;
+                                            var x = Math.round((x0 + (x1 - x0) * t) / ps) * ps;
+                                            var y = Math.round((y0 + (y1 - y0) * t) / ps) * ps;
+                                            ctx.fillRect(x, y, ps, ps);
+                                        }
+                                    }
+                                    if (layers >= 1) {
+                                        // Square: outline right on the sprite boundary.
+                                        line(cx - hw, cy - hw, cx + hw, cy - hw);
+                                        line(cx + hw, cy - hw, cx + hw, cy + hw);
+                                        line(cx + hw, cy + hw, cx - hw, cy + hw);
+                                        line(cx - hw, cy + hw, cx - hw, cy - hw);
+                                    }
+                                    if (layers >= 2) {
+                                        // Diamond: vertices on the midpoints of the
+                                        // tank's sides, so it spans the whole perimeter.
+                                        line(cx, cy - hw, cx + hw, cy);
+                                        line(cx + hw, cy, cx, cy + hw);
+                                        line(cx, cy + hw, cx - hw, cy);
+                                        line(cx - hw, cy, cx, cy - hw);
+                                    }
+                                    if (layers >= 3) {
+                                        // Circle: inscribed in the same box, drawn as
+                                        // a pixel stair (not a smooth stroke).
+                                        var csteps = Math.max(24, Math.round(6 * hw / ps));
+                                        for (var a = 0; a < csteps; ++a) {
+                                            var ang = 2 * Math.PI * a / csteps;
+                                            var x = Math.round((cx + hw * Math.cos(ang)) / ps) * ps;
+                                            var y = Math.round((cy + hw * Math.sin(ang)) / ps) * ps;
+                                            ctx.fillRect(x, y, ps, ps);
+                                        }
+                                    }
+                                    ctx.fillStyle = "#ffffff";
+                                }
+                            }
+                            // Shield: static crackling around the hull as two
+                            // alternating frames of a jagged, rounded ring of
+                            // lightning (see ShieldSprite.qml).
+                            Loader {
+                                // Hidden while armour shields are up: the white
+                                // crackling ring would visually collide with the
+                                // armour outlines around the tank.
+                                active: p.shield && p.armorHP <= 0
+                                anchors.fill: parent
+                                anchors.margins: -Math.round(parent.width * 0.35)
+                                sourceComponent: Component {
+                                    ShieldSprite {
+                                        anchors.fill: parent
+                                        frame: Math.floor(backend.frameTick / 6)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Pixel bullets, brass cannon shells while powered.
+                    Repeater {
+                        model: 16
+                        Item {
+                            property var b: backend.bulletAt(index, backend.frameTick)
+                            visible: b.active
+                            property real s: b.blast ? Math.max(14, win.cell * 0.4) : (b.big ? Math.max(12, win.cell * 0.38) : Math.max(8, win.cell * 0.24))
+                            property real mw: b.blast ? s * 0.4 : s
+                            property real mh: b.blast ? s * 1.8 : s
+                            x: b.x * win.cell - mw / 2
+                            y: b.y * win.cell - mh / 2
+                            width: mw; height: mh
+                            rotation: b.blast ? (b.dir === 0 ? 0 : b.dir === 1 ? 90 : b.dir === 2 ? 180 : 270) : 0
+                            // Missile body (dark gray).
+                            Rectangle {
+                                anchors.fill: parent
+                                color: b.blast ? "#4a4a4a" : (b.big ? "#c8963c" : (b.owner === 2 ? "#ff705a" : "#ffd60a"))
+                            }
+                            // Missile tip (diamond).
+                            Rectangle {
+                                visible: b.blast
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.top: parent.top
+                                anchors.topMargin: -width / 2
+                                width: parent.width * 1.4
+                                height: width
+                                rotation: 45
+                                color: "#7a7a7a"
+                            }
+                            // Fire trail behind the missile.
+                            Rectangle {
+                                visible: b.blast
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.top: parent.bottom
+                                width: parent.width * 0.8
+                                height: parent.height * 0.5
+                                color: "#ff6b35"
+                            }
+                            Rectangle {
+                                visible: b.blast
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.top: parent.bottom
+                                anchors.topMargin: parent.height * 0.3
+                                width: parent.width * 0.5
+                                height: parent.height * 0.4
+                                color: "#ffd700"
+                            }
+                            Rectangle {
+                                visible: !b.blast
+                                anchors.centerIn: parent
+                                width: parent.width / 2; height: parent.height / 2
+                                color: "#ffffff"
+                            }
+                        }
+                    }
+
+                    // Bonus pickups in the Battle City frame: white border,
+                    // blue hard shadow, dark navy interior, word label below.
+                    Item {
+                        id: pickupBox
+                        property var k: backend.pickupAt(backend.frameTick)
+                        visible: k.active
+                        property real s: win.cell * 1.1
+                        property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff", "#ffd700", "#ff6b6b"]
+                        property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE", "LEVELUP", "BLAST"]
+                        x: k.x * win.cell - s / 2
+                        y: k.y * win.cell - (s + 18) / 2
+                        width: s; height: s + 18
+                        opacity: (k.age > 12 && win.treadFrame === 0) ? 0.35 : 1
+                        Rectangle {
+                            x: 4; y: 4
+                            width: parent.s; height: parent.s
+                            color: "#2a4a8c"
+                        }
+                        Rectangle {
+                            width: parent.s; height: parent.s
+                            color: "#0a1030"
+                            border.color: "white"
+                            border.width: 2
+                        }
+                        PickupIcon {
+                            y: 4
+                            width: parent.width
+                            height: parent.s - 8
+                            kind: parent.k.kind
+                            side: Math.min(parent.width - 14, parent.s - 16)
+                        }
+                        Text {
+                            y: parent.s + 2
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: parent.labels[parent.k.kind]
+                            font.bold: true
+                            font.pixelSize: 11; font.letterSpacing: 1
+                            color: parent.cols[parent.k.kind]
+                            style: Text.Outline
+                            styleColor: "black"
+                        }
+                    }
+
+                    // Floating kill scores in pixel type.
+                    Repeater {
+                        model: 8
+                        Text {
+                            property var f: backend.floaterAt(index, backend.frameTick)
+                            visible: f.active
+                            x: f.x * win.cell - 24
+                            y: f.y * win.cell - 12 - f.age * 34
+                            width: 72
+                            horizontalAlignment: Text.AlignHCenter
+                            text: f.text
+                            font.bold: true
+                            font.pixelSize: 19
+                            color: "#ffd60a"
+                            style: Text.Outline
+                            styleColor: "black"
+                            opacity: Math.max(0, 1 - f.age / 1.2)
+                            z: 9
+                        }
+                    }
+
+                    // Forest canopy above everything: hides tanks like the original.
+                    // A dithered leaf field keyed on global cell coordinates, so
+                    // neighbouring forest tiles join with no visible seams. Clear
+                    // cells are real holes you can see through and soft cells are
+                    // translucent leaves; the rim of a copse thins out into a
+                    // ragged edge instead of a hard square.
+                    Repeater {
+                        model: backend.cols * backend.rows
+                        Item {
+                            id: forestTile
+                            property int cx: index % backend.cols
+                            property int cy: Math.floor(index / backend.cols)
+                            property int kind: backend.tileKind(cx, cy, backend.boardRev)
+                            x: cx * win.cell
+                            y: cy * win.cell
+                            width: win.cell
+                            height: win.cell
+                            z: 8
+
+                            // The 8x8 leaf grid is only built on real forest tiles,
+                            // never on the other cells of the board.
+                            Loader {
+                                anchors.fill: parent
+                                active: forestTile.kind === win.tileForest
+                                sourceComponent: canopyPart
+                            }
+
+                            Component {
+                                id: canopyPart
+                                Item {
+                                    id: canopyTile
+                                    anchors.fill: parent
+                                    property bool rimUp: tileAt(forestTile.cx, forestTile.cy - 1) !== win.tileForest
+                                    property bool rimDown: tileAt(forestTile.cx, forestTile.cy + 1) !== win.tileForest
+                                    property bool rimLeft: tileAt(forestTile.cx - 1, forestTile.cy) !== win.tileForest
+                                    property bool rimRight: tileAt(forestTile.cx + 1, forestTile.cy) !== win.tileForest
+
+                                    // Int query, not a string one: this is also
+                                    // what keeps the canopy from re-reading the
+                                    // whole board every frame.
+                                    function tileAt(x, y) {
+                                        return backend.tileKind(x, y, backend.boardRev)
+                                    }
+                                    // Stable per-cell hash on global cell coordinates.
+                                    function leafNoise(gx, gy) {
+                                        let h = (gx * 374761393 + gy * 668265263) | 0
+                                        h = h ^ (h >>> 15)
+                                        h = Math.imul(h, 2246822519)
+                                        h = h ^ (h >>> 13)
+                                        return (h >>> 0) % 100
+                                    }
+                                    function canopy(gx, gy, r, c) {
+                                        const n = leafNoise(gx, gy)
+                                        if (n < 18)
+                                            return "transparent"
+                                        if (r === 0 && rimUp || r === 7 && rimDown || c === 0 && rimLeft || c === 7 && rimRight) {
+                                            if (n < 55)
+                                                return "transparent"
+                                        }
+                                        if (n < 32)
+                                            return "#b0336a29"
+                                        const clump = leafNoise(gx >> 1, gy >> 1)
+                                        if (clump < 20)
+                                            return "#1d3d1a"
+                                        if (clump < 45)
+                                            return "#2f662c"
+                                        if (clump < 80)
+                                            return "#468a35"
+                                        return "#6fae4a"
+                                    }
+                                    function colorAt(r, c) {
+                                        return canopy(forestTile.cx * 8 + c, forestTile.cy * 8 + r, r, c)
+                                    }
+
+                                    Grid {
+                                        anchors.fill: parent
+                                        columns: 8
+                                        rows: 8
+                                        Repeater {
+                                            model: 64
+                                            Rectangle {
+                                                property int r: Math.floor(index / 8)
+                                                property int c: index % 8
+                                                width: Math.ceil(forestTile.width / 8)
+                                                height: Math.ceil(forestTile.height / 8)
+                                                color: canopyTile.colorAt(r, c)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+                    // NUKE: a semi-transparent yellow blast that grows out of the
+                    // spot where the bonus was picked up until it covers the whole
+                    // board, then fades (Backend::nuke()).
+                    Item {
+                        id: nukeFlash
+                        property var n: backend.nuke
+                        property real p: n.active ? n.progress : 0
+                        visible: n.active
+                        z: 12
+                        x: n.active ? n.x * win.cell : 0
+                        y: n.active ? n.y * win.cell : 0
+                        // A radius of one board diagonal reaches every corner from
+                        // any spot on the board.
+                        property real reach: win.cell * Math.sqrt(backend.cols * backend.cols
+                                                                 + backend.rows * backend.rows)
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: nukeFlash.reach * 2 * nukeFlash.p
+                            height: width
+                            radius: width / 2
+                            color: "#ffd93b"
+                            opacity: 0.45 * Math.min(1, (1 - nukeFlash.p) / 0.3)
+                        }
+                    }
+
+                    // BLAST MISSILE impact: a small orange circle that grows out of
+                    // the hit spot (Backend::blastImpact()).
+                    Item {
+                        id: blastFlash
+                        property var b: backend.blastImpact
+                        property real p: b.active ? b.progress : 0
+                        visible: b.active
+                        z: 12
+                        x: b.active ? b.x * win.cell : 0
+                        y: b.active ? b.y * win.cell : 0
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: win.cell * 3 * blastFlash.p
+                            height: width
+                            radius: width / 2
+                            color: "#ff6b35"
+                            opacity: 0.5 * Math.min(1, (1 - blastFlash.p) / 0.5)
+                        }
+                    }
+
+                    // Air support (LEVELUP tier 4) impact: a white/blue circle that
+                    // grows out of the strike spot, 1 s after the sound starts.
+                    Item {
+                        id: airSupportFlash
+                        property var a: backend.airSupportImpact
+                        property real p: a.active ? a.progress : 0
+                        visible: a.active
+                        z: 12
+                        x: a.active ? a.x * win.cell : 0
+                        y: a.active ? a.y * win.cell : 0
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: win.cell * 4 * airSupportFlash.p
+                            height: width
+                            radius: width / 2
+                            color: "#a0d8ff"
+                            opacity: 0.5 * Math.min(1, (1 - airSupportFlash.p) / 0.4)
+                        }
                     }
                 }
-                // Vignette corners.
-                Rectangle {
+
+                // The CRT tube: the playfield texture drawn back through a
+                // curved-glass shader — barrel distortion, screen-space
+                // scanlines, a corner vignette and a chroma split that
+                // grows toward the edges. Needs the GL scene graph; under
+                // software rendering the straight picture is not replaced.
+                Item {
+                    id: tube
                     anchors.fill: parent
-                    z: 11
-                    enabled: false
-                    color: "transparent"
-                    border.color: "#000000"
-                    border.width: 6
-                    opacity: 0.55
-                }
-
-                // NUKE: a semi-transparent yellow blast that grows out of the
-                // spot where the bonus was picked up until it covers the whole
-                // board, then fades (Backend::nuke()).
-                Item {
-                    id: nukeFlash
-                    property var n: backend.nuke
-                    property real p: n.active ? n.progress : 0
-                    visible: n.active
-                    z: 12
-                    x: n.active ? n.x * win.cell : 0
-                    y: n.active ? n.y * win.cell : 0
-                    // A radius of one board diagonal reaches every corner from
-                    // any spot on the board.
-                    property real reach: win.cell * Math.sqrt(backend.cols * backend.cols
-                                                             + backend.rows * backend.rows)
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: nukeFlash.reach * 2 * nukeFlash.p
-                        height: width
-                        radius: width / 2
-                        color: "#ffd93b"
-                        opacity: 0.45 * Math.min(1, (1 - nukeFlash.p) / 0.3)
+                    anchors.margins: 4
+                    // Glass: a soft dark frame just inside the tube edge,
+                    // pointing to the bezel at the same time. Painted once
+                    // per resize, so it costs nothing in play.
+                    Canvas {
+                        anchors.fill: parent
+                        enabled: false
+                        onPaint: {
+                            var ctx = getContext("2d")
+                            ctx.reset()
+                            var e = 5, r = 16
+                            ctx.lineWidth = 9
+                            ctx.strokeStyle = "rgba(0, 0, 0, 0.30)"
+                            ctx.beginPath()
+                            ctx.moveTo(e + r, e)
+                            ctx.lineTo(width - e - r, e)
+                            ctx.quadraticCurveTo(width - e, e, width - e, e + r)
+                            ctx.lineTo(width - e, height - e - r)
+                            ctx.quadraticCurveTo(width - e, height - e, width - e - r, height - e)
+                            ctx.lineTo(e + r, height - e)
+                            ctx.quadraticCurveTo(e, height - e, e, height - e - r)
+                            ctx.lineTo(e, e + r)
+                            ctx.quadraticCurveTo(e, e, e + r, e)
+                            ctx.stroke()
+                        }
+                        onWidthChanged: requestPaint()
+                        onHeightChanged: requestPaint()
+                        Component.onCompleted: requestPaint()
                     }
                 }
 
-                // BLAST MISSILE impact: a small orange circle that grows out of
-                // the hit spot (Backend::blastImpact()).
-                Item {
-                    id: blastFlash
-                    property var b: backend.blastImpact
-                    property real p: b.active ? b.progress : 0
-                    visible: b.active
-                    z: 12
-                    x: b.active ? b.x * win.cell : 0
-                    y: b.active ? b.y * win.cell : 0
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: win.cell * 3 * blastFlash.p
-                        height: width
-                        radius: width / 2
-                        color: "#ff6b35"
-                        opacity: 0.5 * Math.min(1, (1 - blastFlash.p) / 0.5)
-                    }
-                }
-
-                // Air support (LEVELUP tier 4) impact: a white/blue circle that
-                // grows out of the strike spot, 1 s after the sound starts.
-                Item {
-                    id: airSupportFlash
-                    property var a: backend.airSupportImpact
-                    property real p: a.active ? a.progress : 0
-                    visible: a.active
-                    z: 12
-                    x: a.active ? a.x * win.cell : 0
-                    y: a.active ? a.y * win.cell : 0
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: win.cell * 4 * airSupportFlash.p
-                        height: width
-                        radius: width / 2
-                        color: "#a0d8ff"
-                        opacity: 0.5 * Math.min(1, (1 - airSupportFlash.p) / 0.4)
-                    }
-                }
 
                 // State overlay: pixel panel, no Material.
                 Rectangle {

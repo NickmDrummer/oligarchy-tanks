@@ -14,6 +14,13 @@
         <file alias="fonts/Silkscreen-Regular.ttf">fonts/Silkscreen-Regular.ttf</file>
         <file alias="fonts/Silkscreen-Bold.ttf">fonts/Silkscreen-Bold.ttf</file>
         <file alias="fonts/DepartureMono-Regular.otf">fonts/DepartureMono-Regular.otf</file>
+        <!-- The CRT shaders live here as .qsb files, precompiled from
+             shaders/crt.vert and shaders/crt.frag with the qsb tool
+             (Qt 6 does not accept inline GLSL in ShaderEffect).
+             Regenerate with: qsb -qt6 -o shaders/crt.vert.qsb shaders/crt.vert
+             and: qsb -qt6 -o shaders/crt.frag.qsb shaders/crt.frag -->
+        <file alias="shaders/crt.vert.qsb">shaders/crt.vert.qsb</file>
+        <file alias="shaders/crt.frag.qsb">shaders/crt.frag.qsb</file>
         <file alias="sounds/shoot.wav">sounds/shoot.wav</file>
         <file alias="sounds/hit.wav">sounds/hit.wav</file>
         <file alias="sounds/explode.wav">sounds/explode.wav</file>
