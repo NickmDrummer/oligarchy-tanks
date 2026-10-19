@@ -517,8 +517,6 @@ ApplicationWindow {
                 anchors.horizontalCenterOffset: -(win.panelW + win.displayGap) / 2
                 anchors.verticalCenter: parent.verticalCenter
                 color: "#050507"
-                border.color: "#3a3a44"
-                border.width: 4
                 clip: true
 
                 // The picture the tube shows: everything the playfield
@@ -1282,42 +1280,11 @@ ApplicationWindow {
 
                 // The CRT tube: the playfield texture drawn back through a
                 // curved-glass shader — barrel distortion, screen-space
-                // scanlines, a corner vignette and a chroma split that
-                // grows toward the edges. Needs the GL scene graph; under
-                // software rendering the straight picture is not replaced.
-                Item {
-                    id: tube
-                    anchors.fill: parent
-                    anchors.margins: 4
-                    // Glass: a soft dark frame just inside the tube edge,
-                    // pointing to the bezel at the same time. Painted once
-                    // per resize, so it costs nothing in play.
-                    Canvas {
-                        anchors.fill: parent
-                        enabled: false
-                        onPaint: {
-                            var ctx = getContext("2d")
-                            ctx.reset()
-                            var e = 5, r = 16
-                            ctx.lineWidth = 9
-                            ctx.strokeStyle = "rgba(0, 0, 0, 0.30)"
-                            ctx.beginPath()
-                            ctx.moveTo(e + r, e)
-                            ctx.lineTo(width - e - r, e)
-                            ctx.quadraticCurveTo(width - e, e, width - e, e + r)
-                            ctx.lineTo(width - e, height - e - r)
-                            ctx.quadraticCurveTo(width - e, height - e, width - e - r, height - e)
-                            ctx.lineTo(e + r, height - e)
-                            ctx.quadraticCurveTo(e, height - e, e, height - e - r)
-                            ctx.lineTo(e, e + r)
-                            ctx.quadraticCurveTo(e, e, e + r, e)
-                            ctx.stroke()
-                        }
-                        onWidthChanged: requestPaint()
-                        onHeightChanged: requestPaint()
-                        Component.onCompleted: requestPaint()
-                    }
-                }
+                // scanlines, a corner vignette, a chroma split that grows
+                // toward the edges, and a dark rim that follows the
+                // curvature (the straight frame lives in the shader now).
+                // Needs the GL scene graph; under software rendering the
+                // straight picture is not replaced.
 
 
                 // State overlay: pixel panel, no Material.

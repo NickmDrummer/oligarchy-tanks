@@ -27,14 +27,20 @@ vec2 curve(vec2 uv) {
 
 void main() {
     vec2 uv = curve(qt_TexCoord0);
-    // Outside the curved mask there is no phosphor.
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    vec2 v = qt_TexCoord0 - 0.5;
+    // Distance to the curved mask edge, in curved-texture space: the rim and
+    // the mask edge itself both key off it, so they follow the curvature.
+    float d = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+    // Outside the curved mask there is no phosphor; the boundary is blended
+    // into the board colour over ~3 device px so it reads as glass, not a
+    // sawtooth.
+    float edge = smoothstep(0.0, 0.006, d);
+    if (edge <= 0.0) {
         fragColor = vec4(0.020, 0.020, 0.028, 1.0) * ubuf.qt_Opacity;
         return;
     }
     vec4 c = texture(source, uv);
     // Chroma split grows toward the curved edges.
-    vec2 v = qt_TexCoord0 - 0.5;
     vec2 shift = v * 0.004 * dot(v, v) * 4.0;
     c.r = texture(source, uv + shift).r;
     c.b = texture(source, uv - shift).b;
@@ -42,5 +48,11 @@ void main() {
     float scan = mod(gl_FragCoord.y, 3.0) < 1.0 ? 0.18 : 0.0;
     // Vignette: clear in the middle, dark corners.
     float vig = 1.0 - 0.5 * smoothstep(0.30, 0.85, length(v));
-    fragColor = vec4(c.rgb * (1.0 - scan) * vig, 1.0) * ubuf.qt_Opacity;
+    vec3 col = c.rgb * (1.0 - scan) * vig;
+    // The tube's own dark rim, ~9 device px, following the curve exactly:
+    // this replaces the straight glass frame of the old layout.
+    float rim = 1.0 - smoothstep(0.0, 0.020, d);
+    col *= 1.0 - 0.5 * rim;
+    col = mix(vec3(0.020, 0.020, 0.028), col, edge);
+    fragColor = vec4(col, 1.0) * ubuf.qt_Opacity;
 }
