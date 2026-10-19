@@ -1769,3 +1769,63 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
   the LIFE sprite's dead `width` binding.
 - Not yet played by the user: everything in this section.
 
+
+## 20. The post-play-test fix round (bugs 1-4 from the user's session)
+
+### 20.1 Bug 3: the tier-2 shoot sound doubled
+`fireP1()/fireP2()` fire the LEVELUP tier-2 trailing second bullet and both
+played the shoot sound. `fireBullet()` gained `bool playSnd = true`; the
+trailing bullet passes `false` (commit `4ae2119`).
+
+### 20.2 Bug 4: the manual had no scrolling
+The manual section is wrapped in a `Flickable` with a capped height; the BUILD
+and CLOSE buttons stay outside it, always visible (commit `e00542a`).
+
+### 20.3 Bug 1: the armour visuals (the parenthesis saga, then shields)
+The user's first spec was white parenthesis-shaped lines in front of the tank.
+Eight attempts failed the review (Repeater grid lines, Shape/PathArc arcs,
+bar+clipped-pill, pixel half-hexagon brackets). The final design they picked is
+**three shield outlines drawn on the tank sprite's own boundary** (commit
+`6d01478`), all inscribed in the tank's bounding box so each one reaches the
+whole perimeter, same ~2 px pixel line, drawn by `armourCanvas` (a `Canvas`
+next to `TankSprite` in the player delegate):
+
+- armour 1: **square**, the outline exactly on the sprite edge
+- armour 2: **diamond**, vertices on the side midpoints
+- armour 3: **circle**, inscribed in the same box
+- on a hit the **circle is lost first**, then the diamond, the square is last
+  (armorHP 3 -> 2 -> 1)
+
+Notes from the debugging round worth keeping:
+- The canvas is centred on the item (`x: -(width - parent.width) / 2`, width
+  1.2x the item) and every point is snapped to a ~`parent.width/20` pixel grid;
+  measured with a temp red marker at the canvas centre, it sits within ~1 px of
+  the tank's centre. The rotation `[-90,0,90,180][p.dir]` (local +x = forward)
+  is enough and the shapes are rotation-symmetric enough at 90-degree steps.
+- The off-centre look the user reported was **not** the overlay: it was the
+  **spawn grace crackling ring** (`ShieldSprite`, 3 s of `shieldUntil` per
+  spawn) drawn over it, whose white streaks stick out further on one side per
+  frame. The loader is now `active: p.shield && p.armorHP <= 0`, so the ring
+  shows only when there is no armour overlay.
+- Debugging trick: `wp findChildren` misses some dynamically re-parented QML
+  delegates; walking `contentItem()->childItems()` recursively does find them.
+  Also, offscreen `grabWindow()` screenshots caught the shield ring because
+  every capture longer than ~3 s walked out of the grace window - shots at
+  1.2 s of game time are inside it.
+- The `armor`/`armorRows` variant stays in `TankSprite.qml` (section 18.3's
+  grids untouched); the player overlay lives only in `Main.qml`.
+
+### 20.4 Bug 2 pending: air support does not recharge after 10 armored kills
+Not fixed yet. Suspects: `updateAirStrikes()` credits kills to hard-coded
+`m_p[0]`, so P2's recharge can break, and `AirStrike` has no `owner` field.
+
+### 20.5 tier 2 x BLAST MISSILE
+A tier-2 player with BLAST shots used to fire two missiles per press (the
+trailing second bullet was a second BLAST) and played the shoot sound twice.
+The trailing bullet is now gated on `blastShots <= 0`: BLAST fully replaces the
+shot and never stacks with tiers (commit `74e486b`).
+
+### 20.6 Verification state
+`bin/build` clean, `bin/test` **56/56**, offscreen smoke with no QML output.
+Played and approved by the user: the shield visuals and the tier-2/BLAST fix
+are committed; bug 2 (air-support recharge) is the next fix.
