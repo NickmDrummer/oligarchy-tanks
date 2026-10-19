@@ -141,6 +141,7 @@ QVariantMap Backend::playerAt(int i, int tick) const {
     return {{"x", t.x}, {"y", t.y}, {"dir", t.dir}, {"alive", t.alive},
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
             {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
+            {"blast", t.blastShots > 0}, {"tier", t.tier}, {"armorHP", t.armorHP},
             {"active", playerActive(i)}, {"joined", m_joined[i]}};
 }
 
@@ -266,7 +267,8 @@ void Backend::fireP1() {
     fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
     // LEVELUP tier 2: a second bullet trailing behind the first, so the
     // two do not overlap and cancel each other out on the first frame.
-    if (m_p[0].tier >= 2) {
+    // Only for normal shots: BLAST replaces the shot, no double blast.
+    if (m_p[0].tier >= 2 && m_p[0].blastShots <= 0) {
         double x2 = m_p[0].x, y2 = m_p[0].y;
         if (m_p[0].dir == 0) y2 += 0.4;
         if (m_p[0].dir == 2) y2 -= 0.4;
@@ -292,7 +294,8 @@ void Backend::fireP2() {
     m_p[1].cooldown = FIRE_GAP;
     fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1, BULLET_SPEED);
     // LEVELUP tier 2: a second bullet trailing behind the first.
-    if (m_p[1].tier >= 2) {
+    // Only for normal shots: BLAST replaces the shot, no double blast.
+    if (m_p[1].tier >= 2 && m_p[1].blastShots <= 0) {
         double x2 = m_p[1].x, y2 = m_p[1].y;
         if (m_p[1].dir == 0) y2 += 0.4;
         if (m_p[1].dir == 2) y2 -= 0.4;
