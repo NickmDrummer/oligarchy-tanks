@@ -1,4 +1,4 @@
-// tanks — retro 2-player local tank battle vs AI.
+// oligarchy-tanks — retro 2-player local tank battle vs AI.
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -23,13 +23,13 @@ int main(int argc, char *argv[]) {
     qputenv("QML_DISABLE_DISK_CACHE", QByteArrayLiteral("1"));
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName("tanks");
+    app.setApplicationName("oligarchy-tanks");
     app.setApplicationVersion("0.1.0");
 
     // Matches the window to tanks.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon.
-    app.setDesktopFileName("tanks");
-    app.setWindowIcon(QIcon::fromTheme("tanks"));
+    app.setDesktopFileName("oligarchy-tanks");
+    app.setWindowIcon(QIcon::fromTheme("oligarchy-tanks"));
 
     // The UI draws its own pixel furniture (see PixelButton and KeyCap), so the
     // Controls style only shapes the window: plain Basic, no Material.
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
     Backend backend;
     // Pads are read straight from /dev/input/event*. A pad joins a player by
     // pressing START; with none connected nothing changes. The reader writes to
-    // stderr when TANKS_PAD_DEBUG is set.
+    // stderr when OLIGARCHY_TANKS_PAD_DEBUG is set.
     Gamepad gamepad(&backend);
     gamepad.start();
 
@@ -66,9 +66,9 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("backend", &backend);
     // Stamp the running binary's own mtime, so the footer always names the
     // exact build on screen even when only QML was recompiled. In a release
-    // build (TANKS_RELEASE defined) the footer shows a version instead.
+    // build (OLIGARCHY_TANKS_RELEASE defined) the footer shows a version instead.
     const QDateTime built = QFileInfo(QCoreApplication::applicationFilePath()).lastModified();
-#ifdef TANKS_RELEASE
+#ifdef OLIGARCHY_TANKS_RELEASE
     engine.rootContext()->setContextProperty("buildId", QStringLiteral("V0.1"));
 #else
     engine.rootContext()->setContextProperty(

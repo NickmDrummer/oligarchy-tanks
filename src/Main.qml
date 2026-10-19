@@ -14,7 +14,7 @@ ApplicationWindow {
     minimumWidth: 840
     minimumHeight: 680
     visible: true
-    title: "Tanks"
+    title: "Oligarchy Tanks"
     color: "#0b0b10"
 
     property bool helpVisible: false
@@ -423,21 +423,26 @@ ApplicationWindow {
                     }
                 }
             }
-            // Game name, centred over the bar.
+            // Game name, centred over the bar. Fits by shrinking, so the
+            // long name never overflows the bar it sits on.
             Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
-                width: 190; height: 56
+                width: 380; height: 56
                 z: 1
                 Text {
                     x: 3; y: 4
-                    text: "TANKS"
+                    text: "OLIGARCHY TANKS"
                     font.bold: true; font.pixelSize: 34; font.letterSpacing: 3
+                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 14
+                    width: parent.width; horizontalAlignment: Text.AlignHCenter
                     color: "#000000"
                 }
                 Text {
-                    text: "TANKS"
+                    text: "OLIGARCHY TANKS"
                     font.bold: true; font.pixelSize: 34; font.letterSpacing: 3
+                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 14
+                    width: parent.width; horizontalAlignment: Text.AlignHCenter
                     color: theme.accent
                 }
             }
@@ -1269,11 +1274,15 @@ ApplicationWindow {
                             spacing: backend.state === "select" ? 22 : 12
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: backend.state === "select" ? "TANKS"
+                                text: backend.state === "select" ? "OLIGARCHY TANKS"
                                       : backend.state === "gameover" ? (backend.ending === "base" ? "BASE DESTROYED" : "GAME OVER")
                                       : backend.state === "paused" ? "PAUSED" : "VICTORY"
                                 font.bold: true
-                                font.pixelSize: 46; font.letterSpacing: 4
+                                // The long name takes a smaller face than the
+                                // short state words, so the panel never fights
+                                // the board for width.
+                                font.pixelSize: backend.state === "select" ? 30 : 46
+                                font.letterSpacing: backend.state === "select" ? 3 : 4
                                 color: theme.accent
                                 style: Text.Outline
                                 styleColor: "black"
@@ -1490,14 +1499,14 @@ ApplicationWindow {
                     height: helpTitle.implicitHeight + 6
                     Text {
                         x: 3; y: 3
-                        text: "TANKS - MANUAL"
-                        font.bold: true; font.pixelSize: 26; font.letterSpacing: 3
+                        text: "OLIGARCHY TANKS - MANUAL"
+                        font.bold: true; font.pixelSize: 20; font.letterSpacing: 3
                         color: "#000000"
                     }
                     Text {
                         id: helpTitle
-                        text: "TANKS - MANUAL"
-                        font.bold: true; font.pixelSize: 26; font.letterSpacing: 3
+                        text: "OLIGARCHY TANKS - MANUAL"
+                        font.bold: true; font.pixelSize: 20; font.letterSpacing: 3
                         color: theme.accent
                     }
                 }

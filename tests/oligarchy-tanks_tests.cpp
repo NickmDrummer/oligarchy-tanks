@@ -1226,4 +1226,4 @@ private slots:
 };
 
 QTEST_MAIN(TanksTests)
-#include "tanks_tests.moc"
+#include "oligarchy-tanks_tests.moc"

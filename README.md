@@ -1,4 +1,4 @@
-# Tanks
+# Oligarchy Tanks
 
 Retro local tank battle vs AI, in the style of classic Battle City on Sega.
 
@@ -79,7 +79,7 @@ pad number).
 Reading `/dev/input/event*` requires being in the `input` group. Most desktop
 installs already are; if pads are not detected, check with `id -nG`. Without the
 group, or with no pad plugged in, the game simply runs on the keyboard as
-before. To diagnose a pad that does not work, run `TANKS_PAD_DEBUG=1 ./build/tanks`
+before. To diagnose a pad that does not work, run `OLIGARCHY_TANKS_PAD_DEBUG=1 ./build/oligarchy-tanks`
 and watch the `[pad]` lines.
 
 ## Build

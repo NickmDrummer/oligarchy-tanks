@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Tanks
+Name=Oligarchy Tanks
 Comment=Retro 2-player local tank battle vs AI
-Exec=tanks %f
-Icon=tanks
+Exec=oligarchy-tanks %f
+Icon=oligarchy-tanks
 Terminal=false
 Categories=Game;ArcadeGame;
-StartupWMClass=tanks
+StartupWMClass=oligarchy-tanks

@@ -99,7 +99,7 @@ const char *keyName(int code) {
 } // namespace
 
 Gamepad::Gamepad(Backend *backend, QObject *parent) : QObject(parent), m_backend(backend) {
-    m_debug = !qEnvironmentVariableIsEmpty("TANKS_PAD_DEBUG");
+    m_debug = !qEnvironmentVariableIsEmpty("OLIGARCHY_TANKS_PAD_DEBUG");
 }
 
 Gamepad::~Gamepad() {

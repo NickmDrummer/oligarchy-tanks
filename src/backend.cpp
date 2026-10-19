@@ -34,11 +34,11 @@ int goneStrips(unsigned m) {
 Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) {
     m_foes.resize(6);
     m_bullets.reserve(16);
-    // Fixed seed for deterministic tests via TANKS_SEED.
-    if (const char *seed = std::getenv("TANKS_SEED"))
+    // Fixed seed for deterministic tests via OLIGARCHY_TANKS_SEED.
+    if (const char *seed = std::getenv("OLIGARCHY_TANKS_SEED"))
         m_rng.seed(unsigned(std::atoi(seed)));
-    // Debug tier for testing air support: TANKS_TIER=4 starts at tier 4.
-    if (const char *t = std::getenv("TANKS_TIER"))
+    // Debug tier for testing air support: OLIGARCHY_TANKS_TIER=4 starts at tier 4.
+    if (const char *t = std::getenv("OLIGARCHY_TANKS_TIER"))
         m_debugTier = std::atoi(t);
     generateMap();
     resetTanks(true);

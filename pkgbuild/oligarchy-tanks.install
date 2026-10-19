@@ -7,7 +7,7 @@ Gamepads are read straight from /dev/input/event*, which needs the 'input' group
 Press START on the pad to join as player 2 (a second pad takes player 1); the
 keyboard keeps working for both players either way. Without the group, or with
 no pad plugged in, the game runs on the keyboard as usual. To see what the game
-makes of a pad: TANKS_PAD_DEBUG=1 tanks
+makes of a pad: OLIGARCHY_TANKS_PAD_DEBUG=1 oligarchy-tanks
 EOF
 }
 

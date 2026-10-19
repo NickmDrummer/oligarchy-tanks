@@ -5,18 +5,18 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 mkdir -p "$ROOT/build/tests"
 cd "$ROOT/build/tests"
 
-qmake6 "$ROOT/tests/tanks_tests.pro"
+qmake6 "$ROOT/tests/oligarchy-tanks_tests.pro"
 make -j"$(nproc)"
 
 # Same stale-binary guard as bin/build: rebuild once from clean if needed.
-if [ -n "$(find "$ROOT/src" "$ROOT/tests" -newer "$ROOT/build/tests/tanks_tests" 2>/dev/null)" ]; then
+if [ -n "$(find "$ROOT/src" "$ROOT/tests" -newer "$ROOT/build/tests/oligarchy-tanks_tests" 2>/dev/null)" ]; then
   echo "Stale test build detected, rebuilding from clean..." >&2
   rm -rf "$ROOT/build/tests"
   mkdir -p "$ROOT/build/tests"
   cd "$ROOT/build/tests"
-  qmake6 "$ROOT/tests/tanks_tests.pro"
+  qmake6 "$ROOT/tests/oligarchy-tanks_tests.pro"
   make -j"$(nproc)"
 fi
 
 # Fixed map seed so the quarter-chipping test is deterministic.
-TANKS_SEED=7 QT_QPA_PLATFORM=offscreen ./tanks_tests
+OLIGARCHY_TANKS_SEED=7 QT_QPA_PLATFORM=offscreen ./oligarchy-tanks_tests
