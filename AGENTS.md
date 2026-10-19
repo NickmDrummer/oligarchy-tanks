@@ -1,4 +1,4 @@
-# AGENTS.md — Tanks
+# AGENTS.md — Oligarchy Tanks
 
 > **This is the agent entry point for this repository.** Any model or agent
 > picking up this project must read this file first, then `README.md` for the
@@ -74,14 +74,14 @@ with `qmake6` + `make`.
 ## 2. Repo map
 
 ```
-~/Work/tanks
+~/Work/oligarchy-tanks
 ├── AGENTS.md            # this file: agent entry point + state of the build
 ├── bin/build            # qmake6 + make, with stale-build self-heal
-├── bin/test             # test build + run, stale-build self-heal + TANKS_SEED=7
+├── bin/test             # test build + run, stale-build self-heal + OLIGARCHY_TANKS_SEED=7
 ├── bin/install          # installs the Arch package (PKGBUILD)
-├── pkgbuild/            # PKGBUILD, .desktop, .svg, tanks.install (input group note)
+├── pkgbuild/            # PKGBUILD, .desktop, .svg, oligarchy-tanks.install (input group note)
 ├── README.md            # user-facing docs (controls, build, gamepad)
-├── tanks.pro
+├── oligarchy-oligarchy-tanks.pro
 ├── src/
 │   ├── main.cpp         # app setup, QML_DISABLE_DISK_CACHE, buildId from binary mtime
 │   ├── backend.h        # all game state + interface (Q_PROPERTY / Q_INVOKABLE)
@@ -102,8 +102,8 @@ with `qmake6` + `make`.
 │   ├── fonts/           # Silkscreen Regular + Bold + OFL.txt (bundled)
 │   └── sounds/*.wav     # engine, shoot, eshoot, hit, explode, power, nuke
 └── tests/
-    ├── tanks_tests.cpp  # 35 QtTest cases (37 slots)
-    └── tanks_tests.pro
+    ├── oligarchy-oligarchy-tanks_tests.cpp  # 35 QtTest cases (37 slots)
+    └── oligarchy-oligarchy-tanks_tests.pro
 ```
 
 ---
@@ -256,7 +256,7 @@ steel unless it is a guard tile, and `updateBullets()` only chips steel on a
 
 ### 4.3 Determinism
 
-- `TANKS_SEED=<n>` seeds `m_rng`. `bin/test` runs with `TANKS_SEED=7` so map
+- `OLIGARCHY_TANKS_SEED=<n>` seeds `m_rng`. `bin/test` runs with `OLIGARCHY_TANKS_SEED=7` so map
   generation is reproducible.
 - Env-based seeding is a **real feature** (tests depend on it) — keep it.
 
@@ -362,7 +362,7 @@ and **B**) and the brick/PICK/frame-rate commit (`f0d5eb4`). Nothing pushed.
 `src/backend.h/.cpp` (the `Nuke` rename, the 15 s PICK and CANNON, `nuke()`,
 `updateNuke()`, `freezeEnding()`), `src/PickupIcon.qml` (all seven sprites plus
 the wrapper-Item centring fix), `src/Main.qml` (the NUKE blast, the freeze blink,
-the labels and the manual rows), `tests/tanks_tests.cpp` (4 slots) and this file.
+the labels and the manual rows), `tests/oligarchy-oligarchy-tanks_tests.cpp` (4 slots) and this file.
 The gate is the user's play session.
 
 ### 6.0 The round of section 18, by file
@@ -377,7 +377,7 @@ The gate is the user's play session.
                            revivePlayer()
    src/backend.h           the same declarations, freezeEnding() (section 19 adds
                            nuke()/updateNuke())
-   tests/tanks_tests.cpp   8 cases (stuck enemies, the eliminated player)
+   tests/oligarchy-oligarchy-tanks_tests.cpp   8 cases (stuck enemies, the eliminated player)
 
 b41a9f6  Recolour the tanks and redraw the wheeled chassis with a grey contour
    src/TankSprite.qml      the outline property (#6b7280), variant 1 = the user's
@@ -409,7 +409,7 @@ Phase C contains exactly these files:
                           (enemies only), the explosion delegate, the shield
                           loader
    src/resources.qrc      the three new QML components
-   tests/tanks_tests.cpp  the stage composition (16 tanks, kinds by level,
+   tests/oligarchy-oligarchy-tanks_tests.cpp  the stage composition (16 tanks, kinds by level,
                           carriers interleaved) and 16/16 in the level test
    AGENTS.md              section 17
 ```
@@ -447,13 +447,13 @@ purpose — this file changes itself):
  A 2d31ac5  Add a gamepad mapping layer and per-source movement flags
    src/padmap.h/.cpp      PadState, PadSink, PadMapper (Qt-free, unit tested)
    src/backend.h/.cpp     pad registry, pad* invokables, per-source m_padHeld
-   tests/tanks_tests.cpp  3 mapper cases + 8 pad cases
-   tests/tanks_tests.pro  padmap.cpp
+   tests/oligarchy-oligarchy-tanks_tests.cpp  3 mapper cases + 8 pad cases
+   tests/oligarchy-oligarchy-tanks_tests.pro  padmap.cpp
 
  B 3a756d0  Read gamepads from /dev/input and let one join a player
-   src/gamepad.h/.cpp     evdev reader, hotplug, sysfs filter, TANKS_PAD_DEBUG
+   src/gamepad.h/.cpp     evdev reader, hotplug, sysfs filter, OLIGARCHY_TANKS_PAD_DEBUG
    src/main.cpp           create and start Gamepad after Backend
-   tanks.pro              padmap.cpp, gamepad.cpp
+   oligarchy-tanks.pro              padmap.cpp, gamepad.cpp
    src/Main.qml           pad labels, join prompt, manual lines, helpRequested
    README.md / AGENTS.md  docs
    pkgbuild/              install=tanks.install + the input group note
@@ -473,15 +473,15 @@ commit A: `bin/build` clean and 31/31 slots), so each commit builds on its own.
   measure section 7 — removed after measuring.
 
 The rig above also referenced `m_p[0].pickUntil`, an API that no longer exists
-(section 4.2). `#include <cstdlib>` and the `TANKS_SEED` block in the constructor
+(section 4.2). `#include <cstdlib>` and the `OLIGARCHY_TANKS_SEED` block in the constructor
 **stay**: they are real features the tests depend on.
 
 ### 6.2 What the checkpoint commit (`ec59cd9`) contains
 
 - `bin/build`: stale-build guard (wipe + rebuild once from clean if any input is
-  newer than `build/tanks`).
-- `bin/test`: same guard for the test binary, plus `TANKS_SEED=7`.
-- `src/backend.h` / `src/backend.cpp`: `TANKS_SEED` seeding, `boardQ()`,
+  newer than `build/oligarchy-tanks`).
+- `bin/test`: same guard for the test binary, plus `OLIGARCHY_TANKS_SEED=7`.
+- `src/backend.h` / `src/backend.cpp`: `OLIGARCHY_TANKS_SEED` seeding, `boardQ()`,
   `friend struct TanksTestAccess;`, the `m_brickQ` member.
 - `src/main.cpp`: `buildId` from `QFileInfo(applicationFilePath()).lastModified()`.
 - `src/PickupIcon.qml`: the legible sprites **and** `Loader` gating per icon kind.
@@ -519,7 +519,7 @@ The rig above also referenced `m_p[0].pickUntil`, an API that no longer exists
   cover the whole cell slice in the board colour (this is the contour fix); the
   player panels drop the `PICK` label; the manual gains
   `PICK: BASE WALL BECOMES CONCRETE FOR 20 S`.
-- `tests/tanks_tests.cpp`: `TanksTestAccess` reworked (`strips()`, `chip(x, y,
+- `tests/oligarchy-oligarchy-tanks_tests.cpp`: `TanksTestAccess` reworked (`strips()`, `chip(x, y,
   dir)`, `solid()`, `putPlayer()`, `putEnemy()`, `takePickup()`,
   `baseGuardActive()`, `lapseBaseGuard()`); cases are
   `tileQueriesReportTheBoard`, `shotsChipSlices`,
@@ -679,12 +679,12 @@ both `uinput` pads still pass the filter (verified: the harness reports them).
 ## 8. Verification workflow
 
 ```sh
-cd ~/Work/tanks
+cd ~/Work/oligarchy-tanks
 
 bin/build                                  # qmake6 + make, self-heals stale builds
-bin/test                                   # 20 test slots, TANKS_SEED=7, offscreen
-QT_QPA_PLATFORM=offscreen ./build/tanks    # QML load smoke test; must print no warnings
-./build/tanks                              # real run
+bin/test                                   # 20 test slots, OLIGARCHY_TANKS_SEED=7, offscreen
+QT_QPA_PLATFORM=offscreen ./build/oligarchy-tanks    # QML load smoke test; must print no warnings
+./build/oligarchy-tanks                              # real run
 ```
 
 Important:
@@ -724,7 +724,7 @@ is the way to check QML output when the screen is not usable. Everything lives i
 2. Build it against the project's own object files, reusing the generated
    Makefile's flags (zsh needs `${=VAR}` to word-split them):
    ```sh
-   cd ~/Work/tanks/build
+   cd ~/Work/oligarchy-tanks/build
    CXXFLAGS=$(sed -n 's/^CXXFLAGS *= *//p' Makefile | sed 's/\$(DEFINES)//')
    DEFINES=$(sed -n 's/^DEFINES *= *//p' Makefile)
    INCPATH=$(sed -n 's/^INCPATH *= *//p' Makefile)
@@ -765,7 +765,7 @@ outer lambda's locals **by reference** produced a delayed `SIGSEGV` /
 
 ## 9. Environment gotchas (these cost a lot of time)
 
-- **`pkill -f build/tanks` kills the invoking shell.** Use `pkill -x tanks`.
+- **`pkill -f build/oligarchy-tanks` kills the invoking shell.** Use `pkill -x oligarchy-tanks`.
 - **`hyprctl` here is a Lua shim**: `hyprctl dispatch focuswindow` does **not**
   exist. Available: `hl.dsp.focus({direction=...})`, `hl.dsp.window.cycle_next()`,
   etc. Keyboard focus could not be forced from the shell.
@@ -960,7 +960,7 @@ Read gamepads from /dev/input and let one join a player
 - UI: the player panels name the device that drives each tank (KEY / PAD n), a
   blinking PRESS START TO JOIN shows while a pad is waiting, SELECT opens the
   manual, and the manual lists the pad controls.
-- Docs: README pad section, the input group requirement and TANKS_PAD_DEBUG,
+- Docs: README pad section, the input group requirement and OLIGARCHY_TANKS_PAD_DEBUG,
   which prints what the reader sees; the package prints the group note.
 ```
 
@@ -968,7 +968,7 @@ Read gamepads from /dev/input and let one join a player
 
 One commit for the select screen (section 15), after the user played it. Files:
 `README.md`, `src/Main.qml`, `src/backend.cpp`, `src/backend.h`,
-`tests/tanks_tests.cpp`, and this file. It is one change — the game's opening
+`tests/oligarchy-oligarchy-tanks_tests.cpp`, and this file. It is one change — the game's opening
 screen and the single-player model — verified together, so it stays one commit.
 
 ```
@@ -1125,7 +1125,7 @@ that are not gamepads and `looksLikeGamepad()` answers the "stick with gamepad
 buttons" test from sysfs capability masks without opening anything. Both exist
 because the naive version froze the event loop for 620 ms a second — the
 measurement, the cause (`close()` costs ~20 ms here) and the fix are in section
-7.2. `TANKS_PAD_DEBUG=1` prints what the reader sees: every node it rejects, each
+7.2. `OLIGARCHY_TANKS_PAD_DEBUG=1` prints what the reader sees: every node it rejects, each
 pad it finds with its axis ranges, every axis and button it reads, each scan's
 cost, and each pad that goes away. That is the tool to ask a user with an
 untested pad to run.
@@ -1322,7 +1322,7 @@ error paths close fds that never had a notifier, and the destructor runs outside
 the event loop. Qt's own plugins (Wayland, multimedia) hold notifiers too, so
 the candidates are outside the game unless a new clue appears.
 
-To pick this up again: run it as `./build/tanks 2>&1 | tee /tmp/tanks.log`, and
+To pick this up again: run it as `./build/oligarchy-tanks 2>&1 | tee /tmp/tanks.log`, and
 note whether the window froze (process alive, no response, sound stopped or
 looping) or the process exited by itself, and whether the warning came exactly
 with the `GAME OVER` screen. That decides whether it is the pad reader, Qt's
@@ -1862,3 +1862,82 @@ The same walk replaced the old out-of-bounds-to-centre rule, so firing along
 the arena edge also shows the shot leaving the muzzle. Tests:
 `shotLeavesTheMuzzleAgainstABlock` (hull-edge spawn + the wall chips) and
 `shotFiresAtTheArenaEdge`; `bin/test` is 60/60.
+
+---
+
+## 21. The Oligarchy Tanks rename, and the road to publication
+
+The game is renamed **Oligarchy Tanks** (user decision, session of Oct 2026).
+The repo folder is `~/Work/oligarchy-tanks`; the repo, the binary, the Arch
+package, the `.desktop` file, the icon and the Wayland app id are all
+**`oligarchy-tanks`** (the Omarchy app-convention name). Ran in one round,
+commit "Rename to Oligarchy Tanks": the `.pro` files (`oligarchy-tanks.pro`,
+`tests/oligarchy-tanks_tests.pro`), `bin/build` / `bin/test` paths, `main.cpp`
+(application name, desktop file, icon), the window title and the visible
+strings (`OLIGARCHY TANKS`, select 30 px vs 46 px so the long name fits, the
+manual header 26 -> 20 px, the bar title auto-fits at a 380 px item),
+`pkgbuild/oligarchy-tanks.{desktop,install,svg}`, the README/LICENSE titles and
+the env vars, which moved to **`OLIGARCHY_TANKS_SEED`, `OLIGARCHY_TANKS_TIER`,
+`OLIGARCHY_TANKS_PAD_DEBUG`, `OLIGARCHY_TANKS_RELEASE`**.
+
+Naming rule for the code and the docs: the word **`tank`/`Tank` stays as the
+noun everywhere** (`Backend::Tank`, `TankSprite.qml`, `hitsTank`,
+`TanksTestAccess`, prose like "16 tanks per stage"), except
+`tests/oligarchy-tanks_tests.cpp`, whose file name follows the test target.
+
+### 21.1 Compatibility boundary (verified, not promised)
+
+- Portable as-is: C++/QML over Qt6 (`core gui qml quick quickcontrols2
+  multimedia`), fonts and sounds embedded in the `.qrc`, offscreen tests,
+  fullscreen/F11, the theme reads a file with a `#FFD60A` fallback.
+- Linux-only by design: the gamepad reader (`<linux/input.h>`, `/dev/input`,
+  evdev/sysfs). On Windows/macOS the game still builds as a Qt app once these
+  two things happen: **drop `dbus` from both `.pro` files** (no QtDBus code
+  exists; Qt for Windows ships no QtDBus) and exclude `gamepad.cpp` behind a
+  Linux guard. Beyond that, keyboard-only play covers both players on one
+  keyboard, so 1P/2P stays playable everywhere.
+- Not viable: WebAssembly (Qt multimedia + pad input).
+- Bigger cross-platform support (real Windows/macOS builds, pads via SDL) is
+  explicitly out of scope unless the user asks for it later.
+
+### 21.2 Publication route (user decision)
+
+The **plugin marketplace is plugins only** (Quickshell/QML kinds: bar-widget,
+bar, panel, overlay, menu, service; `omarchy plugin add` clones QML and never
+installs binaries), so an app cannot be listed there. The chosen route:
+
+1. **GitHub public repo `NickmDrummer/oligarchy-tanks`** + tag `v0.1.0`.
+2. **AUR package `oligarchy-tanks`** (source recipe, not this repo's local
+   `pkgbuild/PKGBUILD`, which builds from `$startdir/..` and only works for
+   `bin/install`). Needs the user's AUR account + SSH key.
+3. **Omarchy Store listing** (omarchystore.com; requires install through a
+   package manager, install/removal docs in the README, and preview captures
+   taken by the user in fullscreen).
+4. **PR to `omacom/omarchy-pkgs`** (`pkgbuilds/oligarchy-tanks/` + `.omarchy/
+   package.json`) with the source pinned by tag and a GitHub watch, so it gets
+   `omarchy-pkg-add oligarchy-tanks`. It links Qt with a `build()`, so it stays
+   off the fast ring and reaches `rc`/`stable` by promotion.
+
+### 21.3 Next round: power-up adjustments (user list, not started)
+
+- Air support (tier 4): **5 missiles instead of 3**, and the effect **+25%
+  volume**.
+- A visible counter of armoured kills toward the recharge — bar or counter
+  with an icon, e.g. `AIR-SUPPORT: xx%` (design to settle with the user).
+- BLAST missile: **area radius 1.5 -> 3** cells.
+- Pickups: the user confirmed (Oct 2026) that killing a carrier must drop the
+  bonus at a **random free spot** on the board, never at (or near) the
+  carrier's death spot.
+- The tier-3 armour visuals, settled: **reuse the shield power-up's crackling
+  ring** (ShieldSprite lightning) in a **special colour** while `armorHP > 0`;
+  it disappears once the three hits are spent. This replaces the
+  square/diamond/circle canvas outlines shipped in `6d01478`.
+
+### 21.4 Aesthetics backlog (user ideas, pending, low priority)
+
+- **The board is not centred on the screen** — the playfield sits off-centre
+  in the window. Parked as pending (user asked to leave it noted).
+- A **CRT effect** over the map (scanlines/curvature/vignette style).
+- **Arcade stickers** (bezel art) around the display perimeter, covering the
+  board's frame like a coin-op cabinet.
+- **The manual needs corrections** (the user's list, pending).
