@@ -52,6 +52,27 @@ struct TanksTestAccess {
         e.hp = 1;
         b.m_foes.push_back(e);
     }
+    // An armoured (kind 2) enemy that costs an air strike one credit to kill.
+    static void putArmoredEnemy(Backend &b, double x, double y) {
+        Backend::Enemy e;
+        e.x = x;
+        e.y = y;
+        e.alive = true;
+        e.hp = 1;
+        e.kind = 2;
+        b.m_foes.push_back(e);
+    }
+    // Queue an air strike for a given owner; updateAirStrikes() does the rest.
+    static void airStrike(Backend &b, int owner, double x, double y) {
+        b.m_airStrikes.push_back(Backend::AirStrike{x, y, 1.0, false, owner});
+    }
+    static void advanceAir(double dt, Backend &b) { b.updateAirStrikes(dt); }
+    // Armoured-kill counters: the air-support recharge currency.
+    static int armouredKills(const Backend &b, int i) { return b.m_p[i].armoredKills; }
+    // A live player tank, for setting up tier/air state directly.
+    static Backend::Tank &tank(Backend &b, int i) { return b.m_p[i]; }
+    // One full frame of the game (the QTimer normally drives it).
+    static void runTick(Backend &b) { b.tick(); }
     static bool playerAlive(const Backend &b, int i) { return b.m_p[i].alive; }
     static int enemiesAlive(const Backend &b) { return b.aliveEnemies(); }
     static void takePickup(Backend &b, int kind) {
@@ -1114,6 +1135,46 @@ private slots:
         Theme theme(dir.path());
         QCOMPARE(theme.accent(), QString("#112233"));
         QCOMPARE(theme.accentForeground(), QString("white"));
+    }
+
+    // An air strike credits its explosion to the player who launched it,
+    // never to player 0 (the old hard-coded owner). This is what broke the
+    // recharge for P2: his armoured kills were never counted.
+    void airStrikeCreditsItsOwner() {
+        Backend b;
+        b.startGame();
+        // Strike far from the spawn lanes so no other foe is caught in it.
+        TanksTestAccess::putArmoredEnemy(b, 7.0, 13.0);
+        TanksTestAccess::airStrike(b, 1, 7.0, 13.0);
+        const int p0score = b.players().at(0).toMap().value("score").toInt();
+        const int p1score = b.players().at(1).toMap().value("score").toInt();
+        QCOMPARE(TanksTestAccess::armouredKills(b, 0), 0);
+        QCOMPARE(TanksTestAccess::armouredKills(b, 1), 0);
+        TanksTestAccess::advanceAir(1.2, b);
+        // Armoured enemies are 300 points; the armoured one is gone and BOTH
+        // the score and the armoured kill went to its owner (P2).
+        QCOMPARE(TanksTestAccess::armouredKills(b, 0), 0);
+        QCOMPARE(TanksTestAccess::armouredKills(b, 1), 1);
+        QCOMPARE(b.players().at(0).toMap().value("score").toInt(), p0score);
+        QCOMPARE(b.players().at(1).toMap().value("score").toInt(), p1score + 300);
+    }
+
+    // The tier-4 air support recharges once the player has 10 armoured kills.
+    void airSupportRechargesAtTenArmouredKills() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        auto &t2 = TanksTestAccess::tank(b, 1);
+        // Put P2 at tier 4, out of missiles and one kill short of the recharge.
+        t2.tier = 4;
+        t2.alive = true;
+        t2.airRecharging = true;
+        t2.armoredKills = 10;
+        t2.airMissiles = 0;
+        TanksTestAccess::runTick(b);
+        QCOMPARE(t2.airRecharging, false);
+        QCOMPARE(t2.airMissiles, 3);
+        QCOMPARE(t2.armoredKills, 0);
     }
 };
 

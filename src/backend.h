@@ -233,6 +233,7 @@ private:
         double x = 0, y = 0;
         double timer = 1.0;
         bool done = false;
+        int owner = 0;   // player who launched it; score/kill credit goes here
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };

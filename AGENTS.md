@@ -1815,9 +1815,15 @@ Notes from the debugging round worth keeping:
 - The `armor`/`armorRows` variant stays in `TankSprite.qml` (section 18.3's
   grids untouched); the player overlay lives only in `Main.qml`.
 
-### 20.4 Bug 2 pending: air support does not recharge after 10 armored kills
-Not fixed yet. Suspects: `updateAirStrikes()` credits kills to hard-coded
-`m_p[0]`, so P2's recharge can break, and `AirStrike` has no `owner` field.
+### 20.4 Bug 2 fixed: air support recharges after 10 armoured kills again
+`updateAirStrikes()` credited the score and the armoured kill of every
+explosion to hard-coded `m_p[0]`, so P2's tier-4 air support never counted his
+own kills and never recharged. `AirStrike` now carries an `owner` field (the
+player that launched it) and `updateAirStrikes()` credits score, armoured
+kills and the pickup drop to `m_p[owner]`. Two tests cover it: the strike
+credits its owner (`airStrikeCreditsItsOwner`) and the tier-4 tank refills 3
+missiles once `armoredKills` reaches 10 (`airSupportRechargesAtTenArmouredKills`).
+`bin/test` is 58/58 after this round.
 
 ### 20.5 tier 2 x BLAST MISSILE
 A tier-2 player with BLAST shots used to fire two missiles per press (the
@@ -1827,8 +1833,8 @@ shot and never stacks with tiers (commit `74e486b`).
 
 ### 20.6 Verification state
 `bin/build` clean, `bin/test` **56/56**, offscreen smoke with no QML output.
-Played and approved by the user: the shield visuals and the tier-2/BLAST fix
-are committed; bug 2 (air-support recharge) is the next fix.
+Played and approved by the user: the shield visuals, the tier-2/BLAST fix
+and the air-support owner/recharge fix are committed.
 
 ### 20.7 Window: fullscreen by default, F11 toggles
 The window was hard-coded 1040x800 and had no native fullscreen, so Hyprland

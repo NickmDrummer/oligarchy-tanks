@@ -868,7 +868,7 @@ void Backend::tick() {
         double my = t.y + off(m_rng);
         mx = std::max(0.5, std::min((double)(COLS - 0.5), mx));
         my = std::max(0.5, std::min((double)(ROWS - 0.5), my));
-        m_airStrikes.push_back(AirStrike{mx, my, 1.0, false});
+        m_airStrikes.push_back(AirStrike{mx, my, 1.0, false, i});
         if (m_soundEnabled)
             emit playSound("air-support");
         t.airMissiles--;
@@ -1954,10 +1954,10 @@ void Backend::updateAirStrikes(double dt) {
                 e.alive = false;
                 pushExplosion(e.x, e.y);
                 const int pts = (e.kind == 2) ? 300 : (e.kind == 1) ? 200 : 100;
-                // Award to the player who owns this air support (player 0 for now).
-                m_p[0].score += pts;
+                // Award to the player who owns this air support.
+                m_p[s.owner].score += pts;
                 if (e.kind == 2)
-                    m_p[0].armoredKills++;
+                    m_p[s.owner].armoredKills++;
                 m_floaters.push_back(Floater{e.x, e.y, pts, 0});
                 if (e.kind == 3 && !m_pickup.active)
                     spawnPickupAt(e.x, e.y);
