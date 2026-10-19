@@ -1439,6 +1439,27 @@ ApplicationWindow {
                     Text { text: "2 PLAYERS: KEYBOARD P1, FIRST PAD P2, 2ND PAD P1"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                     Text { text: "GAME OVER: START, SPACE OR ENTER GOES BACK TO THE SELECT SCREEN"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                 }
+                // ---- GAME ----
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "GAME"
+                    font.bold: true; font.pixelSize: 20; font.letterSpacing: 3
+                    color: theme.accent
+                }
+                Column {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 6
+                    width: 400
+                    Text { text: "DEFEND THE BASE. DESTROY ALL 16 ENEMIES PER SECTOR."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "ENEMIES: GRAY BASIC (1 HP), YELLOW FAST (1 HP, 1.35X SPEED),"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "ARMORED (3 HP, PURPLE>CYAN>GRAY), CARRIER (RED/GRAY, DROPS POWER-UPS)."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "SCORE: BASIC 100, FAST 200, ARMORED 300. LIVES: 3 (CAP 5)."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "SECTOR: MIX CHANGES (MORE FAST/ARMORED), ENEMIES GET FASTER."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "BRICKS: 4 STRIPS PER TILE. UNDER 2 GONE IT BLOCKS WHOLE;"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "FROM 2 GONE ONLY SURVIVING STRIPS BLOCK (50% LAW)."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "PICK REBUILDS THE BASE WALL AS STEEL (15 S). BASE WALL NEVER BREAKS."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "DEATH RESETS LEVELUP TIER. TIERS SURVIVE SECTOR CHANGE."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                }
                 // ---- POWER-UPS ----
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
