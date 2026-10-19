@@ -2018,3 +2018,12 @@ enemies, the curve, the scanlines and the fringing, and the user played a full
 session ("quedó increíble"), with one follow-up: the straight glass frame line
 (board border + glass Canvas stroke) does not follow the curve — the curved-rim
 round is next.
+
+**The curved-rim follow-up (approved on screen).** The user disliked the one
+straight thing left in the tube: the rectangular glass frame. The board's
+border (`#3a3a44`) and the glass `Canvas` stroke are **gone**; the shader draws
+the rim itself off the mask-distance `d` — a ~9 device px darkening band
+(`rim = 1 - smoothstep(0, 0.020, d)`, strength 0.5) and a ~3 device px blend of
+the mask edge into the board colour (`edge = smoothstep(0, 0.006, d)`), so both
+the rim and the phosphor edge follow the curvature exactly. Anything else
+rectangular around the tube must not come back.
