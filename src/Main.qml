@@ -21,14 +21,17 @@ ApplicationWindow {
     property bool helpPausedGame: false
     // The display is one centred block: board plus side panel, like the
     // screen of an arcade cabinet. The cell is sized from what that block
-    // really has (the area minus the panel, the gap between them and the
-    // board's own 4px border on both axes), never from the full area, so the
-    // block fits and the board never leans on the panel.
+    // really has (the area minus the panel, the gap between them, the
+    // bezel reserve around the block and the board's own 4px margins on
+    // both axes), never from the full area, so the whole cabinet fits and
+    // the board never leans on the panel.
     readonly property int panelW: 160
     readonly property int displayGap: 14
+    // Thickness of the cabinet bezel that frames the display block.
+    readonly property int bezW: 20
     property int cell: Math.max(30, Math.floor(Math.min(
-        (boardArea.width - win.panelW - win.displayGap - 8) / backend.cols,
-        (boardArea.height - 8) / backend.rows)))
+        (boardArea.width - win.panelW - win.displayGap - 8 - 2 * win.bezW) / backend.cols,
+        (boardArea.height - 8 - 2 * win.bezW) / backend.rows)))
     property int treadFrame: 0
 
     // Opening the manual pauses the game; closing it resumes only if the
@@ -250,6 +253,97 @@ ApplicationWindow {
         onTriggered: win.treadFrame = (win.treadFrame + 1) % 2
     }
 
+    // The cabinet wall mural: a game map of brick and steel tiles (175% of
+    // the screen's own tile size) fills the window from the top edge down to
+    // just above the footer, so the HUD bar, the game name and the display
+    // block all sit on top of it. The map is one Canvas painted per resize,
+    // so nothing here costs time in play; the decorative tanks live next to
+    // the display, inside boardArea. Hidden when the window leaves no room.
+    Item {
+        id: wallmap
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        // The layout sits at a 14 px margin; the footer row is its last child.
+        height: 14 + footerRow.y
+        visible: parent.width > 1100
+
+        Canvas {
+            anchors.fill: parent
+            enabled: false
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                var B = wallmap.big
+                for (var sy = 0; sy * B < height; ++sy) {
+                    for (var sx = 0; sx * B < width; ++sx) {
+                        var r = (sx * 13 + sy * 7) % 9
+                        if (r === 2)
+                            continue        // street gap
+                        if (r === 6)
+                            wallmap.paintSteel(ctx, sx * B, sy * B, B)
+                        else
+                            wallmap.paintBrick(ctx, sx * B, sy * B, B)
+                    }
+                }
+            }
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            Component.onCompleted: requestPaint()
+        }
+        readonly property real big: win.cell * 1.75
+        // One brick tile in four offset courses, same inks as the game's own
+        // bricks.
+        function paintBrick(ctx, x, y, B) {
+            ctx.save()
+            ctx.beginPath()
+            ctx.rect(x, y, B, B)
+            ctx.clip()
+            ctx.fillStyle = "#2e1a10"
+            ctx.fillRect(x, y, B, B)
+            var mh = Math.max(2, Math.round(B / 22))
+            var cH = (B - 3 * mh) / 4
+            for (var r = 0; r < 4; ++r) {
+                var cy = y + r * (cH + mh)
+                var off = (r % 2) * B / 4
+                for (var bx = x + off - B / 2; bx < x + B; bx += B / 2) {
+                    ctx.fillStyle = "#9e5230"
+                    ctx.fillRect(bx + mh / 2, cy, B / 2 - mh, cH)
+                    ctx.fillStyle = "#b96a3e"
+                    ctx.fillRect(bx + mh / 2, cy, B / 2 - mh, 3)
+                    ctx.fillStyle = "#5e2f18"
+                    ctx.fillRect(bx + mh / 2, cy + cH - 3, B / 2 - mh, 3)
+                }
+            }
+            ctx.restore()
+        }
+        // One steel tile: four grey plates with top highlights and dark
+        // rivet corners, same construction as the game's steel.
+        function paintSteel(ctx, x, y, B) {
+            ctx.save()
+            ctx.beginPath()
+            ctx.rect(x, y, B, B)
+            ctx.clip()
+            ctx.fillStyle = "#2a2a2a"
+            ctx.fillRect(x, y, B, B)
+            var g = 4
+            var pw = (B - 3 * g) / 2
+            for (var py = 0; py < 2; ++py)
+                for (var px = 0; px < 2; ++px) {
+                    var qx = x + g + px * (pw + g)
+                    var qy = y + g + py * (pw + g)
+                    ctx.fillStyle = "#8d8d8d"
+                    ctx.fillRect(qx, qy, pw, pw)
+                    ctx.fillStyle = "#b5b5b5"
+                    ctx.fillRect(qx, qy, pw, 3)
+                    var rs = Math.max(4, Math.round(B / 22))
+                    ctx.fillStyle = "#6a6a6a"
+                    ctx.fillRect(qx + pw - rs, qy + pw - rs, rs, rs)
+                }
+            ctx.restore()
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 14
@@ -258,6 +352,7 @@ ApplicationWindow {
         // Pixel HUD bar: player 1 on the left, the game name in the centre,
         // player 2 on the right. The enemy count moved to the side panel.
         Item {
+            id: hudRow
             Layout.fillWidth: true
             height: 112
             RowLayout {
@@ -268,6 +363,14 @@ ApplicationWindow {
                     Layout.leftMargin: 120
                     width: 240; height: 112
                     color: "#101014"; border.color: win.p1body; border.width: 2
+                    // Black frame around the panel, so the panel cuts against
+                    // the mural behind the HUD bar.
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -10
+                        color: "#000000"
+                        z: -1
+                    }
                     Column {
                         anchors.centerIn: parent
                         spacing: 4
@@ -353,6 +456,14 @@ ApplicationWindow {
                     width: 240; height: 112
                     visible: backend.playerCount === 2
                     color: "#101014"; border.color: win.p2body; border.width: 2
+                    // Black frame around the panel, so the panel cuts against
+                    // the mural behind the HUD bar.
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -10
+                        color: "#000000"
+                        z: -1
+                    }
                     Column {
                         anchors.centerIn: parent
                         spacing: 4
@@ -432,26 +543,40 @@ ApplicationWindow {
                     }
                 }
             }
-            // Game name, centred over the bar. Fits by shrinking, so the
-            // long name never overflows the bar it sits on.
+
+            // The game name, centred between the two panels on a black plate,
+            // so it cuts against the mural behind the HUD bar.
             Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
-                width: 380; height: 56
-                z: 1
-                Text {
-                    x: 3; y: 4
-                    text: "OLIGARCHY TANKS"
-                    font.bold: true; font.pixelSize: 34; font.letterSpacing: 3
-                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 14
-                    width: parent.width; horizontalAlignment: Text.AlignHCenter
+                width: titleAccent.contentWidth + 64
+                height: 104
+                Rectangle {
+                    anchors.fill: parent
                     color: "#000000"
                 }
                 Text {
+                    id: titleShadow
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.horizontalCenterOffset: 4
+                    anchors.verticalCenterOffset: 4
+                    width: hudRow.width - 2 * (120 + 240 + 32)
                     text: "OLIGARCHY TANKS"
-                    font.bold: true; font.pixelSize: 34; font.letterSpacing: 3
-                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 14
-                    width: parent.width; horizontalAlignment: Text.AlignHCenter
+                    font.bold: true; font.pixelSize: 62; font.letterSpacing: 5
+                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 22
+                    horizontalAlignment: Text.AlignHCenter
+                    color: "#000000"
+                }
+                Text {
+                    id: titleAccent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: titleShadow.width
+                    text: "OLIGARCHY TANKS"
+                    font.bold: true; font.pixelSize: 62; font.letterSpacing: 5
+                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 22
+                    horizontalAlignment: Text.AlignHCenter
                     color: theme.accent
                 }
             }
@@ -461,6 +586,153 @@ ApplicationWindow {
             id: boardArea
             Layout.fillWidth: true
             Layout.fillHeight: true
+
+            // The mural's decorative tanks: one of every kind, staged on the
+            // perimeter roads beside the display, sized like the wall tiles
+            // (175% of a screen tile). dir points at the display; the carrier
+            // shows its red. The tile pattern itself paints in wallmap.
+            Item {
+                id: muralTanks
+                anchors.fill: parent
+                visible: parent.width > 1100
+                readonly property real tp: wallmap.big * 0.94
+
+                TankSprite {
+                    x: 48; y: bezel.y + 40
+                    width: parent.tp; height: parent.tp
+                    dir: 1; frame: win.treadFrame
+                    body: win.p1body; dark: win.p1dark; light: win.p1light
+                }
+                TankSprite {
+                    x: 48; y: board.y + board.height * 0.58
+                    width: parent.tp; height: parent.tp
+                    dir: 1; frame: win.treadFrame
+                    body: win.foeGray; dark: win.foeGrayDark; light: win.foeGrayLight
+                }
+                TankSprite {
+                    x: 168; y: board.y + board.height * 0.78
+                    width: parent.tp; height: parent.tp
+                    dir: 1; frame: win.treadFrame
+                    variant: 2
+                    body: "#9b7ebd"; dark: "#5a4a6e"; light: "#d4c4e8"
+                }
+                TankSprite {
+                    x: parent.width - 48 - parent.tp; y: bezel.y + 40
+                    width: parent.tp; height: parent.tp
+                    dir: 3; frame: win.treadFrame
+                    body: win.p2body; dark: win.p2dark; light: win.p2light
+                }
+                TankSprite {
+                    x: parent.width - 48 - parent.tp; y: board.y + board.height * 0.58
+                    width: parent.tp; height: parent.tp
+                    dir: 3; frame: win.treadFrame
+                    variant: 1
+                    body: win.foeYellow; dark: win.foeYellowDark; light: win.foeYellowLight
+                }
+                TankSprite {
+                    x: parent.width - 168 - parent.tp; y: board.y + board.height * 0.78
+                    width: parent.tp; height: parent.tp
+                    dir: 3; frame: win.treadFrame
+                    body: win.foeRed; dark: win.foeRedDark; light: win.foeRedLight
+                }
+            }
+
+            // The cabinet bezel: a matte frame around the whole display
+            // block (board + side panel), with a brass lip hugging the
+            // picture and a screw in every corner, so the screen reads as a
+            // coin-op monitor set into a cabinet. Pure Sizes; nothing here
+            // covers the playfield pixels.
+            Item {
+                id: bezel
+                x: board.x - win.bezW
+                y: board.y - win.bezW
+                width: board.width + 2 * win.bezW + win.displayGap + win.panelW
+                height: board.height + 2 * win.bezW
+
+                // Frame face.
+                Rectangle {
+                    anchors.fill: parent
+                    color: "#171720"
+                }
+                // Light from the picture: a top bevel and a bottom drop.
+                Rectangle {
+                    anchors { left: parent.left; top: parent.top; right: parent.right }
+                    height: 2
+                    color: "#262631"
+                }
+                Rectangle {
+                    anchors { left: parent.left; bottom: parent.bottom; right: parent.right }
+                    height: 4
+                    color: "#0b0b0f"
+                }
+                // Brass lip around the picture opening.
+                Rectangle {
+                    x: board.x - 2 - bezel.x
+                    y: board.y - 2 - bezel.y
+                    width: (board.x + board.width + win.displayGap + win.panelW)
+                           - board.x + 4
+                    height: 2
+                    color: "#c8862e"
+                }
+                Rectangle {
+                    x: board.x - 2 - bezel.x
+                    y: board.y + board.height - bezel.y
+                    width: (board.x + board.width + win.displayGap + win.panelW)
+                           - board.x + 4
+                    height: 2
+                    color: "#c8862e"
+                }
+                Rectangle {
+                    x: board.x - 2 - bezel.x
+                    y: board.y - 2 - bezel.y
+                    width: 2
+                    height: board.height + 4
+                    color: "#c8862e"
+                }
+                Rectangle {
+                    x: (board.x + board.width + win.displayGap + win.panelW) - bezel.x
+                    y: board.y - 2 - bezel.y
+                    width: 2
+                    height: board.height + 4
+                    color: "#c8862e"
+                }
+                // One screw per corner: a metal dome with a cross slot.
+                Repeater {
+                    model: 4
+                    Item {
+                        x: index % 2 === 0 ? 9 : bezel.width - 21
+                        y: index < 2 ? 9 : bezel.height - 21
+                        width: 12; height: 12
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 6
+                            color: "#23232d"
+                            border.color: "#45454f"
+                            border.width: 1
+                        }
+                        Rectangle {
+                            x: 2; y: 5
+                            width: 8; height: 2
+                            color: "#0c0c11"
+                        }
+                        Rectangle {
+                            x: 5; y: 2
+                            width: 2; height: 8
+                            color: "#0c0c11"
+                        }
+                    }
+                }
+                // Bezel sticker on the bottom rail, the way instruction
+                // cards sit on a real cabinet.
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: parent.height - win.bezW / 2 - height / 2
+                    text: "DEFEND THE OLIGARCHY BASE"
+                    font.pixelSize: 11
+                    font.letterSpacing: 2
+                    color: "#5a5a66"
+                }
+            }
 
             // Battle City style side panel: stage and remaining enemies.
             // It rides with the board inside the centred display block and
@@ -1489,6 +1761,7 @@ ApplicationWindow {
         }
 
         Row {
+            id: footerRow
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
             KeyCap { unit: 20; label: "P" }

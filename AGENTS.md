@@ -2027,3 +2027,34 @@ the rim itself off the mask-distance `d` — a ~9 device px darkening band
 the mask edge into the board colour (`edge = smoothstep(0, 0.006, d)`), so both
 the rim and the phosphor edge follow the curvature exactly. Anything else
 rectangular around the tube must not come back.
+
+**Phase C — the cabinet bezel and the wall mural (approved on screen).** The
+display is now a monitor set into a full arcade cabinet:
+
+- **A bezel** (`win.bezW` 20 px, reserved from the `cell` formula) frames the
+  whole display block: matte face `#171720`, a 2 px brass lip `#c8862e` around
+  the opening, a screw in every corner, and a bottom rail sticker reading
+  `DEFEND THE OLIGARCHY BASE`. Nothing here covers playfield pixels.
+- **A wall mural** (`wallmap`, a window-level Item behind the whole layout)
+  fills the window from the top edge **down to just above the footer** — the
+  footer stays clean — with a game map of brick and steel tiles at **175% of
+  the screen's own tile size** (`win.cell * 1.75`), same inks as the game's
+  tiles, with street gaps so it reads as a map, not a wall. One Canvas painted
+  per resize only; zero cost during play. Hidden under a 1100 px-wide window.
+- **The game name lives on the mural**: `OLIGARCHY TANKS` at 62 px on a black
+  plate, centred in the HUD row between the two panels. The old in-HUD-bar
+  title is gone. The two title `Text`s need `horizontalAlignment:
+  Text.AlignHCenter` — with fit sizing and default left alignment the ink left
+  the plate (caught by pixel screenshot).
+- **The player panels** sit on the mural behind a **10 px black frame**
+  (`anchors.margins: -10`), so they cut against the bricks.
+- **Six decorative tanks** (`muralTanks`, inside `boardArea`) stage one of
+  every kind (P1, P2, basic, wheeled fast, armored purple, carrier red) on the
+  perimeter roads around the display, sized like the mural tiles, treads
+  running on `win.treadFrame`.
+- The display grew back to **cell 57** (+14% linear) by dropping the earlier
+  marquee band reserve and slimming the bezel 22 -> 20.
+
+**Verification:** `bin/build` clean, `bin/test` **60/60** (backend untouched),
+offscreen smoke silent, GL probe render checked end to end, and the user
+approved the full-screen result (with one fix: the title alignment above).
