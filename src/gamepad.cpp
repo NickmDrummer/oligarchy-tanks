@@ -1,3 +1,5 @@
+// Linux only: this reader speaks evdev/sysfs and is excluded from the
+// .pro on every other platform; main.cpp guards its use the same way.
 #include "gamepad.h"
 
 #include "backend.h"

@@ -1,4 +1,4 @@
-QT += core gui quick quickcontrols2 testlib dbus
+QT += core gui quick quickcontrols2 testlib
 CONFIG += c++17 testcase
 TARGET = oligarchy-tanks_tests
 TEMPLATE = app

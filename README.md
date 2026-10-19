@@ -86,10 +86,25 @@ and watch the `[pad]` lines.
 
 ```
 bin/build
-./build/tanks
+./build/oligarchy-tanks
 bin/test
 bin/install
 ```
+
+## Other platforms
+
+The game is a plain Qt 6 app: everything it needs (fonts, sounds, the engine)
+ships inside the binary, and the desktop theme has a hard-coded fallback, so it
+runs wherever Qt 6 runs:
+
+- **Windows / macOS**: build with `qmake6 oligarchy-tanks.pro && make` (plus
+  `windeployqt` / `macdeployqt` to bundle the Qt libraries), then run
+  `build/oligarchy-tanks`. Both players share one keyboard (`W A S D` +
+  `Space`, arrows + `Enter`) — the intended 2-player setup.
+- The **gamepad reader is Linux only** (it reads `/dev/input` directly), so
+  outside Linux pads are not supported; the game falls back to the keyboard
+  with no other change.
+- There is no WebAssembly build (Qt multimedia and pad input do not fit it).
 
 ## Development
 

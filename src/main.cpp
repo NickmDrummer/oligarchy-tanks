@@ -55,11 +55,14 @@ int main(int argc, char *argv[]) {
 
     Theme theme;
     Backend backend;
-    // Pads are read straight from /dev/input/event*. A pad joins a player by
-    // pressing START; with none connected nothing changes. The reader writes to
-    // stderr when OLIGARCHY_TANKS_PAD_DEBUG is set.
+    // Pads are read straight from /dev/input/event* (Linux only: evdev). A pad
+    // joins a player by pressing START; with none connected nothing changes.
+    // The reader writes to stderr when OLIGARCHY_TANKS_PAD_DEBUG is set.
+    // Other platforms build without it and play on the keyboard.
+#if defined(Q_OS_LINUX) && !defined(Q_OS_WASM)
     Gamepad gamepad(&backend);
     gamepad.start();
+#endif
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("theme", &theme);

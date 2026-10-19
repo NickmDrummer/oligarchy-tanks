@@ -1,4 +1,4 @@
-QT += core gui qml quick quickcontrols2 multimedia dbus
+QT += core gui qml quick quickcontrols2 multimedia
 
 CONFIG += c++17 release
 TARGET = oligarchy-tanks
@@ -7,15 +7,20 @@ TEMPLATE = app
 HEADERS += \
     src/backend.h \
     src/padmap.h \
-    src/gamepad.h \
     src/theme.h
 
 SOURCES += \
     src/main.cpp \
     src/backend.cpp \
     src/padmap.cpp \
-    src/gamepad.cpp \
     src/theme.cpp
+
+# The pad reader is evdev/sysfs on Linux; other platforms compile without it
+# and play on the keyboard (main.cpp guards the Gamepad use).
+linux {
+    SOURCES += src/gamepad.cpp
+    HEADERS += src/gamepad.h
+}
 
 RESOURCES += src/resources.qrc
 
