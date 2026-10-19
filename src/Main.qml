@@ -686,42 +686,59 @@ ApplicationWindow {
                             active: tileItem.kind === win.tileBase || tileItem.kind === win.tileDead
                             sourceComponent: basePart
                         }
-                        // Base: the official Omarchy wordmark in pixels. Defend it.
+                        // Base: the official Omarchy icon — the square mark with
+                        // no wordmark. Defend it.
                         Component {
                             id: basePart
                             Item {
                                 id: baseTile
                                 anchors.fill: parent
                                 property bool dead: tileItem.kind === win.tileDead
-                                // 3x5 micro font spelling "omarchy", 27x5 blocks.
-                                property var word: [
-                                    "XXX X.X .X. XX. .XX X.. X.X",
-                                    "X.X XXX X.X X.X X.. X.. X.X",
-                                    "X.X X.X XXX X.. X.. XXX XXX",
-                                    "X.X X.X X.X X.. X.. X.X .X.",
-                                    "XXX X.X X.X X.. .XX X.X .X.",
+                                // The square Omarchy logo, 27x13 blocks: the
+                                // official mark (icon.txt) collapsed 2x2, hard
+                                // coded so the game needs nothing from the host.
+                                // Plate on, glyph cut in.
+                                property var mark: [
+                                    "XXXXXXXXXXXXXXXXXXXXXXXXXXX",
+                                    "XX..........XXX..........XX",
+                                    "XX..XXXXXXXXXXX....XXXX..XX",
+                                    "XX..XX...............XX..XX",
+                                    "XX..XX...............XX..XX",
+                                    "XX..XX...............XX..XX",
+                                    "XXXXXX...............XX..XX",
+                                    "XX..XX...............XX..XX",
+                                    "XX..XX...............XX..XX",
+                                    "XX..XX...............XX..XX",
+                                    "XX..XXXXXXXXXXXXXXXXXXX..XX",
+                                    "XX..........XXX..........XX",
+                                    "XXXXXXXXXXXXXXX..XXXXXXXXXX",
                                 ]
-                                property real px: Math.max(1.5, win.cell / 30)
+                                property string plate: dead ? "#7a3535" : "#9ece6a"
+                                property string glyph: "transparent"
+                                // The mark is 2:1 by design, so uniform blocks
+                                // leave half the tile empty and read squashed:
+                                // stretch the vertical block ~1.7x so the plate
+                                // fills the tile without breaking the shape.
+                                property real px: Math.max(1, win.cell / 29)
+                                property real py: Math.max(1.5, win.cell / 17)
                                 Rectangle {
                                     anchors.fill: parent
                                     anchors.margins: 1
                                     color: baseTile.dead ? "#3d1010" : "#0d0d12"
-                                    border.color: baseTile.dead ? "#7a241b" : theme.accent
-                                    border.width: 2
                                 }
                                 Grid {
                                     anchors.centerIn: parent
                                     columns: 27
-                                    rows: 5
+                                    rows: 13
                                     Repeater {
-                                        model: 135
+                                        model: 351
                                         Rectangle {
                                             property int r: Math.floor(index / 27)
                                             property int c: index % 27
-                                            property string ch: baseTile.word[r][c]
+                                            property string ch: baseTile.mark[r][c]
                                             width: baseTile.px
-                                            height: baseTile.px
-                                            color: ch === "X" ? (baseTile.dead ? "#7a3535" : theme.accent) : "transparent"
+                                            height: baseTile.py
+                                            color: ch === "X" ? baseTile.plate : baseTile.glyph
                                         }
                                     }
                                 }
