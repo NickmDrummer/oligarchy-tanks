@@ -1942,6 +1942,18 @@ installs binaries), so an app cannot be listed there. The chosen route:
   board's frame like a coin-op cabinet.
 - **The manual needs corrections** (the user's list, pending).
 
+### 21.6 Portability round (small, done)
+
+- `dbus` removed from both `.pro` files: no QtDBus code exists anywhere, and
+  Qt for Windows ships no QtDBus — it was blocking a Windows build for nothing.
+- `gamepad.cpp` is no longer compiled outside Linux (`linux { }` block in the
+  `.pro`), `gamepad.h` travels with it, and `main.cpp` guards the `Gamepad`
+  use with `Q_OS_LINUX`; a header note says the file is Linux-only.
+- README gained an "Other platforms" section (Windows/macOS builds with
+  qmake6 + windeployqt/macdeployqt, keyboard 2P, no pads, no WASM), and its
+  build block now names `./build/oligarchy-tanks`.
+- `bin/test` 60/60, offscreen smoke clean.
+
 ### 21.5 Fixed round: the base draws the Omarchy mark
 
 The base tile now renders the **square Omarchy logo** instead of the 3x5
