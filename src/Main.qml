@@ -1388,14 +1388,21 @@ ApplicationWindow {
         Rectangle {
             anchors.centerIn: parent
             width: helpCol.implicitWidth + 56
-            height: helpCol.implicitHeight + 44
+            height: Math.min(helpCol.implicitHeight + 44, parent.height - 40)
             color: "#0d0d12"
             border.color: theme.accent
             border.width: 4
-            Column {
-                id: helpCol
-                anchors.centerIn: parent
-                spacing: 20
+            Flickable {
+                id: helpFlick
+                anchors.fill: parent
+                anchors.margins: 22
+                contentWidth: width
+                contentHeight: helpCol.implicitHeight
+                clip: true
+                Column {
+                    id: helpCol
+                    width: helpFlick.width
+                    spacing: 20
                 // Title.
                 Item {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -1534,15 +1541,24 @@ ApplicationWindow {
                         }
                     }
                 }
-                // Footer
+                }
+                // Footer (outside the scroll area, always visible).
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 28
                     text: "BUILD " + buildId
                     font.family: "Departure Mono"
                     font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
                     color: "#5a5e68"
                 }
-            PixelButton { accent: theme.accent; text: "<< CLOSE (?)"; onClicked: { win.helpVisible = false; keys.forceActiveFocus() } }
+            }
+            PixelButton {
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 4
+                accent: theme.accent; text: "<< CLOSE (?)"
+                onClicked: { win.helpVisible = false; keys.forceActiveFocus() }
             }
         }
     }
