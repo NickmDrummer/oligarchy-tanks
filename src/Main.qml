@@ -1,10 +1,14 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import QtMultimedia
 
 ApplicationWindow {
     id: win
+    // Opens fullscreen: the pixel-art layout is resolution-bound, so the
+    // window always renders 1:1. F11 toggles between fullscreen and windowed.
+    visibility: Window.FullScreen
     width: 1040
     height: 800
     minimumWidth: 840
@@ -106,6 +110,9 @@ ApplicationWindow {
     ]
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
+    // F11: fullscreen <-> windowed. Windowed keeps the design size, so the
+    // pixel layout reads the same in both states.
+    Shortcut { sequence: "F11"; context: Qt.ApplicationShortcut; onActivated: win.visibility = (win.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen) }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; onActivated: Qt.quit() }
     Shortcut { sequence: "P"; context: Qt.ApplicationShortcut; onActivated: backend.togglePause() }
     Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { if (backend.state === "select") backend.menuConfirm(); else if (backend.state === "victory") backend.nextLevel(); else backend.toSelect(); keys.forceActiveFocus() } }
