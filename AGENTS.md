@@ -1829,3 +1829,12 @@ shot and never stacks with tiers (commit `74e486b`).
 `bin/build` clean, `bin/test` **56/56**, offscreen smoke with no QML output.
 Played and approved by the user: the shield visuals and the tier-2/BLAST fix
 are committed; bug 2 (air-support recharge) is the next fix.
+
+### 20.7 Window: fullscreen by default, F11 toggles
+The window was hard-coded 1040x800 and had no native fullscreen, so Hyprland
+opened it at ~50% of the monitor and the compositor's fractional scaling made
+the pixel-art blurry until the user maxed it. It now opens
+`visibility: Window.FullScreen` (always 1:1) and an F11 `Shortcut` toggles
+fullscreen <-> windowed; windowed keeps the 1040x800 design size so the pixel
+layout reads the same in both states. This is also why chat screenshots of the
+game must be taken in fullscreen to be pixel-representative.
