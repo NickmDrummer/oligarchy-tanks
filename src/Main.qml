@@ -843,11 +843,84 @@ ApplicationWindow {
                             dark: index === 0 ? win.p1dark : win.p2dark
                             light: index === 0 ? win.p1light : win.p2light
                         }
+                        // Armour shields: three white pixel outlines drawn
+                        // on the tank sprite boundary, all inscribed in the
+                        // same box so each one reaches the tank's perimeter:
+                        // a square (the boundary itself), a diamond with its
+                        // vertices on the side midpoints, and an inscribed
+                        // circle. On a hit the circle is lost first, then
+                        // the diamond; the square is the last to go.
+                        Canvas {
+                            id: armourCanvas
+                            x: -(width - parent.width) / 2
+                            y: -(height - parent.height) / 2
+                            width: parent.width * 1.2
+                            height: parent.height * 1.2
+                            rotation: [-90, 0, 90, 180][p.dir]
+                            visible: p.armorHP > 0
+                            property int seenArmor: p.armorHP
+                            onSeenArmorChanged: requestPaint()
+                            Component.onCompleted: requestPaint()
+                            onPaint: {
+                                var ctx = getContext("2d");
+                                ctx.reset();
+                                ctx.clearRect(0, 0, width, height);
+                                ctx.fillStyle = "#ffffff";
+                                var ps = Math.max(2, Math.round(parent.width / 20));
+                                var cx = width / 2;
+                                var cy = height / 2;
+                                // Half-size of the tank's bounding box, snapped
+                                // to the pixel grid.
+                                var hw = Math.round(parent.width * 0.5 / ps) * ps;
+                                var layers = Math.min(3, Math.floor(p.armorHP));
+                                // Pixel-stair segment between two points.
+                                function line(x0, y0, x1, y1) {
+                                    var steps = Math.max(1, Math.round(Math.abs(x1 - x0) / ps)
+                                                           + Math.round(Math.abs(y1 - y0) / ps));
+                                    for (var k = 0; k <= steps; ++k) {
+                                        var t = k / steps;
+                                        var x = Math.round((x0 + (x1 - x0) * t) / ps) * ps;
+                                        var y = Math.round((y0 + (y1 - y0) * t) / ps) * ps;
+                                        ctx.fillRect(x, y, ps, ps);
+                                    }
+                                }
+                                if (layers >= 1) {
+                                    // Square: outline right on the sprite boundary.
+                                    line(cx - hw, cy - hw, cx + hw, cy - hw);
+                                    line(cx + hw, cy - hw, cx + hw, cy + hw);
+                                    line(cx + hw, cy + hw, cx - hw, cy + hw);
+                                    line(cx - hw, cy + hw, cx - hw, cy - hw);
+                                }
+                                if (layers >= 2) {
+                                    // Diamond: vertices on the midpoints of the
+                                    // tank's sides, so it spans the whole perimeter.
+                                    line(cx, cy - hw, cx + hw, cy);
+                                    line(cx + hw, cy, cx, cy + hw);
+                                    line(cx, cy + hw, cx - hw, cy);
+                                    line(cx - hw, cy, cx, cy - hw);
+                                }
+                                if (layers >= 3) {
+                                    // Circle: inscribed in the same box, drawn as
+                                    // a pixel stair (not a smooth stroke).
+                                    var csteps = Math.max(24, Math.round(6 * hw / ps));
+                                    for (var a = 0; a < csteps; ++a) {
+                                        var ang = 2 * Math.PI * a / csteps;
+                                        var x = Math.round((cx + hw * Math.cos(ang)) / ps) * ps;
+                                        var y = Math.round((cy + hw * Math.sin(ang)) / ps) * ps;
+                                        ctx.fillRect(x, y, ps, ps);
+                                    }
+                                }
+                                ctx.fillStyle = "#ffffff";
+                            }
+                        }
                         // Shield: static crackling around the hull as two
                         // alternating frames of a jagged, rounded ring of
                         // lightning (see ShieldSprite.qml).
                         Loader {
-                            active: p.shield
+                            // Hidden while armour shields are up: the white
+                            // crackling ring would visually collide with the
+                            // armour outlines around the tank.
+                            active: p.shield && p.armorHP <= 0
                             anchors.fill: parent
                             anchors.margins: -Math.round(parent.width * 0.35)
                             sourceComponent: Component {
