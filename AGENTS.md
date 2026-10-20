@@ -2168,3 +2168,51 @@ new rows spill outside (user capture after the round). Fix somewhere later:
 size the box from its content (the way the select screen's box grows from
 its column), or budget the rows, so the panel always fits whatever lines it
 carries.
+
+### 21.12 New player sprite (variant 3), pending the armoured one
+
+- `TankSprite.qml` gained `playerRows`, the **user's own 16x16 drawing** for
+  the player tanks, exposed as `variant: 3` (narrow light front plate, a 2x2
+  dark badge over the body and a tapered dark rear skirt). One shape for P1
+  and P2 — the palettes tell them apart. It is applied **cell for cell, not
+  recentred** (the user's grid rule).
+- `variant: 0` (treads) is now **basic and carrier only**, so `treadRows`
+  keeps the old drawing untouched for them. Wheels (1) and armour (2) are
+  unchanged.
+- `variant: 3` wired to every player-facing use: the board `playerAt`
+  delegates, the panels' name tank and the five life icons, the select
+  screen's tank marker and the mural's P1/P2 decoration.
+- Sentry: the armoured tank's redesign is still owed (user will send the
+  grid); until then `armorRows` stays. — **Delivered and applied in the same
+  round**: `armorRows` is now the user's own grid (forked cannon, bare-hull
+  middle wider than the tread band, a double-plate core and narrow feet),
+  applied cell for cell. The visual middle actually protrudes past the tread
+  band where the sides are transparent (`....`) — drawn that way; the
+  collision hull is unaffected. Refined twice by the user (filled fork,
+  then the short-cannon shoulders + speckled plate v3), all applied as sent.
+- **The armoured palette is no longer purple/cyan**: the user wanted a
+  colour that "denotes hardness" and picked the dark moss green from a
+  six-palette probe. Hit progression is now **moss green `#4e5d38`/
+  `#303a20`/`#7d9060` (3 HP) -> dark brown `#6e4f33`/`#46311f`/`#a07a52`
+  (2 HP) -> the basic tank's gray (1 HP)** — the degradation itself tells
+  the story. Wired in the enemy delegate's three colour properties, the
+  mural's armoured decoration and the manual line
+  (`ARMORED (3 HP, MOSS>BROWN>GRAY)`). Cyan is gone from the game's hulls.
+- `bin/test` 68/68 (backend untouched), offscreen smoke silent, probe at
+  `/tmp/opencode/crt/spriteprobe` renders variants 0-3 side by side
+  (`/tmp/opencode/crt/sprites3.png`) plus the mural/panel renders in the
+  tier-4 probe. Verified: both player palettes, rotations (dir 1/3 on the
+  mural), the 12 px life icons and the 30 px panel tank.
+
+### 21.13 Pending (user report, after 21.12): the LEVELUP sound plays twice, and it deserves its own arpeggio
+
+- The user hears the LEVELUP pickup about twice as loud as every other
+  power-up. Diagnosis: `applyPickup` emits `playSound("power")` inside the
+  `LevelUp` case AND again after the switch (the post-switch emit only skips
+  Freeze and Nuke), so the sample fires twice on the same frame — two
+  overlapping plays read as double volume. Fix: drop one of the two emits.
+- The user also wants a dedicated sound for LEVELUP instead of the shared
+  `power.wav`: a cheerful ascending arpeggio that marks the tier up. In
+  their view it is the most important power-up of all. New wav plus a new
+  sound name (e.g. `levelup`) wired to the `LevelUp` case only, leaving the
+  other pickups on `power`.

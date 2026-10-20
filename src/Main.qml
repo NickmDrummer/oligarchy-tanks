@@ -56,7 +56,7 @@ ApplicationWindow {
 
     // Enemy palette. The basic tank is grey and the carrier flashes that same
     // grey with red. The fast tank shares the basic one's chassis family but is
-    // a pastel metallic yellow. The armoured tank walks purple -> cyan -> grey
+    // a pastel metallic yellow. The armoured tank walks moss green -> brown ->
     // as it takes hits, so its last stage is the grey of the basic one.
     readonly property color foeGray: "#a8adb8"
     readonly property color foeGrayDark: "#5d626c"
@@ -390,6 +390,7 @@ ApplicationWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: 30; height: 30
                                 dir: 0; frame: 0
+                                variant: 3
                                 body: win.p1body; dark: win.p1dark; light: win.p1light
                             }
                             Text {
@@ -407,6 +408,7 @@ ApplicationWindow {
                                     TankSprite {
                                         width: 12; height: 12
                                         dir: 0; frame: 0
+                                        variant: 3
                                         body: win.p1body; dark: win.p1dark; light: win.p1light
                                         visible: backend.players.length > 0
                                                  && index < backend.players[0].lives
@@ -501,6 +503,7 @@ ApplicationWindow {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: 30; height: 30
                                 dir: 0; frame: 0
+                                variant: 3
                                 body: win.p2body; dark: win.p2dark; light: win.p2light
                             }
                             Text {
@@ -518,6 +521,7 @@ ApplicationWindow {
                                     TankSprite {
                                         width: 12; height: 12
                                         dir: 0; frame: 0
+                                        variant: 3
                                         body: win.p2body; dark: win.p2dark; light: win.p2light
                                         visible: backend.players.length > 1
                                                  && index < backend.players[1].lives
@@ -645,6 +649,7 @@ ApplicationWindow {
                     x: 48; y: bezel.y + 40
                     width: parent.tp; height: parent.tp
                     dir: 1; frame: win.treadFrame
+                    variant: 3
                     body: win.p1body; dark: win.p1dark; light: win.p1light
                 }
                 TankSprite {
@@ -658,12 +663,13 @@ ApplicationWindow {
                     width: parent.tp; height: parent.tp
                     dir: 1; frame: win.treadFrame
                     variant: 2
-                    body: "#9b7ebd"; dark: "#5a4a6e"; light: "#d4c4e8"
+                    body: "#4e5d38"; dark: "#303a20"; light: "#7d9060"
                 }
                 TankSprite {
                     x: parent.width - 48 - parent.tp; y: bezel.y + 40
                     width: parent.tp; height: parent.tp
                     dir: 3; frame: win.treadFrame
+                    variant: 3
                     body: win.p2body; dark: win.p2dark; light: win.p2light
                 }
                 TankSprite {
@@ -1113,7 +1119,7 @@ ApplicationWindow {
                             opacity: (backend.freezeEnding
                                       && Math.floor(backend.frameTick / 20) % 2 === 0) ? 0.25 : 1
                             // Armored tanks shift colour with each hit:
-                            // purple (full) -> cyan (1 hit) -> gray (vulnerable).
+                            // moss green (full) -> brown (1 hit) -> gray (vulnerable).
                             // Carriers flash red <-> gray.
                             property bool carrierFlash: e.kind === 3
                                                         && Math.floor(backend.frameTick / 6) % 2 === 0
@@ -1121,8 +1127,11 @@ ApplicationWindow {
                                 if (e.kind === 3)
                                     return carrierFlash ? win.foeRed : win.foeGray
                                 if (e.kind === 2) {
-                                    if (e.hp >= 3) return "#9b7ebd"
-                                    if (e.hp === 2) return "#7eb8c4"
+                                    // Hardness degrades with the armour: dark
+                                    // moss green (full) -> dark brown (1 hit)
+                                    // -> gray (vulnerable). User palette pick.
+                                    if (e.hp >= 3) return "#4e5d38"
+                                    if (e.hp === 2) return "#6e4f33"
                                     return win.foeGray
                                 }
                                 if (e.kind === 1)
@@ -1133,8 +1142,8 @@ ApplicationWindow {
                                 if (e.kind === 3)
                                     return carrierFlash ? win.foeRedDark : win.foeGrayDark
                                 if (e.kind === 2) {
-                                    if (e.hp >= 3) return "#5a4a6e"
-                                    if (e.hp === 2) return "#3a5a60"
+                                    if (e.hp >= 3) return "#303a20"
+                                    if (e.hp === 2) return "#46311f"
                                     return win.foeGrayDark
                                 }
                                 if (e.kind === 1)
@@ -1145,8 +1154,8 @@ ApplicationWindow {
                                 if (e.kind === 3)
                                     return carrierFlash ? win.foeRedLight : win.foeGrayLight
                                 if (e.kind === 2) {
-                                    if (e.hp >= 3) return "#d4c4e8"
-                                    if (e.hp === 2) return "#c4e4ea"
+                                    if (e.hp >= 3) return "#7d9060"
+                                    if (e.hp === 2) return "#a07a52"
                                     return win.foeGrayLight
                                 }
                                 if (e.kind === 1)
@@ -1218,6 +1227,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 dir: p.dir
                                 frame: p.moving ? win.treadFrame : 0
+                                variant: 3
                                 body: index === 0 ? win.p1body : win.p2body
                                 dark: index === 0 ? win.p1dark : win.p2dark
                                 light: index === 0 ? win.p1light : win.p2light
@@ -1646,6 +1656,7 @@ ApplicationWindow {
                                                 width: 22; height: 22
                                                 dir: 1
                                                 frame: win.treadFrame
+                                                variant: 3
                                                 body: win.p1body
                                                 dark: win.p1dark
                                                 light: win.p1light
@@ -1875,7 +1886,7 @@ ApplicationWindow {
                     width: 400
                     Text { text: "DEFEND THE BASE. DESTROY ALL 16 ENEMIES PER SECTOR."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
                     Text { text: "ENEMIES: GRAY BASIC (1 HP), YELLOW FAST (1 HP, 1.35X SPEED),"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "ARMORED (3 HP, PURPLE>CYAN>GRAY), CARRIER (RED/GRAY, DROPS POWER-UPS)."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "ARMORED (3 HP, MOSS>BROWN>GRAY), CARRIER (RED/GRAY, DROPS POWER-UPS)."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
                     Text { text: "SCORE: BASIC 100, FAST 200, ARMORED 300. LIVES: 3 (CAP 5)."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
                     Text { text: "SECTOR: MIX CHANGES (MORE FAST/ARMORED), ENEMIES GET FASTER."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
                     Text { text: "BRICKS: 4 STRIPS PER TILE. UNDER 2 GONE IT BLOCKS WHOLE;"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }

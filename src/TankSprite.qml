@@ -1,13 +1,14 @@
 // Battle City style pixel tank: 16x16 block grid facing up.
 //
-// Three silhouettes share the same shading language:
-//   variant 0  treads   players, basic tanks and carriers
+// Four silhouettes share the same shading language:
+//   variant 0  treads   basic tanks and carriers
 //   variant 1  wheels   the fast tank: same grey as the basic one, but a
 //                       wheeled chassis instead of treads, so the two read
 //                       apart by shape and not only by speed
 //   variant 2  armour   the armoured tank: chunkier plates and a thicker
 //                       cannon, only a little longer (never wider, so it still
 //                       fits the same lanes)
+//   variant 3  player   the player tanks (P1/P2 shape; the palette differs)
 //
 // The tread band is a column of cells, always drawn: one frame lights the even
 // cells and the other the odd ones, so the two frames interleave and the whole
@@ -29,6 +30,28 @@ Item {
     // whatever colour the hull is, and it is lighter than any hull's dark
     // shade, so the body stays outlined against it.
     property color outline: "#6b7280"
+
+    // The player tanks (variant 3): the user's own drawing, one shape for
+    // P1 and P2 (the palette tells them apart). Basic and carrier keep the
+    // treads grid below.
+    readonly property var playerRows: [
+        "Tttt...MM...tttT",
+        "Tttt...GG...tttT",
+        "Tttt...GG...tttT",
+        "Tttt...GG...tttT",
+        "Tttt.HHHHHH.tttT",
+        "TtttSBBBBBBStttT",
+        "TtttSBBCCBBStttT",
+        "TtttSBCCCCBStttT",
+        "TtttSBBCCBBStttT",
+        "TtttSSBBBBSStttT",
+        "TtttSSSSSSSStttT",
+        "Tttt.SSSSSS.tttT",
+        "Tttt........tttT",
+        "Tttt........tttT",
+        "Tttt........tttT",
+        "Tttt........tttT",
+    ]
 
     readonly property var treadRows: [
         "Tttt...MM...tttT",
@@ -74,26 +97,33 @@ Item {
         "..B....DDD....B.",
     ]
 
+    // The armoured tank (variant 2): the user's own drawing — forked cannon,
+    // a wider bare-hull middle (no tread band over those rows), a double
+    // plate core and narrow feet. Colour changes on every hit come from the
+    // palette; only the shape is fixed here.
     readonly property var armorRows: [
         "Tttt..HHHH..tttT",
-        "Tttt..GGGG..tttT",
-        "Tttt..GGGG..tttT",
-        "Tttt..GGGG..tttT",
-        "Tttt..GGGG..tttT",
-        "TtttHHHHHHHHtttT",
+        "Tttt...GG...tttT",
+        "TtttSSSGGSSStttT",
+        "TtttSSGGGGSStttT",
+        "TtttSGG..GGStttT",
+        "TtttHH....HHtttT",
         "TtttSSSSSSSStttT",
-        "TtttSBBBBBBStttT",
-        "TtttSBCCCCBStttT",
+        "....SBBBBBBS....",
+        "....SBCcCCBS....",
         "TtttSBCcCCBStttT",
+        "TtttSBCCcCBStttT",
+        "TtttSBCCcCBStttT",
         "TtttSBCCCCBStttT",
-        "TtttSBBBBBBStttT",
+        "TtttSSBBBBSStttT",
         "TtttSSSSSSSStttT",
-        "Tttt........tttT",
-        "Tttt........tttT",
-        "Tttt........tttT",
+        "Tttt..SSSS..tttT",
     ]
 
-    property var rows: variant === 1 ? wheelRows : variant === 2 ? armorRows : treadRows
+    property var rows: variant === 1 ? wheelRows
+                     : variant === 2 ? armorRows
+                     : variant === 3 ? playerRows
+                     : treadRows
 
     // Monochrome like the original: treads and cannon are darker and lighter
     // shades of the hull color, never graphite black. The tread band is the
