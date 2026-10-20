@@ -2159,15 +2159,44 @@ board). `bin/test` **66/66**, `bin/build` clean, offscreen smoke silent, the
 `OLIGARCHY_TANKS_TIER=4` probe render checked (panel state line and salvo,
 gold ring around the hull).
 
-### 21.11 Pending (user report, after 21.10): the player panels overflow
+### 21.11 The player panels overflowed; the tier mark moved to the tank's left (delivered)
 
-With every information row that stacks in a panel (tank + key label, SCORE,
-`LV n`, the tier/air-support state line, the join hint), the text runs past
-the panel's bottom edge: the panel box is sized to the old row count and the
-new rows spill outside (user capture after the round). Fix somewhere later:
-size the box from its content (the way the select screen's box grows from
-its column), or budget the rows, so the panel always fits whatever lines it
-carries.
+- Reported after 21.10: with every information row stacked in a panel
+  (name tank, SCORE, effects line, the tier/air-support state line, the
+  join hint), the text ran past the panel's bottom edge — the box was
+  sized to the old row count (240x112) while the content grew.
+- **Measured, not guessed** (`/tmp/opencode/crt/panelprobe`, throwaway):
+  the worst realistic stack — tier 4 + AIR-SUPPORT + effects + unjoined
+  join keys — is **125 px of content in a 112 px box** (13 px of spill).
+  Also found sideways: the widest effects line, `SHIELD SPEED CANNON
+  MISSILE LV 4`, painted **293.7 px** inside a 240 px box. The
+  `KILLED`-line stack is smaller (~108) and can never coexist with tier 4
+  (the tier resets on death), so 125 px is the real ceiling.
+- **The fix is a budget, not content-sizing**: sizing the box from the
+  column would resize the panel whenever a state line appears and
+  **rescale the whole board mid-game** (`win.cell` reads the HUD row's
+  height — the side panel "stays in place so the board never jumps" rule
+  from section 21.7). The panel and `hudRow` went 112 -> **144 px**, which
+  fits the measured worst case with ~9.5 px of margin and never changes
+  during play.
+- **The effects line is confined**: 216 px wide, centered,
+  `fontSizeMode: Text.HorizontalFit` — with everything stacked the font
+  shrinks (painted 200.5 px <= 216 after the LV move below), with little
+  text it renders at its 14 px size as before.
+- **The tier mark left the effects line** (user request in the same round,
+  "el indicador de LV a la izquierda del tanque"): a small `LV n` gold
+  label now rides **to the left of the name tank** in both panels — it is
+  rank, not a temporary effect. With it out of the effects line, the
+  widest line is `SHIELD SPEED CANNON MISSILE` at **206.5 px painted —
+  fits without even shrinking**. Name row with `LV 4` rides at
+  189.3/192.9 px <= 216.
+- Side effect, accepted: the taller HUD row costs the board ~2 px of
+  `cell` in fullscreen (~55 -> ~53); the panels' readability wins.
+  The offscreen probe's 800 px window crams the marquee over the panels —
+  that overlap pre-dates this round (horizontally independent of heights)
+  and at the user's 1920x1080 the plate sits flush between the panels by
+  design. User approved the result on screen ("quedo excelente").
+- `bin/test` 70/70 (backend untouched), offscreen smoke silent.
 
 ### 21.12 New player sprite (variant 3), pending the armoured one
 
@@ -2227,3 +2256,20 @@ carries.
 - Tests: `levelUpSoundsOnceWithItsOwnArpeggio` (QSignalSpy: exactly one
   `playSound("levelup")`) and `blastMissileSoundsOnlyOnce` (exactly one
   `playSound("power")`). `bin/test` now totals 70/70.
+
+### 21.14 Pending (user report, after 21.13): the fifth guided missile is silent-only, and air support wants +15%
+
+- **The fifth guided missile never appears** (user capture in play after
+  the 21.9 round): of the five-missile salvo only four spawn; the fifth
+  plays `air-support.wav` and nothing falls. Diagnose with the salvo
+  machinery of section 21.9 (`updateAirStrikes()`, `m_airStrikes`,
+  `airMissiles`) plus a probe or a test that fires the whole salvo and
+  counts actual launch records — suspect either the launch loop burning
+  the last missile without pushing a strike record, or something eating
+  the last strike (target-less fallback is the path the user's run would
+  hit if no live enemy was in front).
+- **Air support +15% more volume** (user spec): `sndAirSupport.volume` is
+  already at the SoundEffect ceiling (1.0), so the extra 15% has to come
+  from the sample itself — regenerate `sounds/air-support.wav` with its
+  gain scaled by 1.15 (clamped, same recipe as levelup.wav's +50% in
+  21.13), keep the playback volume at 1.0.

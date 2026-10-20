@@ -367,14 +367,19 @@ ApplicationWindow {
         Item {
             id: hudRow
             Layout.fillWidth: true
-            height: 112
+            // Budgeted, not content-sized: content-sizing would resize the
+            // panel whenever a power-up state line appears and rescale the
+            // whole board (cell reads its height) mid-game. 144 fits the
+            // measured worst case -- name row + SCORE + effects + AIR-SUPPORT
+            // + join keys = 125 px (panel probe, section 21.11).
+            height: 144
             RowLayout {
                 anchors.fill: parent
                 spacing: 10
                 // P1, with left padding (50% of the box width).
                 Rectangle {
                     Layout.leftMargin: 120
-                    width: 240; height: 112
+                    width: 240; height: 144
                     color: "#101014"; border.color: win.p1body; border.width: 2
                     // Black frame around the panel, so the panel cuts against
                     // the mural behind the HUD bar.
@@ -390,6 +395,17 @@ ApplicationWindow {
                         Row {
                             anchors.horizontalCenter: parent.horizontalCenter
                             spacing: 10
+                            // The LEVELUP tier mark rides at the left of the
+                            // tank instead of in the effects line (user spec):
+                            // it is rank, not a temporary effect.
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: backend.players.length > 0
+                                         && backend.players[0].tier > 0
+                                text: "LV " + backend.players[0].tier
+                                font.bold: true; font.pixelSize: 13; font.letterSpacing: 1
+                                color: "#ffd60a"
+                            }
                             TankSprite {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: 30; height: 30
@@ -426,14 +442,20 @@ ApplicationWindow {
                             font.bold: true; font.pixelSize: 19; font.letterSpacing: 1
                             color: "#f2f4f8"
                         }
+                        // Confined to the panel's width: the four effects
+                        // plus LV stack into the widest panel line, so this
+                        // row shrinks its font instead of spilling sideways.
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
+                            width: 216
+                            horizontalAlignment: Text.AlignHCenter
+                            fontSizeMode: Text.HorizontalFit
+                            minimumPixelSize: 9
                             text: backend.players.length > 0
                                   ? ((backend.players[0].shield ? "SHIELD " : "")
                                      + (backend.players[0].speed ? "SPEED " : "")
                                      + (backend.players[0].cannon ? "CANNON " : "")
-                                     + (backend.players[0].blast ? "MISSILE " : "")
-                                     + (backend.players[0].tier > 0 ? ("LV " + backend.players[0].tier + " ") : ""))
+                                     + (backend.players[0].blast ? "MISSILE " : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
                             color: "#ffd60a"
@@ -486,7 +508,7 @@ ApplicationWindow {
                 // P2, with right padding (50% of the box width). Hidden in a one-player game.
                 Rectangle {
                     Layout.rightMargin: 120
-                    width: 240; height: 112
+                    width: 240; height: 144
                     visible: backend.playerCount === 2
                     color: "#101014"; border.color: win.p2body; border.width: 2
                     // Black frame around the panel, so the panel cuts against
@@ -503,6 +525,14 @@ ApplicationWindow {
                         Row {
                             anchors.horizontalCenter: parent.horizontalCenter
                             spacing: 10
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: backend.players.length > 1
+                                         && backend.players[1].tier > 0
+                                text: "LV " + backend.players[1].tier
+                                font.bold: true; font.pixelSize: 13; font.letterSpacing: 1
+                                color: "#ffd60a"
+                            }
                             TankSprite {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: 30; height: 30
@@ -541,12 +571,15 @@ ApplicationWindow {
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
+                            width: 216
+                            horizontalAlignment: Text.AlignHCenter
+                            fontSizeMode: Text.HorizontalFit
+                            minimumPixelSize: 9
                             text: backend.players.length > 1
                                   ? ((backend.players[1].shield ? "SHIELD " : "")
                                      + (backend.players[1].speed ? "SPEED " : "")
                                      + (backend.players[1].cannon ? "CANNON " : "")
-                                     + (backend.players[1].blast ? "MISSILE " : "")
-                                     + (backend.players[1].tier > 0 ? ("LV " + backend.players[1].tier + " ") : ""))
+                                     + (backend.players[1].blast ? "MISSILE " : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
                             color: "#ffd60a"
