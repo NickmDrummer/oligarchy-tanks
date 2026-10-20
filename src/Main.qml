@@ -135,7 +135,9 @@ ApplicationWindow {
     SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 1.0 }
     SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
     SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 1.0 }
-    SoundEffect { id: sndAirSupport; source: "qrc:/sounds/air-support.wav"; volume: 0.8 }
+    // The air-support effect runs 25% louder than before (user spec); 1.0 is
+    // the SoundEffect ceiling.
+    SoundEffect { id: sndAirSupport; source: "qrc:/sounds/air-support.wav"; volume: 1.0 }
     SoundEffect { id: sndBlastShoot; source: "qrc:/sounds/blast_missile-shoot.wav"; volume: 0.805 }
     SoundEffect { id: sndBlastHit; source: "qrc:/sounds/blast_missile-hit.wav"; volume: 0.96 }
     // 8-bit engine putter, loops only while a player tank is rolling.
@@ -423,6 +425,24 @@ ApplicationWindow {
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
                             color: "#ffd60a"
                         }
+                        // Tier-4 air support: state line. While a salvo is
+                        // in flight it reads ON; with no salvo up it shows
+                        // the armoured-kill bank, which is the charge: ten
+                        // banked kills release the next five (user design).
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            visible: backend.players.length > 0
+                                     && backend.players[0].tier >= 4
+                            text: backend.players.length > 0
+                                  ? (backend.players[0].airMissiles > 0
+                                     ? "AIR-SUPPORT ON"
+                                     : "AIR-SUPPORT "
+                                       + Math.min(100, backend.players[0].armoredKills * 10) + "%")
+                                  : ""
+                            font.bold: true; font.pixelSize: 13; font.letterSpacing: 1
+                            color: backend.players.length > 0
+                                   && backend.players[0].airMissiles > 0 ? "#9ece6a" : "#a0d8ff"
+                        }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             visible: backend.players.length > 0
@@ -515,6 +535,21 @@ ApplicationWindow {
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
                             color: "#ffd60a"
+                        }
+                        // Tier-4 air support: state line (see the P1 block).
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            visible: backend.players.length > 1
+                                     && backend.players[1].tier >= 4
+                            text: backend.players.length > 1
+                                  ? (backend.players[1].airMissiles > 0
+                                     ? "AIR-SUPPORT ON"
+                                     : "AIR-SUPPORT "
+                                       + Math.min(100, backend.players[1].armoredKills * 10) + "%")
+                                  : ""
+                            font.bold: true; font.pixelSize: 13; font.letterSpacing: 1
+                            color: backend.players.length > 1
+                                   && backend.players[1].airMissiles > 0 ? "#9ece6a" : "#a0d8ff"
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -1180,83 +1215,29 @@ ApplicationWindow {
                                 dark: index === 0 ? win.p1dark : win.p2dark
                                 light: index === 0 ? win.p1light : win.p2light
                             }
-                            // Armour shields: three white pixel outlines drawn
-                            // on the tank sprite boundary, all inscribed in the
-                            // same box so each one reaches the tank's perimeter:
-                            // a square (the boundary itself), a diamond with its
-                            // vertices on the side midpoints, and an inscribed
-                            // circle. On a hit the circle is lost first, then
-                            // the diamond; the square is the last to go.
-                            Canvas {
-                                id: armourCanvas
-                                x: -(width - parent.width) / 2
-                                y: -(height - parent.height) / 2
-                                width: parent.width * 1.2
-                                height: parent.height * 1.2
-                                rotation: [-90, 0, 90, 180][p.dir]
-                                visible: p.armorHP > 0
-                                property int seenArmor: p.armorHP
-                                onSeenArmorChanged: requestPaint()
-                                Component.onCompleted: requestPaint()
-                                onPaint: {
-                                    var ctx = getContext("2d");
-                                    ctx.reset();
-                                    ctx.clearRect(0, 0, width, height);
-                                    ctx.fillStyle = "#ffffff";
-                                    var ps = Math.max(2, Math.round(parent.width / 20));
-                                    var cx = width / 2;
-                                    var cy = height / 2;
-                                    // Half-size of the tank's bounding box, snapped
-                                    // to the pixel grid.
-                                    var hw = Math.round(parent.width * 0.5 / ps) * ps;
-                                    var layers = Math.min(3, Math.floor(p.armorHP));
-                                    // Pixel-stair segment between two points.
-                                    function line(x0, y0, x1, y1) {
-                                        var steps = Math.max(1, Math.round(Math.abs(x1 - x0) / ps)
-                                                               + Math.round(Math.abs(y1 - y0) / ps));
-                                        for (var k = 0; k <= steps; ++k) {
-                                            var t = k / steps;
-                                            var x = Math.round((x0 + (x1 - x0) * t) / ps) * ps;
-                                            var y = Math.round((y0 + (y1 - y0) * t) / ps) * ps;
-                                            ctx.fillRect(x, y, ps, ps);
-                                        }
+                            // Tier armour: the shield power-up's crackling
+                            // lightning ring, in its own gold so it reads
+                            // apart from the white grace ring. It wraps the
+                            // hull while any armour layer is up and drops
+                            // with the armour once the hits are spent.
+                            Loader {
+                                active: p.armorHP > 0
+                                anchors.fill: parent
+                                anchors.margins: -Math.round(parent.width * 0.35)
+                                sourceComponent: Component {
+                                    ShieldSprite {
+                                        anchors.fill: parent
+                                        frame: Math.floor(backend.frameTick / 6)
+                                        tint: "#ffd60a"
+                                        tintDark: "#a5820e"
                                     }
-                                    if (layers >= 1) {
-                                        // Square: outline right on the sprite boundary.
-                                        line(cx - hw, cy - hw, cx + hw, cy - hw);
-                                        line(cx + hw, cy - hw, cx + hw, cy + hw);
-                                        line(cx + hw, cy + hw, cx - hw, cy + hw);
-                                        line(cx - hw, cy + hw, cx - hw, cy - hw);
-                                    }
-                                    if (layers >= 2) {
-                                        // Diamond: vertices on the midpoints of the
-                                        // tank's sides, so it spans the whole perimeter.
-                                        line(cx, cy - hw, cx + hw, cy);
-                                        line(cx + hw, cy, cx, cy + hw);
-                                        line(cx, cy + hw, cx - hw, cy);
-                                        line(cx - hw, cy, cx, cy - hw);
-                                    }
-                                    if (layers >= 3) {
-                                        // Circle: inscribed in the same box, drawn as
-                                        // a pixel stair (not a smooth stroke).
-                                        var csteps = Math.max(24, Math.round(6 * hw / ps));
-                                        for (var a = 0; a < csteps; ++a) {
-                                            var ang = 2 * Math.PI * a / csteps;
-                                            var x = Math.round((cx + hw * Math.cos(ang)) / ps) * ps;
-                                            var y = Math.round((cy + hw * Math.sin(ang)) / ps) * ps;
-                                            ctx.fillRect(x, y, ps, ps);
-                                        }
-                                    }
-                                    ctx.fillStyle = "#ffffff";
                                 }
                             }
-                            // Shield: static crackling around the hull as two
-                            // alternating frames of a jagged, rounded ring of
-                            // lightning (see ShieldSprite.qml).
+                            // Shield power-up (and spawn grace): the white
+                            // crackling ring. Hidden while the gold armour
+                            // ring is up — two rings on one tank would read
+                            // as noise.
                             Loader {
-                                // Hidden while armour shields are up: the white
-                                // crackling ring would visually collide with the
-                                // armour outlines around the tank.
                                 active: p.shield && p.armorHP <= 0
                                 anchors.fill: parent
                                 anchors.margins: -Math.round(parent.width * 0.35)
@@ -1511,8 +1492,9 @@ ApplicationWindow {
                         }
                     }
 
-                    // BLAST MISSILE impact: a small orange circle that grows out of
-                    // the hit spot (Backend::blastImpact()).
+                    // BLAST MISSILE impact: an orange circle that grows out of
+                    // the hit spot (Backend::blastImpact()). Diameter covers
+                    // the whole BLAST_RADIUS of 3 cells.
                     Item {
                         id: blastFlash
                         property var b: backend.blastImpact
@@ -1523,7 +1505,7 @@ ApplicationWindow {
                         y: b.active ? b.y * win.cell : 0
                         Rectangle {
                             anchors.centerIn: parent
-                            width: win.cell * 3 * blastFlash.p
+                            width: win.cell * 6 * blastFlash.p
                             height: width
                             radius: width / 2
                             color: "#ff6b35"

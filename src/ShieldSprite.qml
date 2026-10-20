@@ -10,6 +10,10 @@ Item {
 
     // Changes over time; the two frames alternate.
     property int frame: 0
+    // Callers can tint the ring: the power-up/grace shield stays white/gray
+    // (the default); the tier armour shows in its own colour instead.
+    property color tint: "#ffffff"
+    property color tintDark: "#c9ced6"
 
     readonly property var frames: [
         [
@@ -62,8 +66,8 @@ Item {
     readonly property int px: Math.max(1, Math.floor(Math.min(width, height) / 20))
 
     function colorFor(ch) {
-        if (ch === "W") return "#ffffff"
-        if (ch === "L") return "#c9ced6"
+        if (ch === "W") return root.tint
+        if (ch === "L") return root.tintDark
         return "transparent"
     }
 

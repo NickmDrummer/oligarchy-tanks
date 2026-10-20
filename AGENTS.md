@@ -2088,3 +2088,70 @@ approved the result (`16c748d` is the mural round, committed first):
 The two theme test slots (`themeFallsBack`, `themeReadsAccent`) became one:
 `accentIsTheOmarchyGreen` asserts `#9ece6a` + `black`. `bin/test` is **59/59**,
 `bin/build` clean, offscreen smoke silent, GL probe run.
+
+### 21.9 The power-up round (section 21.3): air support, blast radius, drops and the armour ring
+
+The five §21.3 asks, to be committed as one block once the user has seen and
+approved the result on their screen:
+
+- **Air support fires 5 missiles per salvo** (was 3): every place that
+  refills the salvo — the tier-4 LEVELUP pickup, the ten-armoured-kill
+  recharge and the `OLIGARCHY_TANKS_TIER` debug grant — now sets
+  `airMissiles = 5`.
+- **The air-support effect plays 25% louder**: `sndAirSupport.volume` went
+  0.8 -> 1.0 (the SoundEffect ceiling is 1.0, so 0.8 * 1.25 lands exactly
+  there).
+- **BLAST radius 1.5 -> 3 cells.** New `BLAST_RADIUS = 3.0` constant in
+  `backend.cpp` drives the area-damage test in the blast branch of
+  `updateBullets`; the QML impact circle grew to a matching 6-cell diameter
+  (`Main.qml` `blastFlash`).
+- **Bonuses land at a random free spot anywhere on the board**
+  (`Backend::spawnPickupAt`): candidates are every Empty/Forest cell with no
+  living tank on it, one is drawn at random; the old neighbourhood scan
+  survived only as a last-resort fallback for a packed board.
+- **The tier-armour visual is the ShieldSprite crackling ring, not the
+  square/diamond/circle canvas** (replaces the commit `6d01478` canvas).
+  `ShieldSprite.qml` gained `tint`/`tintDark` properties (the power-up grace
+  ring keeps the white/gray default); the player delegate loads the ring
+  while `armorHP > 0` in gold `#ffd60a`/`#a5820e` — chosen to read apart from
+  the white grace ring, which still hides while armour is up.
+- **The armoured-kill counter is visible** in both player panels when
+  tier >= 4. It is a state line: **`AIR-SUPPORT ON`** (accent green) while a
+  salvo is in flight, **`AIR-SUPPORT n%`** (celeste) while the armoured-kill
+  bank is under ten. `playerAt()` and the per-frame `players()` list carry
+  `armoredKills`/`airMissiles` — the panels read `players()`, which is where
+  the first probe round tripped.
+- **The air-support cycle is bank-driven (user design, settled after two
+  bus reports)**. The armoured-kill bank IS the charge: ten banked kills
+  release a salvo of five strikes, the bank starts over, and the cycle
+  repeats while tier 4 stays alive. Kills bank during a live salvo (a dead
+  salvo with ten banked fires the next one on the spot); a new salvo never
+  stacks on a live one; the bank crosses stage changes untouched
+  (`nextLevel()` -> `resetTanks(false)` keeps tier/armor/kills, the salvo
+  itself resets with the `Tank{}` wipe); death drops the bank with the tank
+  (`killPlayer` zeroes `armoredKills`). The old `airRecharging` flag and
+  the LEVELUP pickup's instant salvo grant are gone — the charge alone
+  drives the salvo. The `OLIGARCHY_TANKS_TIER=4` debug grant still hands
+  out a full salvo for testing.
+- **BLAST missiles home in** on the nearest enemy ahead of the player's
+  area — in the facing half-plane, within +/-4 cells sideways — when one
+  exists at fire time (`Bullet.target`); they curve toward it every step
+  and still fly over every block, snapping onto the hull when a step would
+  overshoot, so they cannot orbit the target. Nobody ahead -> the old
+  straight lane. Missiles keep flying straight if the target dies mid-flight.
+
+Tests: the air-support tests tell the whole cycle:
+`airSupportFiresAtTheTenthArmouredKill` (nine banked hold the hand; the
+tenth releases 5 and zeroes the bank; in-flight banking waits; exhausted
+salvo with ten banked respends instantly),
+`airSupportRechargesAtTenArmouredKills` (P2 side, same rule),
+`airSupportCycleSurvivesTheStageChange` (a 40% bank crosses the sector and
+fires when six more kills land — nothing granted on stage entry),
+`airSupportBankDiesWithThePlayer`, `theBlastAreaReachesThreeCells`
+(impact target + one at ~2.3 cells die, one at ~4.0 survives),
+`theBlastHomesOnAnEnemyAhead` (missile curves 4 cells off the lane and kills
+the target), `theBlastStaysStraightWithNobodyAhead` and
+`pickupDropsOnAFreeSpot` (the drop lands clear of every tank, inside the
+board). `bin/test` **66/66**, `bin/build` clean, offscreen smoke silent, the
+`OLIGARCHY_TANKS_TIER=4` probe render checked (panel state line and salvo,
+gold ring around the hull).

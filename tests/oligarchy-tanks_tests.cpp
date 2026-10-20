@@ -66,6 +66,10 @@ struct TanksTestAccess {
     static void airStrike(Backend &b, int owner, double x, double y) {
         b.m_airStrikes.push_back(Backend::AirStrike{x, y, 1.0, false, owner});
     }
+    // Strikes in flight right now.
+    static int strikesPending(const Backend &b) { return int(b.m_airStrikes.size()); }
+    // Take a tank down the normal death path (the charge dies with it).
+    static void killTank(Backend &b, int i) { b.killPlayer(i); }
     static void advanceAir(double dt, Backend &b) { b.updateAirStrikes(dt); }
     // Armoured-kill counters: the air-support recharge currency.
     static int armouredKills(const Backend &b, int i) { return b.m_p[i].armoredKills; }
@@ -81,6 +85,24 @@ struct TanksTestAccess {
         b.applyPickup(0);
     }
     static bool baseGuardActive(const Backend &b) { return b.m_baseGuardUntil > 0; }
+    // The drop (section 21.3): run the real solver and read where it landed.
+    static void spawnPickupAt(Backend &b, double x, double y) { b.spawnPickupAt(x, y); }
+    static bool pickupActive(const Backend &b) { return b.m_pickup.active; }
+    static double pickupX(const Backend &b) { return b.m_pickup.x; }
+    static double pickupY(const Backend &b) { return b.m_pickup.y; }
+    // Any living tank whose hull reaches into the cell the bonus chose.
+    static bool tankAt(const Backend &b, double px, double py) {
+        auto overlap = [&](double tx, double ty) {
+            return std::abs(tx - px) < 0.9 && std::abs(ty - py) < 0.9;
+        };
+        for (int i = 0; i < 2; ++i)
+            if (b.m_p[i].alive && overlap(b.m_p[i].x, b.m_p[i].y))
+                return true;
+        for (const auto &e : b.m_foes)
+            if (e.alive && overlap(e.x, e.y))
+                return true;
+        return false;
+    }
     // Jump past the guard timer and run the expiry check.
     static void lapseBaseGuard(Backend &b) {
         b.m_time = b.m_baseGuardUntil + 1;
@@ -142,6 +164,7 @@ struct TanksTestAccess {
     static void setSpawned(Backend &b, int n) { b.m_spawned = n; }
     static void noMoreSpawns(Backend &b) { b.m_spawned = b.totalForLevel(); }
     static int lastEnemy(const Backend &b) { return int(b.m_foes.size()) - 1; }
+    static bool enemyIsAlive(const Backend &b, int i) { return b.m_foes[i].alive; }
     static int enemyCount(const Backend &b) { return int(b.m_foes.size()); }
     static double enemyX(const Backend &b, int i) { return b.m_foes[i].x; }
     static double enemyY(const Backend &b, int i) { return b.m_foes[i].y; }
@@ -1201,16 +1224,217 @@ private slots:
         b.startGame();
         TanksTestAccess::freezeFor(b, 60.0);
         auto &t2 = TanksTestAccess::tank(b, 1);
-        // Put P2 at tier 4, out of missiles and one kill short of the recharge.
+        // P2 side, tier 4, no salvo running, ten kills banked: on the tick.
         t2.tier = 4;
         t2.alive = true;
-        t2.airRecharging = true;
         t2.armoredKills = 10;
         t2.airMissiles = 0;
+        t2.airTimer = 0;
         TanksTestAccess::runTick(b);
-        QCOMPARE(t2.airRecharging, false);
-        QCOMPARE(t2.airMissiles, 3);
+        QCOMPARE(t2.airMissiles, 5);
         QCOMPARE(t2.armoredKills, 0);
+    }
+
+    // The user's design (round 21.9, second pass): the armoured-kill bank IS
+    // the charge and the cycle is continuous while tier 4 stays alive. Ten
+    // banked kills release five strikes and the bank starts over; kills keep
+    // banking during the flight, and an exhausted salvo with ten more banked
+    // fires the next one at once.
+    void airSupportFiresAtTheTenthArmouredKill() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.x = 7.5;
+        p1.y = 13.5;
+        p1.tier = 4;
+        p1.armorHP = 0;
+        p1.airMissiles = 0;
+        p1.airTimer = 0;
+        p1.armoredKills = 0;
+        // Nine banked kills hold the hand: nothing fires yet.
+        p1.armoredKills = 9;
+        for (int k = 0; k < 20; ++k)
+            TanksTestAccess::runTick(b);
+        QCOMPARE(TanksTestAccess::strikesPending(b), 0);
+        QCOMPARE(p1.airMissiles, 0);
+        // The tenth kill is the trigger: the salvo queues and the bank starts
+        // over from zero.
+        p1.armoredKills = 10;
+        TanksTestAccess::runTick(b);
+        QCOMPARE(p1.airMissiles, 5);
+        QCOMPARE(p1.armoredKills, 0);
+        // One strike out on the next tick; kills banked in flight wait for a
+        // free launcher.
+        p1.airTimer = 0;
+        TanksTestAccess::runTick(b);
+        QCOMPARE(p1.airMissiles, 4);
+        QCOMPARE(TanksTestAccess::strikesPending(b), 1);
+        p1.armoredKills = 10;
+        p1.airTimer = 0;
+        TanksTestAccess::runTick(b);
+        QCOMPARE(p1.airMissiles, 3);   // still in flight; no stacking second salvo
+        QCOMPARE(p1.armoredKills, 10); // the bank just waits
+        QCOMPARE(TanksTestAccess::strikesPending(b), 2);
+        // Drain the salvo anyway (the pacing is airTimer's job, tested
+        // elsewhere) and the instant-respend rule takes over.
+        for (int k = 0; k < 3 && p1.airMissiles > 0; ++k) {
+            p1.airTimer = 0;
+            TanksTestAccess::runTick(b);
+        }
+        QCOMPARE(p1.airMissiles, 0);   // salvo exhausted, ten still banked
+        TanksTestAccess::runTick(b);
+        QCOMPARE(p1.airMissiles, 5);   // the cycle fired the next one at once
+        QCOMPARE(p1.armoredKills, 0);
+    }
+
+    // The bank crosses the stage change untouched and keeps counting there;
+    // nothing is granted on stage entry - the charge alone drives the salvo.
+    void airSupportCycleSurvivesTheStageChange() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.tier = 4;
+        p1.airMissiles = 0;
+        p1.airTimer = 0;
+        p1.armoredKills = 4;          // 40% banked
+        TanksTestAccess::runTick(b);  // a live tick before the sector flips
+        b.nextLevel();
+        auto &np = TanksTestAccess::tank(b, 0);
+        QCOMPARE(np.tier, 4);
+        QCOMPARE(np.armoredKills, 4); // the bank survives the sector change
+        QCOMPARE(np.airMissiles, 0);  // nothing is forced on stage entry
+        for (int k = 0; k < 20; ++k)
+            TanksTestAccess::runTick(b);
+        QCOMPARE(TanksTestAccess::strikesPending(b), 0);
+        // Six more kills land in the new sector: the tenth releases.
+        np.armoredKills = 10;
+        TanksTestAccess::runTick(b);
+        QCOMPARE(np.airMissiles, 5);
+        QCOMPARE(np.armoredKills, 0);
+    }
+
+    // Death drops the whole cycle with the tank: the bank starts over when
+    // the tier comes back.
+    void airSupportBankDiesWithThePlayer() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.tier = 4;
+        p1.armoredKills = 9;
+        TanksTestAccess::killTank(b, 0);
+        QCOMPARE(p1.tier, 0);
+        QCOMPARE(p1.armoredKills, 0);
+        QCOMPARE(p1.airMissiles, 0);
+    }
+
+    // A blast missile fired at an enemy ahead of the player but off the
+    // firing lane curves up and reaches it (teledirigido, round 21.9).
+    void theBlastHomesOnAnEnemyAhead() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.x = 2.5;
+        p1.y = 12.5;
+        p1.dir = 1;
+        TanksTestAccess::putEnemy(b, 9.5, 8.5);   // 4 cells off the lane, ahead
+        TanksTestAccess::takePickup(b, 8);         // BLAST MISSILE
+        b.fireP1();
+        QVERIFY2(b.bullets().size() >= 1, "the blast shot was not fired");
+        for (int i = 0; i < 90 && b.bullets().size() > 0; ++i)
+            TanksTestAccess::stepBullets(b, 1.0 / 60.0);
+        QCOMPARE(TanksTestAccess::enemiesAlive(b), 0);
+    }
+
+    // With nobody ahead the blast stays a plain straight shot: it flies past
+    // the board edge without touching an enemy standing behind the player.
+    void theBlastStaysStraightWithNobodyAhead() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.x = 2.5;
+        p1.y = 12.5;
+        p1.dir = 1;
+        TanksTestAccess::putEnemy(b, 1.5, 12.5);   // behind the player
+        TanksTestAccess::putEnemy(b, 1.5, 4.0);    // behind, far off-lane anyway
+        TanksTestAccess::takePickup(b, 8);
+        b.fireP1();
+        for (int i = 0; i < 90 && b.bullets().size() > 0; ++i)
+            TanksTestAccess::stepBullets(b, 1.0 / 60.0);
+        QCOMPARE(TanksTestAccess::enemiesAlive(b), 2);
+    }
+
+    // The BLAST MISSILE's area damage reaches 3 cells from the impact now
+    // (user spec: 1.5 -> 3, section 21.3): an enemy 2.0-3.0 cells from the
+    // impact dies with it, one beyond 3 survives.
+    void theBlastAreaReachesThreeCells() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        // One player on a clear lane, facing right; three frozen enemies.
+        TanksTestAccess::clearFoes(b);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.x = 2.5;
+        p1.y = 7.5;
+        p1.dir = 1;
+        TanksTestAccess::putEnemy(b, 6.5, 7.5);    // impact here
+        const int far = TanksTestAccess::lastEnemy(b);
+        TanksTestAccess::putEnemy(b, 8.8, 7.5);    // ~2.3 from the impact: dies
+        const int nearBy = TanksTestAccess::lastEnemy(b);
+        TanksTestAccess::putEnemy(b, 10.5, 7.5);   // ~4.0 from the impact: survives
+        const int out = TanksTestAccess::lastEnemy(b);
+        TanksTestAccess::takePickup(b, 8);         // BLAST MISSILE
+        b.fireP1();
+        QVERIFY2(b.bullets().size() >= 1, "the blast shot was not fired");
+        // Run the shot to its first hit and let the area pulse do its work.
+        for (int i = 0; i < 60 && b.bullets().size() > 0; ++i)
+            TanksTestAccess::stepBullets(b, 1.0 / 60.0);
+        QCOMPARE(b.bullets().size(), 0);
+        QVERIFY2(!TanksTestAccess::enemyIsAlive(b, far), "the impact target died");
+        QVERIFY2(!TanksTestAccess::enemyIsAlive(b, nearBy), "the enemy at ~2.3 cells died with the blast");
+        QVERIFY2(TanksTestAccess::enemyIsAlive(b, out), "the enemy at ~4.0 cells must survive a 3-cell blast");
+    }
+
+    // A carrier's bonus lands on a random free spot anywhere on the board
+    // (section 21.3): empty or forest ground with no tank standing on it,
+    // never dictated by the death spot.
+    void pickupDropsOnAFreeSpot() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        // A crowded corner is the death spot...
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::putPlayer(b, 0, 1.5, 13.5);
+        TanksTestAccess::putEnemy(b, 1.5, 12.6);
+        TanksTestAccess::putEnemy(b, 1.9, 13.5);
+        TanksTestAccess::putEnemy(b, 0.7, 12.9);
+
+        TanksTestAccess::spawnPickupAt(b, 1.5, 13.5);
+        QVERIFY(TanksTestAccess::pickupActive(b));
+        const double px = TanksTestAccess::pickupX(b);
+        const double py = TanksTestAccess::pickupY(b);
+        QVERIFY2(px > 0.0 && px < Backend::COLS && py > 0.0 && py < Backend::ROWS,
+                 "inside the board");
+        QVERIFY2(!TanksTestAccess::tankAt(b, px, py), "a tank stands on the dropped bonus");
     }
 };
 

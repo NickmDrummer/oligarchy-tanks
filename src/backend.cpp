@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <utility>
 
 namespace {
 constexpr double TANK_SIZE = 0.8;
@@ -21,6 +22,8 @@ constexpr int BRICK_BLOCKS_BELOW = 2;
 // How long the NUKE's blast takes to grow from the spot where the bonus was
 // picked up until it covers the board (QML draws the circle).
 constexpr double NUKE_FLASH_TIME = 0.6;
+// BLAST MISSILE area radius, in cells (user spec: 1.5 -> 3).
+constexpr double BLAST_RADIUS = 3.0;
 
 int goneStrips(unsigned m) {
     int n = 0;
@@ -111,6 +114,7 @@ QVariantList Backend::players() const {
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
             {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
             {"blast", t.blastShots > 0}, {"tier", t.tier}, {"armorHP", t.armorHP},
+            {"armoredKills", t.armoredKills}, {"airMissiles", t.airMissiles},
             {"active", playerActive(i)}, {"joined", m_joined[i]},
         });
     }
@@ -142,6 +146,7 @@ QVariantMap Backend::playerAt(int i, int tick) const {
             {"lives", t.lives}, {"score", t.score}, {"moving", t.moving},
             {"shield", m_time < t.shieldUntil}, {"speed", m_time < t.speedUntil}, {"cannon", m_time < t.cannonUntil},
             {"blast", t.blastShots > 0}, {"tier", t.tier}, {"armorHP", t.armorHP},
+            {"armoredKills", t.armoredKills}, {"airMissiles", t.airMissiles},
             {"active", playerActive(i)}, {"joined", m_joined[i]}};
 }
 
@@ -474,9 +479,8 @@ void Backend::startGame() {
             m_p[i].tier = m_debugTier;
             m_p[i].armorHP = (m_debugTier >= 3) ? 3 : 0;
             if (m_debugTier >= 4) {
-                m_p[i].airMissiles = 3;
+                m_p[i].airMissiles = 5;
                 m_p[i].airTimer = 0;
-                m_p[i].airRecharging = false;
             }
         }
     }
@@ -842,22 +846,23 @@ void Backend::tick() {
         updateTank(m_p[i], up, down, left, right, dt, PLAYER_SPEED * boost);
     }
 
-    // Air support (LEVELUP tier 4): fire missiles near the player.
+    // Air support (tier 4): the armoured-kill bank is the charge. Ten banked
+    // kills release a salvo of five strikes (one per 1.5 s); the bank starts
+    // counting over and keeps banking during the flight, so an exhausted
+    // salvo with ten more banked is instant. While a salvo is up the bank
+    // just waits (no salvo stacks on top, user design, round 21.9).
     for (int i = 0; i < m_playerCount; ++i) {
         Tank &t = m_p[i];
         if (t.tier < 4 || !t.alive)
             continue;
-        if (t.airRecharging) {
+        if (t.airMissiles <= 0) {
             if (t.armoredKills >= 10) {
                 t.armoredKills -= 10;
-                t.airMissiles = 3;
+                t.airMissiles = 5;
                 t.airTimer = 0;
-                t.airRecharging = false;
             }
             continue;
         }
-        if (t.airMissiles <= 0)
-            continue;
         t.airTimer -= dt;
         if (t.airTimer > 0)
             continue;
@@ -872,10 +877,7 @@ void Backend::tick() {
         if (m_soundEnabled)
             emit playSound("air-support");
         t.airMissiles--;
-        if (t.airMissiles <= 0)
-            t.airRecharging = true;
-        else
-            t.airTimer = 1.5;
+        t.airTimer = 1.5;
     }
 
     // Respawn dead players that still have lives.
@@ -1125,10 +1127,28 @@ void Backend::updateBullets(double dt) {
         // Capped so a fast shot cannot skip over a quarter-cell gap.
         const double step = std::min(b.speed * dt, BULLET_MAX_STEP);
         double nx = b.x, ny = b.y;
-        if (b.dir == 0) ny -= step;
-        if (b.dir == 2) ny += step;
-        if (b.dir == 3) nx -= step;
-        if (b.dir == 1) nx += step;
+        if (b.blast && b.target >= 0 && b.target < int(m_foes.size())
+                     && m_foes[b.target].alive) {
+            // Homing: curve toward the locked enemy and fly over everything
+            // until contact. Snap onto the hull when the step would overshoot
+            // it, so a short shot cannot orbit the target.
+            const Enemy &tg = m_foes[b.target];
+            const double dx = tg.x - b.x, dy = tg.y - b.y;
+            const double dist = std::max(0.0001, std::hypot(dx, dy));
+            if (dist <= step + 0.3) {
+                nx = tg.x;
+                ny = tg.y;
+            } else {
+                nx += dx / dist * step;
+                ny += dy / dist * step;
+            }
+            b.dir = std::abs(dx) >= std::abs(dy) ? (dx >= 0 ? 1 : 3) : (dy >= 0 ? 2 : 0);
+        } else {
+            if (b.dir == 0) ny -= step;
+            if (b.dir == 2) ny += step;
+            if (b.dir == 3) nx -= step;
+            if (b.dir == 1) nx += step;
+        }
 
         // Out of bounds.
         if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) {
@@ -1204,7 +1224,7 @@ void Backend::updateBullets(double dt) {
                         for (auto &e2 : m_foes) {
                             if (!e2.alive)
                                 continue;
-                            if (std::abs(e2.x - nx) < 1.5 && std::abs(e2.y - ny) < 1.5) {
+                            if (std::abs(e2.x - nx) < BLAST_RADIUS && std::abs(e2.y - ny) < BLAST_RADIUS) {
                                 e2.hp = std::max(0, e2.hp - 2);
                                 if (e2.hp <= 0) {
                                     e2.alive = false;
@@ -1378,6 +1398,29 @@ void Backend::fireBullet(double x, double y, int dir, int owner, double speed, b
     if (b.blast) {
         m_p[owner].blastShots--;
         b.speed = BULLET_SPEED * 0.75;
+        // Homing: lock the nearest enemy ahead of the player's area (in the
+        // facing half-plane, within +/-4 cells sideways). Nobody ahead ->
+        // the shot keeps the old straight lane.
+        const Tank &p = m_p[owner];
+        const double fx = (dir == 1) ? 1.0 : (dir == 3) ? -1.0 : 0.0;
+        const double fy = (dir == 2) ? 1.0 : (dir == 0) ? -1.0 : 0.0;
+        int best = -1;
+        double bestAhead = 0.0;
+        for (size_t k = 0; k < m_foes.size(); ++k) {
+            const Enemy &e = m_foes[k];
+            if (!e.alive)
+                continue;
+            const double dx = e.x - p.x, dy = e.y - p.y;
+            const double ahead = dx * fx + dy * fy;
+            const double side = std::abs(dx * fy - dy * fx);
+            if (ahead < 0.5 || side > 4.0)
+                continue;
+            if (best < 0 || ahead < bestAhead) {
+                best = int(k);
+                bestAhead = ahead;
+            }
+        }
+        b.target = best;
     }
     b.big = (owner < 2 && m_time < m_p[owner].cannonUntil);
     m_bullets.push_back(b);
@@ -1740,7 +1783,9 @@ void Backend::killPlayer(int idx) {
     t.armorHP = 0;
     t.airMissiles = 0;
     t.airTimer = -1;
-    t.airRecharging = false;
+    // The charge dies with the tank: the cycle only runs for a tier-4 tank
+    // still alive (user design, round 21.9).
+    t.armoredKills = 0;
     t.blastUntil = -1;
     t.blastShots = 0;
     t.respawn = 2.0;
@@ -1799,9 +1844,40 @@ int Backend::aliveEnemies() const {
     return n;
 }
 
-// Bonuses only drop from carriers, at the spot where they die.
+// Bonuses only drop from carriers. The user's rule (section 21.3): the bonus
+// lands at a random free spot anywhere on the board - empty (or forest) ground
+// with no tank standing on it - never pinned to where the carrier died.
+// (x, y) is the death spot, used only for the last-resort fallback below.
 void Backend::spawnPickupAt(double x, double y) {
     std::uniform_int_distribution<int> kind(0, 8);
+    std::vector<std::pair<int, int>> free;
+    free.reserve(size_t(COLS) * ROWS);
+    for (int py = 0; py < ROWS; ++py) {
+        for (int px = 0; px < COLS; ++px) {
+            const int tile = m_grid[py * COLS + px];
+            if (tile != Empty && tile != Forest)
+                continue;
+            const auto busy = [&](double tx, double ty) {
+                return tx >= 0 && std::abs(tx - (px + 0.5)) < 0.9
+                       && std::abs(ty - (py + 0.5)) < 0.9;
+            };
+            bool taken = false;
+            for (int i = 0; i < 2 && !taken; ++i)
+                taken = m_p[i].alive && busy(m_p[i].x, m_p[i].y);
+            for (const auto &e : m_foes)
+                taken = taken || (e.alive && busy(e.x, e.y));
+            if (!taken)
+                free.emplace_back(px, py);
+        }
+    }
+    if (!free.empty()) {
+        std::uniform_int_distribution<int> spot(0, int(free.size()) - 1);
+        const auto [cx, cy] = free[spot(m_rng)];
+        m_pickup = Pickup{double(cx) + 0.5, double(cy) + 0.5, kind(m_rng), 0, true};
+        return;
+    }
+    // Nowhere free: fall back to the old neighbourhood scan so a packed board
+    // can still drop something rather than nothing.
     const int cx = int(x), cy = int(y);
     for (int dy = -1; dy <= 1; ++dy)
         for (int dx = -1; dx <= 1; ++dx) {
@@ -1870,11 +1946,6 @@ void Backend::applyPickup(int player) {
             t.tier++;
         // Armour layers from tier 3.
         t.armorHP = armorLayers(t);
-        // Air support at tier 4: fire 3 missiles, 1.5 s apart.
-        if (t.tier >= 4 && !t.airRecharging) {
-            t.airMissiles = 3;
-            t.airTimer = 0;
-        }
         if (m_soundEnabled)
             emit playSound("power");
         break;

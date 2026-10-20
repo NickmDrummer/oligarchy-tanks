@@ -187,11 +187,11 @@ private:
         // recharge at tier 4.
         int armoredKills = 0;
         // Air support (tier 4): missiles left in the current salvo and the
-        // timer to the next one. -1 means no salvo running.
+        // timer to the next one. The armoured-kill bank (`armoredKills`)
+        // IS the charge: ten banked kills release the salvo, and it starts
+        // counting over while tier 4 stays alive.
         int airMissiles = 0;
         double airTimer = -1;
-        // True while air support is on cooldown waiting for 10 armored kills.
-        bool airRecharging = false;
     };
     struct Enemy {
         double x = 0, y = 0;
@@ -226,6 +226,8 @@ private:
         double speed = 0;
         bool big = false;
         bool blast = false;
+        // Homing target (enemy index) for blast shots; -1 flies straight.
+        int target = -1;
     };
     // Pending air-support strike: the sound plays immediately, the explosion
     // (and radio circle) happen 1 s later.
