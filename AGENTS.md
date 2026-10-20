@@ -2257,7 +2257,7 @@ gold ring around the hull).
   `playSound("levelup")`) and `blastMissileSoundsOnlyOnce` (exactly one
   `playSound("power")`). `bin/test` now totals 70/70.
 
-### 21.14 The fifth guided missile was silent-only, and air support wanted +15% (implemented, waiting for the user's check)
+### 21.14 The fifth guided missile was silent-only, and air support wanted +15% (delivered)
 
 - **Diagnosis corrected along the way**: the user said "guided missile",
   which the manual uses for the **BLAST MISSILE pickup** (5 shots), not
@@ -2412,3 +2412,50 @@ killing the game so the compositor dialog never shows.
   min session was single-player pad-present but the browser/context load
   was not reported — treat "browser doing video on the second monitor"
   as a possible ingredient, not proven.
+
+### 21.16 The v0.2.0 publication round (Oct 20, shipped)
+
+The game round of 21.9-21.14 lands tagged and public:
+
+- The mute fix rode a last commit before tagging: **`f990382`** — the
+  100 ms engine timer now stops both loops while muted (the user
+  verified M silences the putter; bin/test 72/72 and the offscreen smoke
+  were already green). The study record of 21.15 travelled in the same
+  commit.
+- **Tag `v0.2.0`** is on `f990382`; `master` pushed (everything from the
+  CRT round on went public at once: `16c748d` .. `f990382`).
+- **GitHub release published**:
+  https://github.com/NickmDrummer/oligarchy-tanks/releases/tag/v0.2.0 —
+  highlights cover the cabinet/CRT/mural round, the user's own sprites
+  with the moss/brown/gray armour degradation, the power-up tuning (bank
+  air support, 3-cell homing blast, drops anywhere free), the sound round
+  (levelup arpeggio, single emissions, louder air support), the panel
+  budget, and the two fixes (fifth blast shot, M turning the engine
+  loops off).
+- **`omarchy-pkgs` recipe PR #1348 raised**:
+  https://github.com/omacom/omarchy-pkgs/pull/1348 (branch
+  `add-oligarchy-tanks` on the fork). Files:
+  `pkgbuilds/oligarchy-tanks/{PKGBUILD,oligarchy-tanks.install,.omarchy/package.json}`.
+  - Source-pinned tag tarball (`v0.2.0`, sha256 recorded); build is
+    plain `qmake6 oligarchy-tanks.pro && make`.
+  - **Verified before raising**: the package built clean from the v0.2.0
+    tarball itself, and note what differs from the in-repo dev build —
+    the plain tarball build produces the binary at the project root
+    (`./oligarchy-tanks`), not `build/oligarchy-tanks` (that path is a
+    `bin/build` convenience); re-verified that `upstream-watch.py check`
+    prints `already current` and `tests/pinned-sources.sh` passes.
+  - Installs: the binary, LICENSE + the three font licences, the desktop
+    file and the icon as `oligarchy-tanks.svg` (the in-repo PKGBUILD
+    still installs it as `tanks.svg` — a rename leftover, the desktop
+    file demands `oligarchy-tanks`; fixing that is owed to the local
+    recipe when convenient, cosmetics only), and the pad/input-group
+    note as `install-note.txt`.
+- **Left standing for this round**: the Omarchy Store listing waits on
+  the user's fullscreen captures; the AUR source recipe stays deferred
+  until registration reopens (21.2); PR #1348's CI build (x86_64 and
+  aarch64)
+  is watched as part of the store round.
+- The freeze hunt stays open as 21.15 — the watchdog lives at
+  `/tmp/opencode/freeze/watchdog_real.sh` and the user reported a clean
+  ~17 min session; the round scope was timeboxed (user: "terminemos con
+  la ronda de publicación si es rápido").
