@@ -162,6 +162,15 @@ ApplicationWindow {
         running: true
         repeat: true
         onTriggered: {
+            // M must silence the engine loops too: until this branch the
+            // mute only stopped event sounds and the putter kept going.
+            if (!backend.soundEnabled) {
+                if (sndEngine.playing)
+                    sndEngine.stop()
+                if (sndEngineMove.playing)
+                    sndEngineMove.stop()
+                return
+            }
             var anyAlive = (backend.players.length > 0 && backend.players[0].alive)
                            || (backend.players.length > 1 && backend.players[1].alive)
             var playing = backend.state === "playing" && anyAlive

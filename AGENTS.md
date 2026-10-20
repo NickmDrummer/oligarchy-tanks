@@ -2287,7 +2287,11 @@ gold ring around the hull).
   scaled — `sounds/air-support.wav` regenerated through an in-place
   amplitude x1.15 with a hard clamp (peak 22260 -> 25599 of 32767), same
   22050 Hz mono 16-bit format, duration unchanged, playback volume
-  untouched at 1.0. Hook to verify by ear at the next session.
+  untouched at 1.0. **Verified by the user, both parts**: the fifth shot
+  falls ("el bug del guided missile: CORREGIDO") and the boosted air
+  support reads on their ears ("si mejoró con el 15%"). Committed as
+  `bc731a4` (naming was to stay as is: `GUIDED MISSILE` only in the
+  manual description, the visible label keeps `MISSILE`).
 
 ### 21.15 Open again: the `QSocketNotifier: Invalid socket` crash (twice, tier-4 sessions)
 
@@ -2320,9 +2324,91 @@ Reproduction plan for the next round:
    salvo while watching stderr for the message; then the same with the
    sound toggled off (`M` -> `soundEnabled=false`) to bisect the audio
    path. Not started yet — the session above is logged first.
-- Still owed before the commit: ~~the user plays the missile fix~~
-  **Verified by the user**: the fifth shot falls ("el bug del guided
-  missile: CORREGIDO"). The boosted air support lands in this commit too
-  ("lo dejamos asi nomas" on the naming — the visible label stays
-  `MISSILE`, the manual description keeps GUIDED MISSILE); if the +15%
-  does not read on their ears it is one more wav-scaling away.
+
+**Round of Oct 20 — the user's description pins the symptom.**
+
+- The window **froze completely with the idle engine loop still
+  sounding**, and ~3 s later Hyprland showed its wait-or-kill dialog.
+  That is a **wedged GUI thread**, not a dead process: the audio lives
+  in Qt's multimedia threads and keeps rendering what was already
+  playing, the GUI thread stops ticking and the compositor times the
+  client out. Combined with the poll-level `QSocketNotifier` warning, the
+  shape is: some fd died (audio stream or Wayland), and the next touch
+  of the dead object from the GUI thread blocked it for ever.
+- Journal around the session shows **no USB events during the runs** —
+  the 00:21:46 `USB disconnect` was the EDIFIER M60 speaker, before all
+  of it. Not a hotplug event, then.
+- The pad reader's fd lifecycle was re-reviewed: `closeDevice()` deletes
+  the notifier **before** `::close(fd)`, both loops are bounded. The
+  closing code in the game is not the suspect.
+- The only tier-4-specific resource pattern stays the audio churn: a
+  2.0 s `air-support.wav` played every 1.5 s (overlapping plays of the
+  same `SoundEffect`), on top of the two infinite engine loops.
+- **The fuse that turns an fd warning into a full GUI wedge: the 100 ms
+  engine timer touches `SoundEffect` state on the GUI thread every 100
+  ms** (`sndEngine.playing` read + `.volume` re-assignment, Main.qml
+  lines 160-183). If the audio layer wedges, the GUI blocks within one
+  tick of it — exactly matching "froze while the idle loop kept playing".
+- Bug found while mapping this: **that timer ignores
+  `backend.soundEnabled`**, so `M` never silences the engine loops (and
+  the churn keeps running after a mute — this also weakens the naive
+  "bisect with M" plan; the timer needs its own mute branch for the
+  bisection to mean anything).
+
+Capture recipe at the next freeze (leave the dialog on "Wait"):
+`ptrace_scope=1` blocks attaching from a sibling shell, so sudo it:
+
+```sh
+PID=$(pgrep -x oligarchy-tanks)
+sudo eu-stack -p $PID > /tmp/tanks-hang.txt
+sudo gdb -p $PID -batch -ex "thread apply all bt" >> /tmp/tanks-hang.txt 2>&1
+ls -l /proc/$PID/fd > /tmp/tanks-fds.txt
+for t in /proc/$PID/task/*; do echo "$t $(cat $t/comm) $(cat $t/wchan)"; done > /tmp/tanks-threads.txt
+```
+
+The auto-capture harness (this round, throwaway in `/tmp/opencode/freeze`)
+wraps the project wrapper: a probe process that loads the real QML with
+audio, drives tier-4 salvos endlessly (bank topped so a salvo always
+restarts) plus a real 100 ms heartbeat written by a `QTimer` on the GUI
+thread; a watchdog shell process — parent of the probe, so it may ptrace
+without sudo — detects a stalled heartbeat (>1.5 s) and runs `eu-stack`,
+gdb and the fd listing on its own. A hang caught this way needs no user
+reflexes. `watchdog_real.sh` is the same idea for a session of play: it
+launches the real binary (`OLIGARCHY_TANKS_TIER=4`) as its own child and
+reacts to a 3 s stall of the main thread's CPU clock, capturing and then
+killing the game so the compositor dialog never shows.
+
+**Results of the first capture rounds (Oct 20, after the commit):**
+
+- **Offscreen stress, audio on, the tier-4 + BLAST mix driven for ever**
+  (salvo refilled as soon as the bank drains, blast shots through the
+  game's own fire path, engine loops live, 100 ms heartbeat watched):
+  two clean 150 s rounds before the queue was stopped to make room for a
+  real session. No hang.
+- **A real ~17 min tier-4 session by the user under `watchdog_real.sh`**
+  (real fullscreen, real audio, real pad present): played to completion,
+  the user exited normally at 01:50. The watchdog sat ready the whole
+  time, sampled the main thread every 300 ms and never saw a stall;
+  the game's stderr holds **zero lines** — not one `QSocketNotifier`
+  warning, not even a mild one. No hang, no symptom at all.
+- Interpretation so far: the issue is rarer than 2-of-2 — yesterday's
+  twin freezes were a burst, not an everyday state. The audio-fd suspect
+  stands; so does "stop chasing, hunt with data". The watchdog is the
+  standing tool: run `/tmp/opencode/freeze/watchdog_real.sh` before any
+  play session and, on a hang, it captures everything by itself.
+- Still open for the two failed sessions: how long they ran before
+  freezing, one or two players, keyboard or pad driving, and whether
+  BLAST was firing right before (the fifth-missile collision bug was
+  live in yesterday's build and gone in this one — if a freeze came just
+  after a fifth blast shot, the bullet churn is suspect number two
+  behind the audio).
+- **The user's answer (Oct 20):** the game was opened with the tier-4
+  grant and **froze mid-air-support**, playing alone, **with the pad
+  driving**, and with **Zen (browser) open on another monitor playing
+  Twitter**. So the freeze environment was: a busy machine (a browser
+  scrolling media on the second screen), audio salvo overlapping in
+  flight, pad read by the game. All three stand: system load around the
+  audio fd, and the audio churn remains suspect one. Today's clean ~17
+  min session was single-player pad-present but the browser/context load
+  was not reported — treat "browser doing video on the second monitor"
+  as a possible ingredient, not proven.
