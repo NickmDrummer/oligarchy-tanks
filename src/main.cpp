@@ -16,6 +16,12 @@
 #include "gamepad.h"
 #include "theme.h"
 
+// Passed by the .pro (DEFINES += OLIGARCHY_TANKS_VERSION="0.2.0"), but a
+// direct compile still needs a version to name.
+#ifndef OLIGARCHY_TANKS_VERSION
+#define OLIGARCHY_TANKS_VERSION "0.2.0"
+#endif
+
 int main(int argc, char *argv[]) {
     // The FFmpeg version note from QtMultimedia is benign startup info.
     QLoggingCategory::setFilterRules(QStringLiteral("qt.multimedia.ffmpeg.info=false"));
@@ -70,16 +76,17 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("backend", &backend);
-    // Stamp the running binary's own mtime, so the footer always names the
-    // exact build on screen even when only QML was recompiled. In a release
-    // build (OLIGARCHY_TANKS_RELEASE defined) the footer shows a version instead.
+    // The version names the release the user is playing (round 21.10): the
+    // footer and the manual show it. A development build appends the binary's
+    // mtime so a screenshot always names the exact build; a release build
+    // (OLIGARCHY_TANKS_RELEASE defined) shows the version alone.
+    QCoreApplication::setApplicationVersion(QStringLiteral(OLIGARCHY_TANKS_VERSION));
+    QString build = QStringLiteral("V") + QCoreApplication::applicationVersion();
+#ifndef OLIGARCHY_TANKS_RELEASE
     const QDateTime built = QFileInfo(QCoreApplication::applicationFilePath()).lastModified();
-#ifdef OLIGARCHY_TANKS_RELEASE
-    engine.rootContext()->setContextProperty("buildId", QStringLiteral("V0.1"));
-#else
-    engine.rootContext()->setContextProperty(
-        "buildId", QStringLiteral("BUILD ") + built.toString(QStringLiteral("MMM d yyyy HH:mm:ss")));
+    build += QStringLiteral("  ") + built.toString(QStringLiteral("MMM d HH:mm:ss"));
 #endif
+    engine.rootContext()->setContextProperty("buildId", build);
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;

@@ -464,8 +464,11 @@ void Backend::padFire(int pad) {
 }
 
 void Backend::padSelect(int pad) {
+    // The pad's SELECT plays the menu key (R): back to the select screen
+    // mid-game, next sector on victory. The QML side carries the state
+    // rules and does nothing on the select screen (user spec, round 21.10).
     if (playerForPad(pad) >= 0)
-        emit helpRequested();
+        emit menuRequested();
 }
 
 void Backend::startGame() {
@@ -866,14 +869,36 @@ void Backend::tick() {
         t.airTimer -= dt;
         if (t.airTimer > 0)
             continue;
-        // Fire one missile at a random spot within ~3 cells. The sound plays
-        // immediately; the explosion and radio circle happen 1 s later.
-        std::uniform_real_distribution<double> off(-3.0, 3.0);
-        double mx = t.x + off(m_rng);
-        double my = t.y + off(m_rng);
-        mx = std::max(0.5, std::min((double)(COLS - 0.5), mx));
-        my = std::max(0.5, std::min((double)(ROWS - 0.5), my));
-        m_airStrikes.push_back(AirStrike{mx, my, 1.0, false, i});
+        // Fire one missile. With an enemy on the board the strike is a
+        // guided shell: the 1 s flight ends on the target's CURRENT position,
+        // so the hit is guaranteed even if it keeps moving (user design,
+        // round 21.10). Aimless otherwise: a random spot within ~3 cells,
+        // as before. The sound plays immediately.
+        int target = -1;
+        double best = 0.0;
+        for (int k = 0; k < int(m_foes.size()); ++k) {
+            if (!m_foes[k].alive)
+                continue;
+            const double dx = m_foes[k].x - t.x;
+            const double dy = m_foes[k].y - t.y;
+            const double d2 = dx * dx + dy * dy;
+            if (target < 0 || d2 < best) {
+                target = k;
+                best = d2;
+            }
+        }
+        double mx, my;
+        if (target >= 0) {
+            mx = m_foes[target].x;
+            my = m_foes[target].y;
+        } else {
+            std::uniform_real_distribution<double> off(-3.0, 3.0);
+            mx = t.x + off(m_rng);
+            my = t.y + off(m_rng);
+            mx = std::max(0.5, std::min((double)(COLS - 0.5), mx));
+            my = std::max(0.5, std::min((double)(ROWS - 0.5), my));
+        }
+        m_airStrikes.push_back(AirStrike{mx, my, 1.0, false, i, target});
         if (m_soundEnabled)
             emit playSound("air-support");
         t.airMissiles--;
@@ -2018,6 +2043,13 @@ void Backend::updateAirStrikes(double dt) {
             continue;
         // 1 s elapsed: fire the explosion and the radio circle.
         s.done = true;
+        // A guided strike lands on its target's current position: the hit
+        // is guaranteed even if the enemy moved during the 1 s flight. With
+        // no live target it falls back to the stored spot.
+        if (s.target >= 0 && s.target < int(m_foes.size()) && m_foes[s.target].alive) {
+            s.x = m_foes[s.target].x;
+            s.y = m_foes[s.target].y;
+        }
         // Damage enemies near the strike.
         for (auto &e : m_foes) {
             if (!e.alive)

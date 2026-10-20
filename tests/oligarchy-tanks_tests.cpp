@@ -68,6 +68,10 @@ struct TanksTestAccess {
     }
     // Strikes in flight right now.
     static int strikesPending(const Backend &b) { return int(b.m_airStrikes.size()); }
+    // One strike in flight (to nudge its timer or read its landing spot).
+    static Backend::AirStrike &strike(Backend &b, int i) { return b.m_airStrikes[i]; }
+    static double airX(const Backend &b) { return b.m_airSupportX; }
+    static double airY(const Backend &b) { return b.m_airSupportY; }
     // Take a tank down the normal death path (the charge dies with it).
     static void killTank(Backend &b, int i) { b.killPlayer(i); }
     static void advanceAir(double dt, Backend &b) { b.updateAirStrikes(dt); }
@@ -163,9 +167,10 @@ struct TanksTestAccess {
     }
     static void setSpawned(Backend &b, int n) { b.m_spawned = n; }
     static void noMoreSpawns(Backend &b) { b.m_spawned = b.totalForLevel(); }
-    static int lastEnemy(const Backend &b) { return int(b.m_foes.size()) - 1; }
-    static bool enemyIsAlive(const Backend &b, int i) { return b.m_foes[i].alive; }
+    static int lastEnemy(const Backend &b) { return int(b.m_foes.size()) - 1; }    static bool enemyIsAlive(const Backend &b, int i) { return b.m_foes[i].alive; }
     static int enemyCount(const Backend &b) { return int(b.m_foes.size()); }
+    // One enemy slot, mutable (move it mid-flight, kill it, read its hp).
+    static Backend::Enemy &enemy(Backend &b, int i) { return b.m_foes[i]; }
     static double enemyX(const Backend &b, int i) { return b.m_foes[i].x; }
     static double enemyY(const Backend &b, int i) { return b.m_foes[i].y; }
     static bool buried(const Backend &b, int i) { return b.buriedInSolid(b.m_foes[i].x, b.m_foes[i].y); }
@@ -1335,6 +1340,62 @@ private slots:
         QCOMPARE(p1.tier, 0);
         QCOMPARE(p1.armoredKills, 0);
         QCOMPARE(p1.airMissiles, 0);
+    }
+
+    // Air support is guided shell fire (user spec, round 21.10): each strike
+    // goes after the nearest alive enemy and lands on its CURRENT position,
+    // so the hit is guaranteed even if it moved during the 1 s flight.
+    void airSupportLandsOnItsTarget() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        TanksTestAccess::putPlayer(b, 0, 7.5, 13.5);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.tier = 4;
+        p1.armorHP = 0;
+        p1.airMissiles = 1;
+        p1.airTimer = 0;
+        p1.armoredKills = 0;
+        TanksTestAccess::putEnemy(b, 3.0, 3.0);   // the nearest (only) foe
+        const int target = TanksTestAccess::lastEnemy(b);
+        TanksTestAccess::runTick(b);
+        QCOMPARE(p1.airMissiles, 0);              // the missile is out
+        QCOMPARE(TanksTestAccess::strikesPending(b), 1);
+        // The enemy wanders while the missile flies; the strike must follow.
+        TanksTestAccess::enemy(b, target).x = 5.0;
+        TanksTestAccess::enemy(b, target).y = 4.0;
+        TanksTestAccess::strike(b, 0).timer = 0.0;  // the 1 s flight is over
+        TanksTestAccess::runTick(b);
+        QCOMPARE(TanksTestAccess::enemyIsAlive(b, target), false);
+        QCOMPARE(TanksTestAccess::airX(b), 5.0);  // landed on the moved spot
+        QCOMPARE(TanksTestAccess::airY(b), 4.0);
+    }
+
+    // A target that dies during the flight does not astray the strike: it
+    // falls back to the spot it was launched at.
+    void airSupportFallsBackWithoutLiveTarget() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 60.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        TanksTestAccess::putPlayer(b, 0, 7.5, 13.5);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.tier = 4;
+        p1.armorHP = 0;
+        p1.airMissiles = 1;
+        p1.airTimer = 0;
+        p1.armoredKills = 0;
+        TanksTestAccess::putEnemy(b, 3.0, 3.0);
+        TanksTestAccess::runTick(b);              // fires, guided at the foe
+        TanksTestAccess::enemy(b, TanksTestAccess::lastEnemy(b)).alive = false;
+        TanksTestAccess::strike(b, 0).timer = 0.0;
+        TanksTestAccess::runTick(b);              // impact on the stored spot
+        QCOMPARE(TanksTestAccess::strikesPending(b), 0);
+        QCOMPARE(TanksTestAccess::airX(b), 3.0);
+        QCOMPARE(TanksTestAccess::airY(b), 3.0);
     }
 
     // A blast missile fired at an enemy ahead of the player but off the

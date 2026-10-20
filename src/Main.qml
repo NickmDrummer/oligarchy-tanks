@@ -203,8 +203,15 @@ ApplicationWindow {
                 sndBlastHit.play()
         }
         function onStateChanged() { keys.forceActiveFocus() }
-        // SELECT / Share on a pad opens the manual, exactly like "?".
-        function onHelpRequested() { win.helpVisible = !win.helpVisible }
+        // The pad's SELECT plays the menu key (R): back to the select screen
+        // mid-game, next sector on victory. On the select screen it does
+        // nothing, so a pad never confirms a mode by accident (user spec).
+        function onMenuRequested() {
+            if (backend.state === "victory")
+                backend.nextLevel();
+            else if (backend.state !== "select")
+                backend.toSelect();
+        }
     }
 
     // Keyboard state forwarding. Held keys set direction flags in C++,
@@ -419,7 +426,7 @@ ApplicationWindow {
                                   ? ((backend.players[0].shield ? "SHIELD " : "")
                                      + (backend.players[0].speed ? "SPEED " : "")
                                      + (backend.players[0].cannon ? "CANNON " : "")
-                                     + (backend.players[0].blast ? "BLAST " : "")
+                                     + (backend.players[0].blast ? "MISSILE " : "")
                                      + (backend.players[0].tier > 0 ? ("LV " + backend.players[0].tier + " ") : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
@@ -530,7 +537,7 @@ ApplicationWindow {
                                   ? ((backend.players[1].shield ? "SHIELD " : "")
                                      + (backend.players[1].speed ? "SPEED " : "")
                                      + (backend.players[1].cannon ? "CANNON " : "")
-                                     + (backend.players[1].blast ? "BLAST " : "")
+                                     + (backend.players[1].blast ? "MISSILE " : "")
                                      + (backend.players[1].tier > 0 ? ("LV " + backend.players[1].tier + " ") : ""))
                                   : ""
                             font.bold: true; font.pixelSize: 14; font.letterSpacing: 1
@@ -1315,7 +1322,7 @@ ApplicationWindow {
                         visible: k.active
                         property real s: win.cell * 1.1
                         property var cols: ["#edc400", "#c9ced6", "#b9c0c9", "#e8e8e8", "#ffd93b", "#c8963c", "#9fd8ff", "#ffd700", "#ff6b6b"]
-                        property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE", "LEVELUP", "BLAST"]
+                        property var labels: ["SPEED", "SHIELD", "PICK", "LIFE", "NUKE", "CANNON", "FREEZE", "LEVELUP", "MISSILE"]
                         x: k.x * win.cell - s / 2
                         y: k.y * win.cell - (s + 18) / 2
                         width: s; height: s + 18
@@ -1850,7 +1857,7 @@ ApplicationWindow {
                         PadIcon { kind: "trigger"; label: "R2"; unit: 22; face: "#f2f4f8" }
                         PadIcon { kind: "face"; label: "X"; unit: 22; face: "#f2f4f8" }
                     }
-                    Text { text: "START JOINS OR PAUSES - SHARE: MANUAL"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
+                    Text { text: "START JOINS OR PAUSES - SHARE: MENU"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                     Text { text: "1 PLAYER: KEYBOARD UNLESS A PAD PRESSES START"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                     Text { text: "2 PLAYERS: KEYBOARD P1, FIRST PAD P2, 2ND PAD P1"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                     Text { text: "GAME OVER: START, SPACE OR ENTER GOES BACK TO THE SELECT SCREEN"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
@@ -1866,15 +1873,15 @@ ApplicationWindow {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 6
                     width: 400
-                    Text { text: "DEFEND THE BASE. DESTROY ALL 16 ENEMIES PER SECTOR."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "ENEMIES: GRAY BASIC (1 HP), YELLOW FAST (1 HP, 1.35X SPEED),"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "ARMORED (3 HP, PURPLE>CYAN>GRAY), CARRIER (RED/GRAY, DROPS POWER-UPS)."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "SCORE: BASIC 100, FAST 200, ARMORED 300. LIVES: 3 (CAP 5)."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "SECTOR: MIX CHANGES (MORE FAST/ARMORED), ENEMIES GET FASTER."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "BRICKS: 4 STRIPS PER TILE. UNDER 2 GONE IT BLOCKS WHOLE;"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "FROM 2 GONE ONLY SURVIVING STRIPS BLOCK (50% LAW)."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "PICK REBUILDS THE BASE WALL AS STEEL (15 S). BASE WALL NEVER BREAKS."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
-                    Text { text: "DEATH RESETS LEVELUP TIER. TIERS SURVIVE SECTOR CHANGE."; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "DEFEND THE BASE. DESTROY ALL 16 ENEMIES PER SECTOR."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "ENEMIES: GRAY BASIC (1 HP), YELLOW FAST (1 HP, 1.35X SPEED),"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "ARMORED (3 HP, PURPLE>CYAN>GRAY), CARRIER (RED/GRAY, DROPS POWER-UPS)."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "SCORE: BASIC 100, FAST 200, ARMORED 300. LIVES: 3 (CAP 5)."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "SECTOR: MIX CHANGES (MORE FAST/ARMORED), ENEMIES GET FASTER."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "BRICKS: 4 STRIPS PER TILE. UNDER 2 GONE IT BLOCKS WHOLE;"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "FROM 2 GONE ONLY SURVIVING STRIPS BLOCK (50% LAW)."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "PICK REBUILDS THE BASE WALL AS STEEL (15 S). BASE WALL NEVER BREAKS."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
+                    Text { text: "DEATH RESETS LEVELUP TIER. TIERS SURVIVE SECTOR CHANGE."; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#f2f4f8"; wrapMode: Text.WordWrap; width: parent.width }
                 }
                 // ---- POWER-UPS ----
                 Text {
@@ -1896,7 +1903,7 @@ ApplicationWindow {
                             ["CANNON", "#c8963c", "ONE-SHOT ARMOUR (BIG SHELL) FOR 15 S"],
                             ["FREEZE", "#9fd8ff", "ENEMIES STOP FOR 8 S, BLINKING AS THEY THAW"],
                             ["LEVELUP", "#ffd700", "RAISES OFFENSIVE TIER (SPEED, DOUBLE SHOT, ARMOUR, AIR SUPPORT)"],
-                            ["BLAST", "#ff6b6b", "BLAST MISSILE (5 SHOTS): SLOWER SHOT, AREA DAMAGE (2 HP), PASSES THROUGH BLOCKS"]
+                            ["MISSILE", "#ff6b6b", "GUIDED MISSILE (5 SHOTS): SLOWER SHOT, HOMES IN ON ENEMIES AHEAD, AREA DAMAGE (2 HP), PASSES THROUGH BLOCKS"]
                         ]
                         Row {
                             spacing: 16
@@ -1927,16 +1934,28 @@ ApplicationWindow {
                         }
                     }
                 }
-                }
-                // Footer (outside the scroll area, always visible).
-                Text {
+                // The release version and the repository, under the last
+                // power-up and with room to scroll clear of the CLOSE button
+                // (user request, round 21.10).
+                Column {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 28
-                    text: "BUILD " + buildId
-                    font.family: "Departure Mono"
-                    font.bold: true; font.pixelSize: 11; font.letterSpacing: 1
-                    color: "#5a5e68"
+                    spacing: 4
+                    Item { width: 1; height: 12 }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: buildId
+                        font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13
+                        color: "#5a5e68"
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "<a href=\"https://github.com/NickmDrummer/oligarchy-tanks\">GITHUB.COM/NICKMDRUMMER/OLIGARCHY-TANKS</a>"
+                        onLinkActivated: function (link) { Qt.openUrlExternally(link) }
+                        font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12
+                        color: theme.accent; linkColor: theme.accent
+                    }
+                    Item { width: 1; height: 44 }
+                }
                 }
             }
             PixelButton {

@@ -1091,8 +1091,11 @@ Two layers, deliberately:
   the west position — `Square` on a PlayStation pad, `X` on an Xbox one
   (`BTN_WEST`), so it is the same physical button on both brands. `L1`/`R1` are
   deliberately not fire.
-- **`SHARE`/`SELECT`** emits `helpRequested`, which QML turns into the same
-  manual as `?` (including the auto-pause).
+- **`SHARE`/`SELECT`** emits `menuRequested` (round 21.10): QML applies the
+  same state rules as the `R` key — back to the select screen mid-game (and
+  out of a pause), next sector on victory — and does nothing on the select
+  screen so a pad never confirms a mode by accident. The `?` key on the
+  keyboard still opens the manual.
 - **Unplugging** returns the slot to the keyboard (`padDisconnected` clears
   `m_padHeld` and `PadMapper::release()` reports the release), and the join hint
   under that tank comes back. The pad index is the smallest free one, so a
@@ -2155,3 +2158,13 @@ the target), `theBlastStaysStraightWithNobodyAhead` and
 board). `bin/test` **66/66**, `bin/build` clean, offscreen smoke silent, the
 `OLIGARCHY_TANKS_TIER=4` probe render checked (panel state line and salvo,
 gold ring around the hull).
+
+### 21.11 Pending (user report, after 21.10): the player panels overflow
+
+With every information row that stacks in a panel (tank + key label, SCORE,
+`LV n`, the tier/air-support state line, the join hint), the text runs past
+the panel's bottom edge: the panel box is sized to the old row count and the
+new rows spill outside (user capture after the round). Fix somewhere later:
+size the box from its content (the way the select screen's box grows from
+its column), or budget the rows, so the panel always fits whatever lines it
+carries.

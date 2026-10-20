@@ -24,6 +24,10 @@ linux {
 
 RESOURCES += src/resources.qrc
 
+# The release version the footer and the manual name (round 21.10).
+DEFINES += OLIGARCHY_TANKS_VERSION=\\\"0.2.0\\\"
+VERSION = 0.2.0
+
 # For a release build, uncomment the next line (or pass DEFINES+=OLIGARCHY_TANKS_RELEASE
-# to qmake). The footer then shows "V0.1" instead of the build stamp.
+# to qmake). The footer then shows the version alone, without the build stamp.
 # DEFINES += OLIGARCHY_TANKS_RELEASE

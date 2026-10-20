@@ -50,7 +50,7 @@ players**, so a pad never takes a tank away from anyone.
 | `START` | Confirm the mode on the select screen, join a tank, pause and resume |
 | Left stick / d-pad | Move (and pick the mode on the select screen) |
 | `L2` / `R2`, or `Square` (PlayStation) / `X` (Xbox) | Fire (and confirm the mode) |
-| `SHARE` / `SELECT` | Open the manual, like `?` |
+| `SHARE` / `SELECT` | Menu, like `R` (back from a run, next sector on victory) |
 
 Each tank shows the device driving it (`KEY` or `PAD n`) and, underneath,
 a blinking hint with the keys that drive it (`Space`; `Enter` for player 2;

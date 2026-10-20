@@ -153,7 +153,7 @@ signals:
     void soundChanged();
     void playSound(const QString &name);
     // A pad asked for the manual (SELECT / Share).
-    void helpRequested();
+    void menuRequested();
     void padsChanged();
     void playerCountChanged();
     void menuChanged();
@@ -236,6 +236,7 @@ private:
         double timer = 1.0;
         bool done = false;
         int owner = 0;   // player who launched it; score/kill credit goes here
+        int target = -1; // enemy index the strike tracks; -1 = aimless spot
     };
 
     enum Tile { Empty = 0, Brick = 1, Steel = 2, Base = 3, BaseDead = 4, Forest = 5 };
