@@ -2257,19 +2257,72 @@ gold ring around the hull).
   `playSound("levelup")`) and `blastMissileSoundsOnlyOnce` (exactly one
   `playSound("power")`). `bin/test` now totals 70/70.
 
-### 21.14 Pending (user report, after 21.13): the fifth guided missile is silent-only, and air support wants +15%
+### 21.14 The fifth guided missile was silent-only, and air support wanted +15% (implemented, waiting for the user's check)
 
-- **The fifth guided missile never appears** (user capture in play after
-  the 21.9 round): of the five-missile salvo only four spawn; the fifth
-  plays `air-support.wav` and nothing falls. Diagnose with the salvo
-  machinery of section 21.9 (`updateAirStrikes()`, `m_airStrikes`,
-  `airMissiles`) plus a probe or a test that fires the whole salvo and
-  counts actual launch records — suspect either the launch loop burning
-  the last missile without pushing a strike record, or something eating
-  the last strike (target-less fallback is the path the user's run would
-  hit if no live enemy was in front).
-- **Air support +15% more volume** (user spec): `sndAirSupport.volume` is
-  already at the SoundEffect ceiling (1.0), so the extra 15% has to come
-  from the sample itself — regenerate `sounds/air-support.wav` with its
-  gain scaled by 1.15 (clamped, same recipe as levelup.wav's +50% in
-  21.13), keep the playback volume at 1.0.
+- **Diagnosis corrected along the way**: the user said "guided missile",
+  which the manual uses for the **BLAST MISSILE pickup** (5 shots), not
+  for air support. First reading here wrongly blamed the air-support
+  salvo.
+- **The real bug is only on the FIFTH blast shot, with tier >= 2**:
+  `fireBullet()` spends the shot count during the main fire, so the
+  section 20.5 gate (`blastShots <= 0`) read 0 afterwards, judged "no
+  BLAST in play" and launched the tier-2 trailing bullet right behind the
+  missile; the two collided (bullet vs bullet) and the missile died at
+  the muzzle — nothing but the shoot sound. Shots 1-4 were never affected
+  (the gate saw 4, 3, 2, 1 > 0).
+- Fix: both `fireP1()`/`fireP2()` capture `blastReplacing` (the count
+  still > 0) **before** firing and the tier-2 gate now also requires
+  `!blastReplacing`. The 20.5 rule (BLAST replaces the shot, never
+  stacks) is unchanged for every shot.
+- Tests: `theFifthBlastShotSpawnsItsMissile` (five taps through
+  `fireP1()`, exactly one blast missile per press) and
+  `tier2TwinShotsSurviveWithoutBlast` (no BLAST -> two bullets, trailing
+  0.4 cells behind — the 20.5 gate itself is regression-locked now).
+  Found while writing the test: the per-frame `bullets()` list lacked the
+  `blast`/`big` keys that only `bulletAt()` carried — same
+  per-frame-plus-invokable rule as `players()`; both added.
+  `bin/test` **72/72**.
+- **Air support +15% more volume** (user spec): the playback volume was
+  already at the SoundEffect ceiling (1.0), so the sample itself was
+  scaled — `sounds/air-support.wav` regenerated through an in-place
+  amplitude x1.15 with a hard clamp (peak 22260 -> 25599 of 32767), same
+  22050 Hz mono 16-bit format, duration unchanged, playback volume
+  untouched at 1.0. Hook to verify by ear at the next session.
+
+### 21.15 Open again: the `QSocketNotifier: Invalid socket` crash (twice, tier-4 sessions)
+
+The section 15.5 warning came back **twice in one play session** while the
+user tested with `OLIGARCHY_TANKS_TIER=4`: `Invalid socket 72 and type
+'Read', disabling...` and, on the next run, `Invalid socket 62...`. The
+user calls both a **crash** (the game died or froze — wait for the
+detail, see below).
+
+New clues vs section 15.5:
+- The binary is now `oligarchy-tanks`; `coredumpctl` shows **no core dump
+  for it** after the sessions (the only core in the log is an old
+  `/tmp/opencode/crt/probe`), so whatever happened was **not a SIGSEGV**
+  — the process either exited through a clean-ish path or froze with the
+  message being the last thing it printed.
+- Both sessions were **tier 4** — whose tier-4 salvo plays a 2.0 s
+  `air-support.wav` every 1.5 s, so plays overlap (the sample is longer
+  than the launch interval). The prime suspect set is unchanged from
+  15.5 (a fd closed under a live notifier: the pad reader, Qt
+  multimedia's audio stream, or Wayland), but the **correlation with
+  tier-4 audio churn is the first pattern** the issue ever showed.
+
+Reproduction plan for the next round:
+1. The user runs `./build/oligarchy-tanks 2>&1 | tee /tmp/tanks.log` at
+   the next tier-4 session, and notes at the crash: did the window
+   **freeze** (process alive, no response, sound stopped or looping) or
+   **exit by itself**; what was on screen; whether a pad was plugged or
+   unplugged around it; whether the salvo was firing.
+2. Same-time stress from here: tier-4 grab-loop probes hammering the
+   salvo while watching stderr for the message; then the same with the
+   sound toggled off (`M` -> `soundEnabled=false`) to bisect the audio
+   path. Not started yet — the session above is logged first.
+- Still owed before the commit: ~~the user plays the missile fix~~
+  **Verified by the user**: the fifth shot falls ("el bug del guided
+  missile: CORREGIDO"). The boosted air support lands in this commit too
+  ("lo dejamos asi nomas" on the naming — the visible label stays
+  `MISSILE`, the manual description keeps GUIDED MISSILE); if the +15%
+  does not read on their ears it is one more wav-scaling away.

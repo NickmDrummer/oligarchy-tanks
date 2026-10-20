@@ -152,6 +152,9 @@ struct TanksTestAccess {
                 putTile(b, x, y, Empty);
     }
     static void stepBullets(Backend &b, double dt) { b.updateBullets(dt); }
+    // Empty the barrel between shots: keeping the previous missile in the
+    // air would turn "one missile per press" into a stack count.
+    static void clearBullets(Backend &b) { b.m_bullets.clear(); }
     static unsigned brickMaskAt(const Backend &b, int x, int y) {
         return b.m_brickQ[y * Backend::COLS + x];
     }
@@ -708,6 +711,45 @@ private slots:
         TanksTestAccess::givePickup(b, 0, TanksTestAccess::BlastMissileKind);
         QCOMPARE(spy.count(), 1);
         QCOMPARE(spy.first().first().toString(), QString("power"));
+    }
+
+    // The FIFTH blast shot used to double-fire: fireBullet() spent the last
+    // blast count during the main fire, so the tier-2 trailing-bullet gate
+    // (read afterwards) saw 0 and launched a normal bullet right behind the
+    // missile; the two collided and the missile died at the muzzle with
+    // nothing but its sound (user report, section 21.14).
+    void theFifthBlastShotSpawnsItsMissile() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::tank(b, 0).tier = 2;
+        TanksTestAccess::tank(b, 0).blastShots = 5;
+        for (int shot = 0; shot < 5; ++shot) {
+            TanksTestAccess::tank(b, 0).cooldown = 0;
+            TanksTestAccess::clearBullets(b);
+            b.fireP1();
+            // Exactly one bullet per press, and it is the missile.
+            QVERIFY2(b.bullets().size() == 1,
+                     qPrintable(QStringLiteral("shot %1: %2 bullets").arg(shot).arg(b.bullets().size())));
+            QVERIFY2(b.bullets().at(0).toMap().value("blast").toBool(),
+                     qPrintable(QStringLiteral("shot %1 is not a blast missile (spend count=%2)")
+                                    .arg(shot)
+                                    .arg(TanksTestAccess::tank(b, 0).blastShots)));
+        }
+    }
+
+    // And the tier-2 twin shot is untouched when no BLAST is in play: one
+    // press fires the main shell plus the trailing second bullet.
+    void tier2TwinShotsSurviveWithoutBlast() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::tank(b, 0).tier = 2;
+        b.fireP1();
+        QCOMPARE(b.bullets().size(), 2);
+        // The trailing one sits 0.4 cells behind the first (P1 faces up).
+        QCOMPARE(b.bullets().at(0).toMap().value("blast").toBool(), false);
+        const double y0 = b.bullets().at(0).toMap().value("y").toDouble();
+        const double y1 = b.bullets().at(1).toMap().value("y").toDouble();
+        QVERIFY(qAbs((y1 - y0) - 0.4) < 0.01);
     }
 
     // --- Power-ups (section 19) ---------------------------------------------

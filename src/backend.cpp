@@ -133,7 +133,7 @@ QVariantList Backend::bullets() const {
     QVariantList out;
     for (const auto &b : m_bullets)
         if (b.active)
-            out.append(QVariantMap{{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}});
+            out.append(QVariantMap{{"x", b.x}, {"y", b.y}, {"dir", b.dir}, {"owner", b.owner}, {"blast", b.blast}, {"big", b.big}});
     return out;
 }
 
@@ -269,11 +269,17 @@ void Backend::fireP1() {
     if (m_state != "playing" || !m_p[0].alive || m_p[0].cooldown > 0)
         return;
     m_p[0].cooldown = FIRE_GAP;
+    // Was the main shot a BLAST missile? fireBullet() burns the shot count
+    // during the fire itself, so checking blastShots afterwards reads 0 on
+    // the FIFTH shot and wrongly fires the tier-2 trailing bullet right
+    // behind the missile -- the two collide and the missile dies at the
+    // muzzle with nothing but its sound (the user's report, section 21.14).
+    const bool blastReplacing = m_p[0].blastShots > 0;
     fireBullet(m_p[0].x, m_p[0].y, m_p[0].dir, 0, BULLET_SPEED);
     // LEVELUP tier 2: a second bullet trailing behind the first, so the
     // two do not overlap and cancel each other out on the first frame.
     // Only for normal shots: BLAST replaces the shot, no double blast.
-    if (m_p[0].tier >= 2 && m_p[0].blastShots <= 0) {
+    if (m_p[0].tier >= 2 && m_p[0].blastShots <= 0 && !blastReplacing) {
         double x2 = m_p[0].x, y2 = m_p[0].y;
         if (m_p[0].dir == 0) y2 += 0.4;
         if (m_p[0].dir == 2) y2 -= 0.4;
@@ -297,10 +303,13 @@ void Backend::fireP2() {
     if (m_state != "playing" || !m_p[1].alive || m_p[1].cooldown > 0)
         return;
     m_p[1].cooldown = FIRE_GAP;
+    // Same as fireP1: the tier-2 gate must know whether the main shot was
+    // a BLAST missile, or it double-fires on the fifth blast shot.
+    const bool blastReplacing = m_p[1].blastShots > 0;
     fireBullet(m_p[1].x, m_p[1].y, m_p[1].dir, 1, BULLET_SPEED);
     // LEVELUP tier 2: a second bullet trailing behind the first.
     // Only for normal shots: BLAST replaces the shot, no double blast.
-    if (m_p[1].tier >= 2 && m_p[1].blastShots <= 0) {
+    if (m_p[1].tier >= 2 && m_p[1].blastShots <= 0 && !blastReplacing) {
         double x2 = m_p[1].x, y2 = m_p[1].y;
         if (m_p[1].dir == 0) y2 += 0.4;
         if (m_p[1].dir == 2) y2 -= 0.4;
