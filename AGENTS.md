@@ -2204,15 +2204,26 @@ carries.
   tier-4 probe. Verified: both player palettes, rotations (dir 1/3 on the
   mural), the 12 px life icons and the 30 px panel tank.
 
-### 21.13 Pending (user report, after 21.12): the LEVELUP sound plays twice, and it deserves its own arpeggio
+### 21.13 The LEVELUP sound played twice, and it deserved its own arpeggio (delivered)
 
-- The user hears the LEVELUP pickup about twice as loud as every other
-  power-up. Diagnosis: `applyPickup` emits `playSound("power")` inside the
-  `LevelUp` case AND again after the switch (the post-switch emit only skips
-  Freeze and Nuke), so the sample fires twice on the same frame — two
-  overlapping plays read as double volume. Fix: drop one of the two emits.
-- The user also wants a dedicated sound for LEVELUP instead of the shared
-  `power.wav`: a cheerful ascending arpeggio that marks the tier up. In
-  their view it is the most important power-up of all. New wav plus a new
-  sound name (e.g. `levelup`) wired to the `LevelUp` case only, leaving the
-  other pickups on `power`.
+- Reported after 21.12: the user heard the LEVELUP pickup about twice as
+  loud as every other power-up. Diagnosis: `applyPickup` emitted
+  `playSound("power")` inside the `LevelUp` case AND again after the switch
+  (the post-switch emit only skipped Freeze and Nuke), so the sample fired
+  twice on the same frame — two overlapping plays read as double volume.
+  **BLAST/MISSILE carried the same double emission**, unnoticed.
+- Fix: each pickup now sounds exactly once. The in-case emits are gone from
+  `LevelUp` and `BlastMissile`; the post-switch emit plays `"levelup"` for
+  LEVELUP and `"power"` for everything else (Freeze and Nuke keep sounding
+  inside their cases).
+- The user asked for a dedicated sound: a cheerful ascending arpeggio to
+  mark the tier up ("the most important power-up of all"). New
+  `sounds/levelup.wav`, a chiptune square-wave climb (C5 E5 G5 C6 held into
+  E6, 0.7 s, per-note decay) generated at the game's sample format
+  (22050 Hz, mono, 16-bit), wired as `sndLevelUp` in `Main.qml` at volume
+  0.6 like the other pickups, plus its `resources.qrc` entry. The user
+  loved it but asked for +50%: the wav was regenerated at 0.45/0.51 peak
+  gain (playback volume stays 0.6).
+- Tests: `levelUpSoundsOnceWithItsOwnArpeggio` (QSignalSpy: exactly one
+  `playSound("levelup")`) and `blastMissileSoundsOnlyOnce` (exactly one
+  `playSound("power")`). `bin/test` now totals 70/70.

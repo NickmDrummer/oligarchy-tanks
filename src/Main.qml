@@ -134,6 +134,8 @@ ApplicationWindow {
     SoundEffect { id: sndHit; source: "qrc:/sounds/hit.wav"; volume: 0.6 }
     SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 1.0 }
     SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
+    // LEVELUP's own cheerful arpeggio, at the same gain as the other pickups.
+    SoundEffect { id: sndLevelUp; source: "qrc:/sounds/levelup.wav"; volume: 0.6 }
     SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 1.0 }
     // The air-support effect runs 25% louder than before (user spec); 1.0 is
     // the SoundEffect ceiling.
@@ -193,6 +195,8 @@ ApplicationWindow {
                 sndBoom.play()
             else if (name === "power")
                 sndPower.play()
+            else if (name === "levelup")
+                sndLevelUp.play()
             else if (name === "nuke")
                 sndNuke.play()
             else if (name === "air-support")

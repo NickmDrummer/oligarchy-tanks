@@ -1971,19 +1971,23 @@ void Backend::applyPickup(int player) {
             t.tier++;
         // Armour layers from tier 3.
         t.armorHP = armorLayers(t);
-        if (m_soundEnabled)
-            emit playSound("power");
         break;
     }
     case BlastMissile:
         t.blastShots = 5;
         t.blastUntil = m_time + 9999; // kept for compat; blastShots drives the count
-        if (m_soundEnabled)
-            emit playSound("power");
         break;
     }
-    if (m_pickup.kind != Freeze && m_pickup.kind != Nuke && m_soundEnabled)
-        emit playSound("power");
+    // One sound per pickup. LEVELUP used to emit here AND in the fall-through
+    // below, firing the sample twice on the same frame (the user heard it at
+    // double volume); it now gets its own arpeggio, once. Freeze and Nuke
+    // already sounded inside their cases.
+    if (m_soundEnabled) {
+        if (m_pickup.kind == LevelUp)
+            emit playSound("levelup");
+        else if (m_pickup.kind != Freeze && m_pickup.kind != Nuke)
+            emit playSound("power");
+    }
 }
 
 // The NUKE overlay: where the blast started, how far it has grown (0..1) and

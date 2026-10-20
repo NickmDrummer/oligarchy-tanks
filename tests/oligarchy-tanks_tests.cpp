@@ -1,5 +1,6 @@
 #include <QDir>
 #include <QFile>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -197,6 +198,8 @@ struct TanksTestAccess {
     static constexpr int PickKind = 2;   // PickupKind::Pick
     static constexpr int NukeKind = 4;   // PickupKind::Nuke
     static constexpr int CannonKind = 5; // PickupKind::Cannon
+    static constexpr int LevelUpKind = 7;      // PickupKind::LevelUp
+    static constexpr int BlastMissileKind = 8; // PickupKind::BlastMissile
     // A bonus lying on the board, at a known spot.
     static void putPickup(Backend &b, int kind, double x, double y) {
         b.m_pickup = Backend::Pickup{x, y, kind, 0, true};
@@ -678,6 +681,33 @@ private slots:
         TanksTestAccess::givePickup(b, 1, TanksTestAccess::LifeKind);
         QCOMPARE(TanksTestAccess::playerLives(b, 1), 4);
         QCOMPARE(TanksTestAccess::playerLives(b, 0), 3);
+    }
+
+    // --- Pickup sounds (section 21.13) ---------------------------------------
+
+    // LEVELUP used to fire the shared "power" sample twice on the same frame
+    // (once inside its case, once in the fall-through), which the user heard
+    // at double volume. It now sounds exactly once, with its own arpeggio.
+    void levelUpSoundsOnceWithItsOwnArpeggio() {
+        Backend b;
+        b.menuChoose(1);
+        QSignalSpy spy(&b, &Backend::playSound);
+        QVERIFY(spy.isValid());
+        TanksTestAccess::givePickup(b, 0, TanksTestAccess::LevelUpKind);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().first().toString(), QString("levelup"));
+    }
+
+    // BLAST/MISSILE had the same double emission (in-case plus fall-through);
+    // it stays on the shared "power" sample, once.
+    void blastMissileSoundsOnlyOnce() {
+        Backend b;
+        b.menuChoose(1);
+        QSignalSpy spy(&b, &Backend::playSound);
+        QVERIFY(spy.isValid());
+        TanksTestAccess::givePickup(b, 0, TanksTestAccess::BlastMissileKind);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().first().toString(), QString("power"));
     }
 
     // --- Power-ups (section 19) ---------------------------------------------
