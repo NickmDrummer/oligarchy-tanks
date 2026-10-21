@@ -2508,6 +2508,60 @@ would stay silent until it is restarted. A watchdog that recreates the
 thread when it wedges is the natural follow-up (not done yet). Qt 6.12.1
 fixes the root cause upstream; the workaround is needed until then.
 
+#### 21.18.1 The board was silent, and the build said nothing
+
+**The first version of the sound board did not play at all**, and the
+user found it: "el audio del juego no me funcionó en ningun momento al
+abrirlo", plus a crash. Three separate mistakes, all of them quiet:
+
+1. **The methods the QML calls were plain C++ methods.** QML can only
+   call slots and `Q_INVOKABLE` methods, so every call threw
+   `TypeError: Property 'setMuted' of object SoundBoard(...) is not a
+   function` (10 times a second, from the 100 ms timer) and nothing
+   was ever played.
+2. **The calls to the worker went through `QMetaObject::invokeMethod`
+   by name.** That only finds slots and `Q_INVOKABLE` methods and
+   **fails silently** on anything else: a method that is not a slot
+   there means a mute that never reaches the sound. Verified with a
+   two-line program: `invokeMethod` on a plain method returns
+   `false` and does nothing; on a slot it works. The board now
+   forwards the state through **signals**, which cannot fail that way.
+3. **A `QSoundEffect` in loop that is stopped does not come back with
+   `play()`** (Qt 6.12). Stopping the motor for the mute left it mute
+   for good, and the same happened when the run ended. The two loops
+   now stay alive for the whole session and the state travels with
+   the **volume**.
+
+A fourth thing, found on the way: **loading a source is asynchronous**,
+and `play()` on an effect that is still loading is thrown away. The QML
+type had time to load before the first sound; in the board the first
+play can arrive right away, so an effect asked to play before it is
+ready is played again when it becomes ready.
+
+**The lesson, and it is the important part.** The verification was
+wrong twice over: looking at the *stream* to decide whether there was
+sound (a stream exists as soon as the source is set, even with no
+audio in it), and trusting the offscreen smoke (it never runs the
+100 ms timer). The check that actually tells the truth is **`pw-top`:
+a stream that is really playing shows up as `R` (reading from the
+sink), and one that was created but never fed shows up as `C`**. The
+old code and the fixed one now look the same: `R 99 ... F32LE 1 22050
++ oligarchy-tanks`.
+
+**Two tests cover the board** so this cannot happen again silently: the
+three calls the QML makes must be invocable, and the board must forward
+every call to its worker with the values intact. `bin/test` is
+**77/77** and the offscreen smoke is clean.
+
+**Also worth recording:** the crash the user hit was a **SIGSEGV in
+`QSocketNotifier::setEnabled`**, on the thread that owns the dispatcher
+(`QThread::exec` -> `QEventDispatcherGLib::processEvents`), and it came
+from the *first* version of the board, which touched the audio device
+monitor from the worker: the monitor is a process-wide object with the
+thread affinity of whoever created it, and enabling its notifier from
+another thread is a use-after-free. The monitor is left alone now.
+
+
 ### 21.16 The v0.2.0 publication round (Oct 20, shipped)
 
 The game round of 21.9-21.14 lands tagged and public:
