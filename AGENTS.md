@@ -2497,3 +2497,15 @@ The game round of 21.9-21.14 lands tagged and public:
   corrections go on the same `add-oligarchy-tanks` branch and the PR
   updates itself. Local clone of the recipe fork lives at
   `/tmp/omarchy-pkgs` (branch `add-oligarchy-tanks`).
+- **The recipe was tightened after the PR went up** (commit `d659e3da`
+  on the branch, so the PR picked it up): the source now uses the
+  repo's explicit tarball form
+  (`"$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"`)
+  and builds from `$srcdir`, `hicolor-icon-theme` was added so the
+  desktop icon resolves, and `.omarchy/package.json` gained
+  **`"auto_merge": true`** — a new tag in the game's own GitHub repo
+  now updates the recipe by itself, with no further PR. Verified
+  before pushing: the recipe builds a clean
+  `oligarchy-tanks-0.2.0-1-x86_64.pkg.tar.zst` with the right file
+  list (binary, desktop file, icon, four licences), `pinned-sources.sh`
+  passes and `upstream-watch.py` still prints `already current`.
