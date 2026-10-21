@@ -1,6 +1,6 @@
 pkgbase = oligarchy-tanks
 	pkgdesc = Retro 2-player local tank battle vs AI (Battle City style, Qt 6)
-	pkgver = 0.2.1
+	pkgver = 0.2.2
 	pkgrel = 1
 	url = https://github.com/NickmDrummer/oligarchy-tanks
 	install = oligarchy-tanks.install
@@ -15,7 +15,7 @@ pkgbase = oligarchy-tanks
 	depends = qt6-wayland
 	depends = qt6-multimedia
 	depends = xdg-desktop-portal
-	source = https://github.com/NickmDrummer/oligarchy-tanks/archive/refs/tags/v0.2.1.tar.gz
-	sha256sums = 512f9588f3ab4827bbd0ef11571ffd0c8c5bac05a61744f61254444921e1207a
+	source = https://github.com/NickmDrummer/oligarchy-tanks/archive/refs/tags/v0.2.2.tar.gz
+	sha256sums = 14f43b6d0d2dec5b061169a44241b399f09e1f52dbb8e5b92afb8e64a7c51a54
 
 pkgname = oligarchy-tanks

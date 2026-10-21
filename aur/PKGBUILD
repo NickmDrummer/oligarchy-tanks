@@ -12,7 +12,7 @@ depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'qt6-multimedia' 'xdg-deskto
 makedepends=('gcc' 'make')
 install=oligarchy-tanks.install
 source=("$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('512f9588f3ab4827bbd0ef11571ffd0c8c5bac05a61744f61254444921e1207a')
+sha256sums=('14f43b6d0d2dec5b061169a44241b399f09e1f52dbb8e5b92afb8e64a7c51a54')
 
 build() {
   cd "$pkgname-$pkgver"
