@@ -5,6 +5,30 @@ Retro local tank battle vs AI, in the style of classic Battle City on Sega.
 Defend the star base alone or with a friend. 16 enemies per sector, random map
 every game.
 
+<!-- Screenshots: docs/screenshots/ -->
+
+## Install
+
+On Arch and Omarchy:
+
+```sh
+omarchy pkg add oligarchy-tanks
+```
+
+Or from the AUR, once the package is published:
+
+```sh
+yay -S oligarchy-tanks
+```
+
+Building from source needs Qt 6 (`qt6-base`, `qt6-declarative`,
+`qt6-multimedia`):
+
+```sh
+bin/build
+./build/oligarchy-tanks
+```
+
 ## Start
 
 The game opens on the arcade select screen: **1 PLAYER** or **2 PLAYERS**.
