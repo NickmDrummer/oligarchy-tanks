@@ -2412,6 +2412,30 @@ killing the game so the compositor dialog never shows.
   min session was single-player pad-present but the browser/context load
   was not reported — treat "browser doing video on the second monitor"
   as a possible ingredient, not proven.
+- **The watchdog was rebuilt after `/tmp` was cleaned** (the harness
+  does not live in the repo, by the project's rule; the recipe is
+  here). `/tmp/opencode/freeze/watchdog_real.sh`:
+  - launches the real binary as **its own child** with
+    `OLIGARCHY_TANKS_TIER=4`, so the script may ptrace it without
+    sudo even with `kernel.yama.ptrace_scope=1` (a process may always
+    inspect its own descendants);
+  - samples the **main thread's CPU clock** (utime+stime from
+    `/proc/<pid>/task/<pid>/stat`, cut after the closing parenthesis
+    because the comm field may hold spaces) every 300 ms and calls
+    **3 s without a single tick** a hang — the GUI thread is what
+    freezes, while the audio threads keep playing, which is exactly
+    the reported symptom;
+  - on a hang it writes `eu-stack` + `gdb -p <pid> -batch -ex "thread
+    apply all bt"` into `/tmp/opencode/freeze/real-stack.txt`, the fd
+    list into `real-fds.txt` and the per-thread wait channel into
+    `real-threads.txt`, then kills the game so the compositor's
+    wait-or-kill dialog never appears;
+  - the game's own stdout/stderr land in `game-stdout.log` and
+    `game-stderr.log` — the last one is how a `QSocketNotifier` warning
+    would be caught.
+  Usage: `watchdog_real.sh [minutes]`. Verified on Oct 20 with a
+  one-minute window: the game ran, the watchdog sampled it, no stall,
+  **stderr empty**.
 
 ### 21.16 The v0.2.0 publication round (Oct 20, shipped)
 
