@@ -8,6 +8,7 @@
 
 #include "backend.h"
 #include "padmap.h"
+#include "soundboard.h"
 #include "theme.h"
 
 // Deterministic access to Backend internals so bonus behaviour and block
@@ -1570,6 +1571,54 @@ private slots:
         QVERIFY2(px > 0.0 && px < Backend::COLS && py > 0.0 && py < Backend::ROWS,
                  "inside the board");
         QVERIFY2(!TanksTestAccess::tankAt(b, px, py), "a tank stands on the dropped bonus");
+    }
+
+    // ---- The sound board (round 21.18) ----
+    //
+    // The QML type SoundEffect could not be moved to another thread, so the
+    // sounds live in a C++ SoundBoard on a worker thread. Two mistakes
+    // there silenced the whole game, and neither showed up in the build:
+    //
+    //   - the methods the QML calls were plain C++ methods, so every call
+    //     failed with a TypeError and nothing was ever played;
+    //   - the calls to the worker went through QMetaObject::invokeMethod
+    //     by name, and that only finds slots and Q_INVOKABLE methods: on
+    //     anything else it fails SILENTLY, which looked like a mute that
+    //     never reached the sound.
+    //
+    // So: the three calls the QML makes must be invocable, and the board
+    // must forward the state to the worker.
+
+    void theSoundBoardAnswersTheQmlCalls() {
+        SoundBoard board;
+        // QML can only call slots and Q_INVOKABLE methods. If one of
+        // these is not invocable, the QML call throws a TypeError and
+        // the game is silent.
+        QVERIFY(QMetaObject::invokeMethod(&board, "setEngine", Q_ARG(bool, true), Q_ARG(bool, false)));
+        QVERIFY(QMetaObject::invokeMethod(&board, "setMuted", Q_ARG(bool, true)));
+        QVERIFY(QMetaObject::invokeMethod(&board, "play", Q_ARG(QString, "shoot")));
+    }
+
+    void theSoundBoardForwardsEveryCallToItsWorker() {
+        SoundBoard board;
+        QSignalSpy engine(&board, &SoundBoard::engineChanged);
+        QSignalSpy muted(&board, &SoundBoard::mutedChanged);
+        QSignalSpy played(&board, &SoundBoard::soundPlayed);
+
+        board.setEngine(true, true);
+        board.setMuted(true);
+        board.play("air-support");
+
+        QCOMPARE(engine.count(), 1);
+        QCOMPARE(muted.count(), 1);
+        QCOMPARE(played.count(), 1);
+        // The values have to arrive intact, or the worker would drive the
+        // wrong sound.
+        const auto engineArgs = engine.takeFirst();
+        QCOMPARE(engineArgs.at(0).toBool(), true);
+        QCOMPARE(engineArgs.at(1).toBool(), true);
+        QCOMPARE(muted.takeFirst().at(0).toBool(), true);
+        QCOMPARE(played.takeFirst().at(0).toString(), QString("air-support"));
     }
 
     // ---- The freeze round (21.15) ----

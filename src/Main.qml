@@ -145,11 +145,7 @@ ApplicationWindow {
             // sounds are doing: reading a sound's playing property is a
             // call into the audio backend, and that is what used to
             // block the GUI thread when the device died.
-            if (!backend.soundEnabled) {
-                sounds.setMuted(true)
-                return
-            }
-            sounds.setMuted(false)
+            sounds.setMuted(!backend.soundEnabled)
             var anyAlive = (backend.players.length > 0 && backend.players[0].alive)
                            || (backend.players.length > 1 && backend.players[1].alive)
             var playing = backend.state === "playing" && anyAlive

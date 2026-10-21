@@ -28,6 +28,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QThread>
 
@@ -51,7 +52,11 @@ public slots:
 
 private:
     QSoundEffect *effect(const QString &name);
+    // Brings the two engine loops in line with the state and the mute.
+    void applyEngine();
     QHash<QString, QSoundEffect *> m_effects;
+    // The sounds asked for while their source was still loading.
+    QSet<QString> m_pending;
     QSoundEffect *m_engine = nullptr;
     QSoundEffect *m_engineMove = nullptr;
     bool m_engineRunning = false;
@@ -76,12 +81,26 @@ public:
     // board never asks a sound whether it is playing, because reading
     // that property is a call into the audio backend, and that is what
     // used to touch the audio from the GUI thread on every tick.
-    void setEngine(bool running, bool moving);
-    void setMuted(bool muted);
+    //
+    // QML can only call slots and Q_INVOKABLE methods, so these three
+    // are invokable: without it the QML calls fail with a TypeError and
+    // the game is silent.
+    Q_INVOKABLE void setEngine(bool running, bool moving);
+    Q_INVOKABLE void setMuted(bool muted);
 
     // One-shot sounds: "shoot", "hit", "explode", "power", "levelup",
     // "nuke", "air-support", "blast_missile-shoot", "blast_missile-hit".
-    void play(const QString &name);
+    Q_INVOKABLE void play(const QString &name);
+
+signals:
+    // The calls to the worker. They travel as signals on purpose: a
+    // QMetaObject::invokeMethod by name only finds slots and
+    // Q_INVOKABLE methods, and it fails SILENTLY on anything else, which
+    // is how a mute that never reached the sound looked like a game
+    // that could not be muted.
+    void engineChanged(bool running, bool moving);
+    void mutedChanged(bool muted);
+    void soundPlayed(const QString &name);
 
 private:
     QThread m_thread;
