@@ -33,5 +33,9 @@
         <file alias="sounds/blast_missile-shoot.wav">sounds/blast_missile-shoot.wav</file>
         <file alias="sounds/blast_missile-hit.wav">sounds/blast_missile-hit.wav</file>
         <file alias="sounds/air-support.wav">sounds/air-support.wav</file>
+        <!-- The application icon, embedded so the window carries it even when
+             the package is not installed. Generated from the same drawing as
+             pkgbuild/oligarchy-tanks.svg by tools/make-icon.py. -->
+        <file alias="icons/oligarchy-tanks.png">icons/oligarchy-tanks.png</file>
     </qresource>
 </RCC>
