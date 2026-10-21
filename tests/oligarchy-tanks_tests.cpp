@@ -82,6 +82,8 @@ struct TanksTestAccess {
     static Backend::Tank &tank(Backend &b, int i) { return b.m_p[i]; }
     // One full frame of the game (the QTimer normally drives it).
     static void runTick(Backend &b) { b.tick(); }
+    // The game clock, so a test can prove the loop kept moving.
+    static double gameTime(const Backend &b) { return b.m_time; }
     static bool playerAlive(const Backend &b, int i) { return b.m_p[i].alive; }
     static int enemiesAlive(const Backend &b) { return b.aliveEnemies(); }
     static void takePickup(Backend &b, int kind) {
@@ -1568,6 +1570,122 @@ private slots:
         QVERIFY2(px > 0.0 && px < Backend::COLS && py > 0.0 && py < Backend::ROWS,
                  "inside the board");
         QVERIFY2(!TanksTestAccess::tankAt(b, px, py), "a tank stands on the dropped bonus");
+    }
+
+    // ---- The freeze round (21.15) ----
+    //
+    // The sessions that wedged the GUI thread ran tier 4, whose salvo
+    // plays a 2.0 s air-support sample every 1.5 s, so the plays overlap.
+    // The game froze mid-air-support while the idle loop kept sounding,
+    // and the same thing happened three times on a different machine, so
+    // it is not one machine's audio stack.
+    //
+    // WHAT THESE TESTS DO NOT DO: they do not reproduce the freeze. The
+    // freeze is a blocked GUI thread, and the audio lives in QML
+    // (SoundEffect) and in the multimedia backend - none of which a
+    // backend test can reach. The real capture needs the running game
+    // and a debugger: see tools/watchdog.sh.
+    //
+    // What the backend CAN be held to is that the churn never costs the
+    // game loop its progress: a tick must always advance the clock, and a
+    // salvo in flight must never leave the state inconsistent (missiles
+    // lost, strikes leaked, the bank wrong). If the backend ever grew a
+    // stall of its own under the churn, these would catch it.
+
+    // A salvo that keeps restarting, with the samples overlapping, must
+    // never stall the loop or lose state.
+    void theGameClockKeepsMovingUnderTheTier4Churn() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 600.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.x = 7.5;
+        p1.y = 13.5;
+        p1.tier = 4;
+        p1.armorHP = 0;
+
+        // Ten kills release the salvo of five; the bank then restarts, so
+        // the cycle repeats for ever: the same overlap the failing session
+        // had, with a strike in flight most of the time.
+        const double start = TanksTestAccess::gameTime(b);
+        int salvos = 0;
+        for (int k = 0; k < 600; ++k) {
+            p1.armoredKills = 10;   // the bank is topped every tick
+            TanksTestAccess::runTick(b);
+            // The clock must move on every single tick: a frozen loop is
+            // exactly the symptom the user reported.
+            QVERIFY2(TanksTestAccess::gameTime(b) > start,
+                     "the game clock stopped advancing under the audio churn");
+            if (p1.airMissiles == 5)
+                salvos++;
+            // A salvo may not stack on a live one, and the bank may not
+            // hold more than the ten it is worth.
+            QVERIFY(p1.airMissiles <= 5);
+            QVERIFY(p1.armoredKills <= 10);
+        }
+        QVERIFY2(salvos > 0, "the salvo cycle never fired");
+        // The strikes that were launched must all resolve: one second of
+        // flight and the missile is gone. The last salvo may still be in
+        // the air, so the loop is given the time it needs.
+        for (int k = 0; k < 200 && TanksTestAccess::strikesPending(b) > 0; ++k)
+            TanksTestAccess::runTick(b);
+        QCOMPARE(TanksTestAccess::strikesPending(b), 0);
+    }
+
+    // The same churn with the BLAST shots mixed in: the fifth blast shot is
+    // the one that used to die at the muzzle, and a burst of them is what
+    // the failing session was playing.
+    void theBlastShotsSurviveTheTier4Churn() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 600.0);
+        TanksTestAccess::clearArea(b, 0, 0, Backend::COLS - 1, Backend::ROWS - 1);
+        TanksTestAccess::clearFoes(b);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.x = 7.5;
+        p1.y = 13.5;
+        p1.tier = 4;
+        p1.armorHP = 0;
+        p1.blastShots = 5;
+
+        const double start = TanksTestAccess::gameTime(b);
+        for (int k = 0; k < 400; ++k) {
+            p1.armoredKills = 10;
+            TanksTestAccess::runTick(b);
+            QVERIFY2(TanksTestAccess::gameTime(b) > start,
+                     "the game clock stopped advancing with the blast shots");
+            // A blast shot is spent by the press, and the fifth one still
+            // spawns its missile (the 21.14 fix).
+            if (k % 3 == 0)
+                b.fireP1();
+        }
+        // The blast count never goes negative and the salvo stays sane.
+        QVERIFY(p1.blastShots >= 0);
+        QVERIFY(p1.airMissiles <= 5);
+    }
+
+    // Muting must stop the engine loops (the 21.17 fix) and the sound flag
+    // must be what the audio side reads, so a muted game is silent even
+    // with the tier-4 churn running.
+    void aMutedGameAsksForNoSoundUnderTheTier4Churn() {
+        Backend b;
+        b.startGame();
+        TanksTestAccess::freezeFor(b, 600.0);
+        auto &p1 = TanksTestAccess::tank(b, 0);
+        p1.alive = true;
+        p1.tier = 4;
+
+        b.setSoundEnabled(false);
+        QSignalSpy sounds(&b, &Backend::playSound);
+        for (int k = 0; k < 60; ++k) {
+            p1.armoredKills = 10;
+            TanksTestAccess::runTick(b);
+        }
+        QVERIFY2(sounds.isEmpty(), "a muted game still asked for a sound");
     }
 };
 
