@@ -2521,6 +2521,88 @@ The game round of 21.9-21.14 lands tagged and public:
   corrections go on the same `add-oligarchy-tanks` branch and the PR
   updates itself. Local clone of the recipe fork lives at
   `/tmp/omarchy-pkgs` (branch `add-oligarchy-tanks`).
+
+### 21.17 The 0.2.1 round: the icon drawn from the game, and a clean version
+
+Two questions from the user started it: the game said "0.2.1" while
+the repo said "0.2.0", and which image the app menu used as the app's
+icon.
+
+**There was never a 0.2.1 in the repo.** Checked exhaustively: every
+commit of `oligarchy-tanks.pro` (only `0.2.0` since `c421ccc`, and
+`V0.1` before it), every git object including the dangling ones and
+the reflog, the compiled binary's strings, the whole filesystem, the
+AUR, the Store and the opencode session DB. The game has only ever
+shown `0.2.0` (plus its build stamp). What the user saw was the
+**package** version: Arch shows `pkgver-pkgrel`, so the installed
+package read **`0.2.0-1`**, which is easy to read as "0.2.1" at a
+glance (the pacman log confirms `installed oligarchy-tanks (0.2.0-1)`
+that evening). The game itself was never 0.2.1.
+
+**The icon was the first commit's drawing**: a blue tank (`#5f81da`)
+on a near-black rounded square, from before the accent became the
+Omarchy green and before the player sprite was redrawn — it had
+drifted from the game for weeks. The new one is assembled **from the
+game itself**, so it cannot drift again:
+
+- the brick palette and course pattern: `src/Main.qml` (`brickPart`);
+- the 16x16 player tank grid: `src/TankSprite.qml` (`playerRows`);
+- the P1 palette (`p1body` / `p1dark` / `p1light`) and the neutral
+  outline grey `TankSprite` uses for its trace.
+
+`tools/make-icon.py` writes both the scalable SVG (hicolor theme) and
+a PNG, and the PNG goes into the binary through `resources.qrc`, so
+the window carries the icon even when the package is not installed
+(`main.cpp` falls back to the embedded copy when the theme has none).
+The layout: a 4 px `#9ece6a` green border, a 56x56 brick field (four
+courses, offset joints, highlight and shadow) and the P1 tank at 3x
+pointing up — the grid already points up, so it is not rotated (the
+project's rule: *that grid is the sprite*). Verified pixel by pixel
+against the grid.
+
+**The version hygiene.** The version lives in the `.pro`
+(`OLIGARCHY_TANKS_VERSION` and `VERSION`); `main.cpp` keeps a
+fallback define for a direct compile, and the two recipes carry their
+own `pkgver`. The dead `app.setApplicationVersion("0.1.0")` in
+`main.cpp` is gone. The packaging builds now pass
+`DEFINES+=OLIGARCHY_TANKS_RELEASE`, so the packaged game shows
+`V0.2.1` alone instead of `V0.2.1  Oct 20 22:03:00`; the build stamp
+is for development builds only.
+
+**A real bug found on the way (the reason the tag moved).** `make`
+only recompiles a source when the file itself changed, so passing a
+different `DEFINES` to qmake left the **old objects** in place and the
+binary kept the old behaviour: the packaged game still printed its
+timestamp even with `OLIGARCHY_TANKS_RELEASE` set. Caught by reading
+the *packaged* binary's strings, not by trusting the build's exit
+code. `bin/build` now stamps the qmake arguments in `build/.qmake-args`
+and wipes the build when they change, so a release build really is a
+release build. Verified in both directions (dev -> release -> dev ->
+release) and in the package that was produced.
+
+**What shipped.**
+
+- Commits: `2dcfeb8` (the icon), `7be917a` (the bump to 0.2.1 and
+  the release stamp), `f3d0119` (the AUR recipe on v0.2.1), `6cfc06e`
+  (the build-flags fix), `92e9bb2` (the AUR sha256 after the tag
+  moved).
+- Tag **`v0.2.1`** and the GitHub release
+  (https://github.com/NickmDrummer/oligarchy-tanks/releases/tag/v0.2.1).
+  The tag was **moved once** to carry the build fix — the release was
+  minutes old and nobody had consumed it (the omarchy-pkgs PR is
+  still open, the AUR is not published), so the sha256 was updated in
+  both recipes afterwards.
+- `omarchy-pkgs` PR #1348 follows: `pkgver=0.2.1` with the new
+  sha256, the release stamp in its `build()`, and
+  `upstream-watch.py` prints `already current` for 0.2.1.
+- The AUR recipe in `aur/` follows the same sha256 and the release
+  stamp; its `.SRCINFO` is regenerated.
+- `bin/test` **72/72** and the offscreen smoke clean.
+
+**Still standing:** the AUR push (the registration is closed), the
+Omarchy Store listing (the store is offline by its own decision) and
+PR #1348's merge, which waits for a maintainer's `build-approved`
+label.
 - **The recipe was tightened after the PR went up** (commit `d659e3da`
   on the branch, so the PR picked it up): the source now uses the
   repo's explicit tarball form
