@@ -2447,6 +2447,67 @@ killing the game so the compositor dialog never shows.
   one-minute window: the game ran, the watchdog sampled it, no stall,
   **stderr empty**.
 
+#### 21.15.1 SOLVED: the freeze was Qt's audio backend, in the GUI thread
+
+**The cause, confirmed in Qt's own source (6.12.0, the version here).**
+`QSoundEffect` owns a `QAutoResetEvent`, which on Linux is an **eventfd**
+with a `QSocketNotifier` registered on it
+(`qtmultimedia/src/multimedia/support/qautoresetevent_linux.cpp`). When the
+audio device dies, two things go wrong, **both in the thread that owns the
+effect**:
+
+- `QPipewireAudioSinkStream::handleDeviceRemoved()` (qpipewire_audiosink.cpp:217)
+  calls `handleIOError(m_parent)` **without** `requestStop()`, so the stream
+  is destroyed from the pipewire thread while the owner may be inside
+  `stop()` — a use-after-free, **QTBUG-150678**, whose fix
+  (`8e7f6edf`) only lands in **Qt 6.12.1** (17 Nov 2026, not out yet, not
+  in Arch yet).
+- `stop()` then waits on `m_disconnectSemaphore.acquire()` — **a wait with
+  no timeout** (qpipewire_audiosink.cpp:164) — for a confirmation the
+  stuck daemon cannot give. **That is the freeze.**
+- The eventfd is closed while its notifier is still registered
+  (**QTBUG-144711**), so the GLib dispatcher spins on an invalid fd and
+  prints the exact warning the user saw:
+  `QSocketNotifier: Invalid socket NN and type 'Read', disabling...`
+  (the quotes are the GLib dispatcher's wording; the Unix one has none).
+  **The fd numbers in the reports (59, 62, 72) are these eventfds** — the
+  running game has them at 64-74.
+
+**The correlation with the user's freezes is exact.** The system log shows
+the EDIFIER M60 dying in the same second as both freezes:
+`keyd: DEVICE: removed 2d99:a094:623461cd bestechnic EDIFIER M60` +
+`kernel: usb 1-2: USB disconnect` + `pipewire: spa.alsa: front:5p: No
+such device` (20 Oct 00:21:46) and the same on 21 Oct 01:30:55. The M60 is
+a USB DAC: **turning it off removes it from the system**, and that is the
+trigger. The `CX31993` dongle never disconnects, which is why the game
+usually survives (pipewire migrates the stream to the other sink).
+
+**The reproduction (Oct 21).** The event was reproduced three times (the
+M60 unbound, the sink killed, the pipewire daemon stopped) and the game
+**survived every one** — because pipewire heals the situation by moving
+the stream to another sink. The freeze needs the daemon to stay stuck,
+which is what the `wireplumber: poll fd error/hangup (card removed?)` in
+the 20 Oct log shows.
+
+**The fix (commit `8c726dc`).** The QML type `SoundEffect` cannot be moved
+between threads, so the effects now live in a C++ **`SoundBoard`**
+(`src/soundboard.{h,cpp}`) on a **worker thread**: a wedged backend can
+only wedge that thread, and the game keeps running (and stays quiet). The
+board is also *told* the state of the engine loops instead of being *asked*
+what the sounds are doing — reading `playing` is a call into the backend,
+and the 100 ms timer made it ten times a second from the GUI thread.
+
+**Verified after the fix:** with the audio device killed under the running
+game (the USB dongle unbound, and the pipewire daemon stopped), the window
+stays alive, the main thread keeps advancing, and the `soundboard` thread
+is waiting (`poll_schedule_timeout`), not stuck. `bin/test` is 75/75 and
+the offscreen smoke is clean.
+
+**What is left.** The audio thread can end up wedged for good, so the game
+would stay silent until it is restarted. A watchdog that recreates the
+thread when it wedges is the natural follow-up (not done yet). Qt 6.12.1
+fixes the root cause upstream; the workaround is needed until then.
+
 ### 21.16 The v0.2.0 publication round (Oct 20, shipped)
 
 The game round of 21.9-21.14 lands tagged and public:
