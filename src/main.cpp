@@ -16,10 +16,10 @@
 #include "gamepad.h"
 #include "theme.h"
 
-// Passed by the .pro (DEFINES += OLIGARCHY_TANKS_VERSION="0.2.0"), but a
+// Passed by the .pro (DEFINES += OLIGARCHY_TANKS_VERSION="0.2.1"), but a
 // direct compile still needs a version to name.
 #ifndef OLIGARCHY_TANKS_VERSION
-#define OLIGARCHY_TANKS_VERSION "0.2.0"
+#define OLIGARCHY_TANKS_VERSION "0.2.1"
 #endif
 
 int main(int argc, char *argv[]) {
@@ -30,12 +30,16 @@ int main(int argc, char *argv[]) {
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("oligarchy-tanks");
-    app.setApplicationVersion("0.1.0");
 
     // Matches the window to tanks.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon.
     app.setDesktopFileName("oligarchy-tanks");
-    app.setWindowIcon(QIcon::fromTheme("oligarchy-tanks"));
+    // The theme icon when the package is installed, the embedded copy
+    // otherwise, so the window always carries the game's icon.
+    QIcon icon = QIcon::fromTheme("oligarchy-tanks");
+    if (icon.isNull())
+        icon = QIcon(QStringLiteral(":/icons/oligarchy-tanks.png"));
+    app.setWindowIcon(icon);
 
     // The UI draws its own pixel furniture (see PixelButton and KeyCap), so the
     // Controls style only shapes the window: plain Basic, no Material.

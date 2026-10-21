@@ -16,7 +16,8 @@ sha256sums=('a254a7e823fbb260a88d02a1e1bbe631dd2aac04333a880b8f52d2a7495aedd0')
 
 build() {
   cd "$pkgname-$pkgver"
-  qmake6 oligarchy-tanks.pro
+  # The release stamp: the footer and the manual show the version alone.
+  qmake6 oligarchy-tanks.pro DEFINES+=OLIGARCHY_TANKS_RELEASE
   make -j"$(nproc)"
 }
 

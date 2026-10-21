@@ -1,5 +1,5 @@
 pkgname=oligarchy-tanks
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc='Retro 2-player local tank battle vs AI'
 arch=('x86_64' 'aarch64')
@@ -12,7 +12,8 @@ sha256sums=()
 
 build() {
   cd "$startdir/.."
-  ./bin/build
+  # The release stamp: the footer and the manual show the version alone.
+  ./bin/build DEFINES+=OLIGARCHY_TANKS_RELEASE
 }
 
 package() {
