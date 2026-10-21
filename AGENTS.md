@@ -2561,6 +2561,26 @@ monitor from the worker: the monitor is a process-wide object with the
 thread affinity of whoever created it, and enabling its notifier from
 another thread is a use-after-free. The monitor is left alone now.
 
+**And the engine kept rumbling.** With the loops alive for the whole
+session (they have to be: a stopped loop does not come back), the
+volume was following the last state of the tank instead of whether a
+run was going on — so the motor went on at its last volume after the
+tank died, on the menus and while the next sector was loading. The
+volumes now come from **one shared function** that takes the whole
+state (running, moving, muted), so the board and the worker cannot
+disagree: no run, no sound, and a stale "moving" flag cannot bring it
+back. A test covers it.
+
+**How to check the sound, for real.** `pw-top` says whether a stream
+carries audio (a stream that is really playing shows up as `R`, one
+that was created but never fed shows up as `C`), but it says nothing
+about the *volume*, and the volume of a QSoundEffect is applied inside
+Qt, so it does not show up on the pipewire stream either. Capturing
+the sink does not work on this machine (the dongle has no
+`hwC3D0` device, and the pipewire monitor records silence even for
+`paplay`). **For the volume, the user's ears are the check.**
+
+
 
 ### 21.16 The v0.2.0 publication round (Oct 20, shipped)
 
