@@ -2580,6 +2580,35 @@ the sink does not work on this machine (the dongle has no
 `hwC3D0` device, and the pipewire monitor records silence even for
 `paplay`). **For the volume, the user's ears are the check.**
 
+### 21.20 The 0.2.2 release (Oct 21, shipped)
+
+The round closed the freeze and shipped it.
+
+- **Commits**: `0728381` (the watchdog can capture a stack, plus the
+  reproduction script), `20fe845` (the game loop held to the tier-4
+  churn), `8c726dc` (the sounds on their own thread), `a76d718` (the
+  monitor's affinity — later corrected), `f8eb2c2` (the board actually
+  plays), `e67fa59` (the engine is silent without a run), plus the
+  icon, the README and the docs.
+- **Tag `v0.2.2`** and the GitHub release
+  (https://github.com/NickmDrummer/oligarchy-tanks/releases/tag/v0.2.2),
+  with the freeze explained in the notes.
+- **The recipes** (AUR and omarchy-pkgs) follow the v0.2.2 tarball
+  with its sha256; the omarchy-pkgs PR #1348 is at 0.2.2 and its
+  watch prints `already current`.
+- `bin/test` is **78/78** and the offscreen smoke is clean.
+
+**What the user checked**: the mute works, the engine goes quiet when
+the run ends, and the icon is the new one. The one thing left is that
+**the fix has to reach the user's second machine**, which has the
+0.2.0: the 0.2.2 is the release that fixes it there.
+
+**Still open**: the AUR push (the registration is closed), the Omarchy
+Store listing (the store is offline by its own decision), PR #1348's
+merge (it waits for a maintainer's `build-approved` label), and the
+watchdog that would revive the sound thread if it wedges.
+
+
 
 
 ### 21.16 The v0.2.0 publication round (Oct 20, shipped)
