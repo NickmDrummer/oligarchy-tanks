@@ -5,7 +5,14 @@ Retro local tank battle vs AI, in the style of classic Battle City on Sega.
 Defend the star base alone or with a friend. 16 enemies per sector, random map
 every game.
 
-<!-- Screenshots: docs/screenshots/ -->
+<p align="center">
+  <img src="docs/screenshots/gameplay1.png" alt="A run in the first stage" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/select.png" alt="The arcade select screen" width="49%">
+  <img src="docs/screenshots/gameplay2.png" alt="A two-player run in the second stage" width="49%">
+</p>
 
 ## Install
 
