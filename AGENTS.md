@@ -860,26 +860,26 @@ The icon is still a pickaxe, but its **effect** is the Battle City shovel
     Material style, and the select screen rebuilt from key caps, pad pictures
     and a tank marker. **Committed (section 16)**: 43/43 slots, 37/37 QML probe checks,
     the user approved the result from the screenshots.
-17. **The user plays commit D.** Still owed: it was approved from screenshots,
-    not from a play session. Any surprise there is a small follow-up commit.
+17. ~~**The user plays commit D.**~~ **Done**: played in the rounds that
+    followed (sections 16-21); nothing surprising came out of it.
 18. **Phase C, the enemy overhaul** (section 17). **Committed.** The user played
     the death explosion, the frost and the shield across several rounds and
     asked for the commit; the fixed **16 tanks a stage** was the one piece not
     played (it was implemented at commit time — section 17).
 19. **Phase 2 of the overhaul**: the manual (`?`) first, then the in-game
     interface, both from the user's notes, one at a time — and each one with the
-    same gate: user plays, then commit.
+    same gate: user plays, then commit. **Done**: the manual was reworked in
+    `c421ccc` and the interface in the rounds of 21.8-21.12.
 20. ~~**The round of section 18**~~ **Committed** as `0399f60` (the two bugs,
     § 18.1-18.2) and `b41a9f6` (the sprites and the palette, § 18.3), after the
     user approved the wheeled chassis and asked for the fast tank's pastel
     yellow.
-21. **The power-ups, round 1** (section 19): the sprites, the two durations and
-    the two new effects. Implemented and verified with `bin/test` (56 slots) and
-    the `/tmp/opencode/pick` probe. **Waiting for the user to play, then
-    commit.** Landed with the same batch: CANNON breaking steel by strip
-    (section 19.4, now done). Still to come from the same list: the LEVELUP
-    five tiers and the BLAST MISSILE. The `GAME` section of the manual is
-    now implemented (C8).
+21. ~~**The power-ups, round 1** (section 19)~~ **Done and committed**: the
+    sprites, the two durations and the two new effects. The user played the
+    whole batch and asked for the commit; the follow-ups from the same list
+    (CANNON breaking steel by strip, the CANNON one-shot armour, the LEVELUP
+    five tiers and the BLAST MISSILE) landed with it and in the round of
+    21.9.
 
 ---
 
@@ -1171,6 +1171,7 @@ Nothing — the pad is committed (`2d31ac5`, `3a756d0`) and the user confirmed i
 plays well. What is left on the pad front is part of the select screen
 (section 15): any pad, assigned or not, drives the mode options, `START`
 confirms the highlighted mode, and confirming hands every pad back to waiting.
+**That part shipped too** (section 15), so the pad front is closed.
 
 ---
 
@@ -1405,9 +1406,9 @@ sentence. Detail-by-detail iteration comes after this phase.
   its absence with no pad, the 1P/2P join hints per panel, and the game over /
   paused / manual overlays with their buttons.
 - `/tmp/opencode/shots` saves a PNG per state for eyeballing (1040x800 offscreen).
-- **Play session: still owed.** The user approved the result from the
-  screenshots and asked for the commit; nobody has played commit D yet. If
-  anything misbehaves in play, it is a small follow-up commit, not a revert.
+- **Play session: done.** The user approved the result from the screenshots
+  and asked for the commit; the play sessions that came after (sections 17-21)
+  played it and nothing surprised them.
 
 **Decisions worth keeping.**
 
@@ -1734,10 +1735,10 @@ and FREEZE are unchanged. Both are asserted against the clock the effects read
   `chipBrick()` chips steel unless it is a guard tile, and `updateBullets()`
   only chips steel on a `big` (CANNON) bullet. The base wall stays concrete.
   Section 4.2 has been rewritten accordingly.
-- **The CANNON's "one-shot armour" is not implemented either**: `cannonUntil`
-  only marks bullets `big`. The plan is `tierArmor` + `armorLayers() = max(
-  tierArmor, m_time < cannonUntil ? 1 : 0)` in the LEVELUP round, an enemy hit
-  spending the tier layer first and then clearing `cannonUntil`.
+- **The CANNON's "one-shot armour"**: **done** (section 21.9). `armorLayers()`
+  in `src/backend.h` returns `max(tierArmor(t), m_time < t.cannonUntil ? 1 : 0)`
+  — the tier armour and the CANNON's one-shot do not stack — and an enemy hit
+  spends a layer before the CANNON's.
 - **LEVELUP** (implemented, C6): raises offensive tier. Tier 1 = bullets +30%
   speed; tier 2 = two bullets fired at once; tier 3 = 3 armour layers; tier 4 =
   air support (3 missiles near the player, one every 1.5 s, tanks only, never
@@ -1936,14 +1937,23 @@ installs binaries), so an app cannot be listed there. The chosen route:
   it disappears once the three hits are spent. This replaces the
   square/diamond/circle canvas outlines shipped in `6d01478`.
 
-### 21.4 Aesthetics backlog (user ideas, pending, low priority)
+### 21.4 Aesthetics backlog (user ideas) — all done
 
-- **The board is not centred on the screen** — the playfield sits off-centre
-  in the window. Parked as pending (user asked to leave it noted).
-- A **CRT effect** over the map (scanlines/curvature/vignette style).
-- **Arcade stickers** (bezel art) around the display perimeter, covering the
-  board's frame like a coin-op cabinet.
-- **The manual needs corrections** (the user's list, pending).
+- ~~**The board is not centred on the screen**~~ — **done** in 21.7 phase A:
+  the board and the side panel form one centred cabinet screen.
+- ~~**A CRT effect** over the map~~ — **done** in 21.7 phase B: the picture
+  goes through a shader (curvature, scanlines, chroma split, vignette) and
+  the rim follows the curve.
+- ~~**Arcade stickers** (bezel art) around the display perimeter~~ — **done**
+  in 21.7 phase C: the bezel, the brass lip, the screws and the rail
+  sticker, over the full-window wall mural.
+- ~~**The manual needs corrections**~~ — **done**: the manual was reworked
+  in `c421ccc` (the version, the air support line, the power-up rows) and
+  the user confirmed it in the last rounds.
+
+**Nothing of this list is pending any more.** The user's note (Oct 20) is
+that the earlier model ran out of context before recording it, so the list
+still read as open.
 
 ### 21.6 Portability round (small, done)
 
