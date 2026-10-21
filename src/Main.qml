@@ -130,64 +130,31 @@ ApplicationWindow {
     Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { if (backend.state === "select") backend.menuConfirm(); else if (backend.state === "victory") backend.nextLevel(); else backend.toSelect(); keys.forceActiveFocus() } }
     Shortcut { sequence: "M"; context: Qt.ApplicationShortcut; onActivated: backend.soundEnabled = !backend.soundEnabled }
 
-    SoundEffect { id: sndShoot; source: "qrc:/sounds/shoot.wav"; volume: 0.7 }
-    SoundEffect { id: sndHit; source: "qrc:/sounds/hit.wav"; volume: 0.6 }
-    SoundEffect { id: sndBoom; source: "qrc:/sounds/explode.wav"; volume: 1.0 }
-    SoundEffect { id: sndPower; source: "qrc:/sounds/power.wav"; volume: 0.6 }
-    // LEVELUP's own cheerful arpeggio, at the same gain as the other pickups.
-    SoundEffect { id: sndLevelUp; source: "qrc:/sounds/levelup.wav"; volume: 0.6 }
-    SoundEffect { id: sndNuke; source: "qrc:/sounds/nuke.wav"; volume: 1.0 }
-    // The air-support effect runs 25% louder than before (user spec); 1.0 is
-    // the SoundEffect ceiling.
-    SoundEffect { id: sndAirSupport; source: "qrc:/sounds/air-support.wav"; volume: 1.0 }
-    SoundEffect { id: sndBlastShoot; source: "qrc:/sounds/blast_missile-shoot.wav"; volume: 0.805 }
-    SoundEffect { id: sndBlastHit; source: "qrc:/sounds/blast_missile-hit.wav"; volume: 0.96 }
-    // 8-bit engine putter, loops only while a player tank is rolling.
-    // Note: SoundEffect.playing is read-only, so a timer drives play/stop.
-    SoundEffect {
-        id: sndEngine
-        source: "qrc:/sounds/engine.wav"
-        loops: SoundEffect.Infinite
-        volume: 0.40
-    }
-    // Faster gallop for when a tank is actually rolling.
-    SoundEffect {
-        id: sndEngineMove
-        source: "qrc:/sounds/engine_move.wav"
-        loops: SoundEffect.Infinite
-        volume: 0.0
-    }
+    // The sounds live in the C++ SoundBoard, on a thread of their own:
+    // when the audio device dies, Qt's handling can wedge the thread
+    // that owns the sound, and in the GUI thread that freeze is the
+    // game (see src/soundboard.h). The QML type SoundEffect cannot be
+    // moved between threads, so the board does it in C++.
     Timer {
         interval: 100
         running: true
         repeat: true
         onTriggered: {
-            // M must silence the engine loops too: until this branch the
-            // mute only stopped event sounds and the putter kept going.
+            // The board keeps the engine loops in the right state. It is
+            // told what the state is instead of being asked what the
+            // sounds are doing: reading a sound's playing property is a
+            // call into the audio backend, and that is what used to
+            // block the GUI thread when the device died.
             if (!backend.soundEnabled) {
-                if (sndEngine.playing)
-                    sndEngine.stop()
-                if (sndEngineMove.playing)
-                    sndEngineMove.stop()
+                sounds.setMuted(true)
                 return
             }
+            sounds.setMuted(false)
             var anyAlive = (backend.players.length > 0 && backend.players[0].alive)
                            || (backend.players.length > 1 && backend.players[1].alive)
             var playing = backend.state === "playing" && anyAlive
             var moving = playing && ((backend.players.length > 0 && backend.players[0].moving) || (backend.players.length > 1 && backend.players[1].moving))
-            if (playing) {
-                if (!sndEngine.playing)
-                    sndEngine.play()
-                if (!sndEngineMove.playing)
-                    sndEngineMove.play()
-                sndEngine.volume = moving ? 0.0 : 0.40
-                sndEngineMove.volume = moving ? 0.50 : 0.0
-            } else {
-                if (sndEngine.playing)
-                    sndEngine.stop()
-                if (sndEngineMove.playing)
-                    sndEngineMove.stop()
-            }
+            sounds.setEngine(playing, moving)
         }
     }
 
@@ -196,24 +163,8 @@ ApplicationWindow {
         function onPlaySound(name) {
             if (!backend.soundEnabled)
                 return
-            if (name === "shoot")
-                sndShoot.play()
-            else if (name === "hit")
-                sndHit.play()
-            else if (name === "explode")
-                sndBoom.play()
-            else if (name === "power")
-                sndPower.play()
-            else if (name === "levelup")
-                sndLevelUp.play()
-            else if (name === "nuke")
-                sndNuke.play()
-            else if (name === "air-support")
-                sndAirSupport.play()
-            else if (name === "blast_missile-shoot")
-                sndBlastShoot.play()
-            else if (name === "blast_missile-hit")
-                sndBlastHit.play()
+            // The board knows the sounds; it plays them on its own thread.
+            sounds.play(name)
         }
         function onStateChanged() { keys.forceActiveFocus() }
         // The pad's SELECT plays the menu key (R): back to the select screen

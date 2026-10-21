@@ -14,6 +14,7 @@
 
 #include "backend.h"
 #include "gamepad.h"
+#include "soundboard.h"
 #include "theme.h"
 
 // Passed by the .pro (DEFINES += OLIGARCHY_TANKS_VERSION="0.2.1"), but a
@@ -68,6 +69,10 @@ int main(int argc, char *argv[]) {
 
     Theme theme;
     Backend backend;
+    // The sounds live in a thread of their own: when the audio device
+    // dies, Qt's own handling can wedge the thread that owns the sound
+    // (see soundboard.h). In the GUI thread that freeze is the game.
+    SoundBoard sounds;
     // Pads are read straight from /dev/input/event* (Linux only: evdev). A pad
     // joins a player by pressing START; with none connected nothing changes.
     // The reader writes to stderr when OLIGARCHY_TANKS_PAD_DEBUG is set.
@@ -80,6 +85,7 @@ int main(int argc, char *argv[]) {
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("backend", &backend);
+    engine.rootContext()->setContextProperty("sounds", &sounds);
     // The version names the release the user is playing (round 21.10): the
     // footer and the manual show it. A development build appends the binary's
     // mtime so a screenshot always names the exact build; a release build

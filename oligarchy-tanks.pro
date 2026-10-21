@@ -7,12 +7,14 @@ TEMPLATE = app
 HEADERS += \
     src/backend.h \
     src/padmap.h \
+    src/soundboard.h \
     src/theme.h
 
 SOURCES += \
     src/main.cpp \
     src/backend.cpp \
     src/padmap.cpp \
+    src/soundboard.cpp \
     src/theme.cpp
 
 # The pad reader is evdev/sysfs on Linux; other platforms compile without it
