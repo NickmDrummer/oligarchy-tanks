@@ -1609,16 +1609,48 @@ private slots:
         board.setMuted(true);
         board.play("air-support");
 
-        QCOMPARE(engine.count(), 1);
+        QVERIFY(engine.count() >= 1);
         QCOMPARE(muted.count(), 1);
         QCOMPARE(played.count(), 1);
         // The values have to arrive intact, or the worker would drive the
         // wrong sound.
-        const auto engineArgs = engine.takeFirst();
+        const auto engineArgs = engine.last();
         QCOMPARE(engineArgs.at(0).toBool(), true);
         QCOMPARE(engineArgs.at(1).toBool(), true);
         QCOMPARE(muted.takeFirst().at(0).toBool(), true);
         QCOMPARE(played.takeFirst().at(0).toString(), QString("air-support"));
+    }
+
+    // The motor is only for a run that is going on. The user heard it
+    // keep rumbling on the game over screen, on the select screen and
+    // while the next sector was loading: the volumes followed the last
+    // state instead of the current one.
+    void theEngineIsSilentWithoutARun() {
+        SoundBoard board;
+        // A run going on, the tank still: the putter rumbles.
+        board.setEngine(true, false);
+        QVERIFY(qAbs(board.putterVolume() - 0.40) < 0.001);
+        QVERIFY(qAbs(board.gallopVolume() - 0.0) < 0.001);
+        // The tank rolls: the gallop takes over.
+        board.setEngine(true, true);
+        QVERIFY(qAbs(board.putterVolume() - 0.0) < 0.001);
+        QVERIFY(qAbs(board.gallopVolume() - 0.50) < 0.001);
+        // The run ends (the tank died, or the sector was cleared): the
+        // motor goes quiet, whatever it was doing.
+        board.setEngine(false, false);
+        QVERIFY(qAbs(board.putterVolume() - 0.0) < 0.001);
+        QVERIFY(qAbs(board.gallopVolume() - 0.0) < 0.001);
+        // A menu with a stale "moving" flag must not bring it back.
+        board.setEngine(false, true);
+        QVERIFY(qAbs(board.putterVolume() - 0.0) < 0.001);
+        QVERIFY(qAbs(board.gallopVolume() - 0.0) < 0.001);
+        // Mute: silent, and still silent when the run goes on.
+        board.setEngine(true, false);
+        board.setMuted(true);
+        QVERIFY(qAbs(board.putterVolume() - 0.0) < 0.001);
+        QVERIFY(qAbs(board.gallopVolume() - 0.0) < 0.001);
+        board.setMuted(false);
+        QVERIFY(qAbs(board.putterVolume() - 0.40) < 0.001);
     }
 
     // ---- The freeze round (21.15) ----

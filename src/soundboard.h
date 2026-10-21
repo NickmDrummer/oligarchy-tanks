@@ -34,6 +34,16 @@
 
 class QSoundEffect;
 
+// The volumes of the two engine loops, given the state of the game.
+//
+// The putter is the idle rumble, the gallop is the faster one while a
+// tank rolls, and they cross-fade. Both are silent when there is no run
+// going on and when the sound is muted.
+//
+// It lives here so the board and the worker cannot disagree about it:
+// the board uses it to report the state, the worker to apply it.
+void engineVolumes(bool running, bool moving, bool muted, float *putter, float *gallop);
+
 // The worker: it owns the QSoundEffects and lives in its own thread.
 class SoundWorker : public QObject {
     Q_OBJECT
@@ -46,7 +56,7 @@ public slots:
     // The QSoundEffects are created here, in the worker thread: an
     // effect must be created and destroyed in the thread that owns it.
     void initialize();
-    void setEngine(bool running, bool moving);
+    void setEngine(bool running, bool moving, bool muted);
     void setMuted(bool muted);
     void play(const QString &name);
 
@@ -92,19 +102,30 @@ public:
     // "nuke", "air-support", "blast_missile-shoot", "blast_missile-hit".
     Q_INVOKABLE void play(const QString &name);
 
+    // The volumes the engine loops are playing at right now. The tests
+    // use them, and they are the honest answer to "is the motor
+    // supposed to be sounding at this moment?".
+    Q_INVOKABLE double putterVolume() const;
+    Q_INVOKABLE double gallopVolume() const;
+
 signals:
     // The calls to the worker. They travel as signals on purpose: a
     // QMetaObject::invokeMethod by name only finds slots and
     // Q_INVOKABLE methods, and it fails SILENTLY on anything else, which
     // is how a mute that never reached the sound looked like a game
     // that could not be muted.
-    void engineChanged(bool running, bool moving);
+    void engineChanged(bool running, bool moving, bool muted);
     void mutedChanged(bool muted);
     void soundPlayed(const QString &name);
 
 private:
     QThread m_thread;
     SoundWorker *m_worker = nullptr;
+    // The state of the game, kept here so the volumes can be reported
+    // without asking the worker (which may be busy).
+    bool m_engineRunning = false;
+    bool m_engineMoving = false;
+    bool m_muted = false;
 };
 
 #endif // SOUNDBOARD_H

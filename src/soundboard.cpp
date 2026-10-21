@@ -29,6 +29,20 @@ const SoundSpec kSounds[] = {
 
 } // namespace
 
+void engineVolumes(bool running, bool moving, bool muted, float *putter, float *gallop) {
+    // No run, no sound: the motor is silent on the select screen, on the
+    // game over screen and while the next sector loads.
+    if (!running || muted) {
+        *putter = 0.0f;
+        *gallop = 0.0f;
+        return;
+    }
+    // The gallop is the loud one while the tank rolls; the putter takes
+    // over when it stops.
+    *putter = moving ? 0.0f : 0.40f;
+    *gallop = moving ? 0.50f : 0.0f;
+}
+
 // ---- the worker: it owns the QSoundEffects and lives in its own thread.
 
 SoundWorker::SoundWorker(QObject *parent) : QObject(parent) {}
@@ -67,13 +81,11 @@ void SoundWorker::initialize() {
     m_engine->setSource(QUrl(QStringLiteral("qrc:/sounds/engine.wav")));
     m_engine->setVolume(0.40f);
     m_engine->setLoopCount(QSoundEffect::Infinite);
-    m_engine->setObjectName(QStringLiteral("engine"));
 
     m_engineMove = new QSoundEffect(this);
     m_engineMove->setSource(QUrl(QStringLiteral("qrc:/sounds/engine_move.wav")));
     m_engineMove->setVolume(0.0f);
     m_engineMove->setLoopCount(QSoundEffect::Infinite);
-    m_engineMove->setObjectName(QStringLiteral("engine-move"));
 
     // The loops have the same loading story: they cannot be played before
     // their source is ready, and the first run begins right away.
@@ -89,17 +101,14 @@ QSoundEffect *SoundWorker::effect(const QString &name) {
     return m_effects.value(name, nullptr);
 }
 
-void SoundWorker::setEngine(bool running, bool moving) {
-    if (m_engineRunning == running && m_engineMoving == moving)
-        return;
+void SoundWorker::setEngine(bool running, bool moving, bool muted) {
     m_engineRunning = running;
-    m_engineMoving = moving;
+    m_engineMoving = running && moving;
+    m_muted = muted;
     applyEngine();
 }
 
 void SoundWorker::setMuted(bool muted) {
-    if (m_muted == muted)
-        return;
     m_muted = muted;
     applyEngine();
 }
@@ -117,11 +126,11 @@ void SoundWorker::applyEngine() {
         if (m_engineMove->status() == QSoundEffect::Ready && !m_engineMove->isPlaying())
             m_engineMove->play();
     }
-    // The gallop is the loud one while the tank rolls; the putter takes
-    // over when it stops. The mute is the volume down to nothing.
-    const float level = m_muted ? 0.0f : 1.0f;
-    m_engine->setVolume((m_engineMoving ? 0.0f : 0.40f) * level);
-    m_engineMove->setVolume((m_engineMoving ? 0.50f : 0.0f) * level);
+    float putter = 0.0f;
+    float gallop = 0.0f;
+    engineVolumes(m_engineRunning, m_engineMoving, m_muted, &putter, &gallop);
+    m_engine->setVolume(putter);
+    m_engineMove->setVolume(gallop);
 }
 
 void SoundWorker::play(const QString &name) {
@@ -170,13 +179,33 @@ SoundBoard::~SoundBoard() {
 }
 
 void SoundBoard::setEngine(bool running, bool moving) {
-    emit engineChanged(running, moving);
+    m_engineRunning = running;
+    // No run, no rolling: the tank is not moving on a menu.
+    m_engineMoving = running && moving;
+    emit engineChanged(m_engineRunning, m_engineMoving, m_muted);
 }
 
 void SoundBoard::setMuted(bool muted) {
-    emit mutedChanged(muted);
+    m_muted = muted;
+    emit mutedChanged(m_muted);
+    // The engine volumes follow the mute too.
+    emit engineChanged(m_engineRunning, m_engineMoving, m_muted);
 }
 
 void SoundBoard::play(const QString &name) {
     emit soundPlayed(name);
+}
+
+double SoundBoard::putterVolume() const {
+    float putter = 0.0f;
+    float gallop = 0.0f;
+    engineVolumes(m_engineRunning, m_engineMoving, m_muted, &putter, &gallop);
+    return putter;
+}
+
+double SoundBoard::gallopVolume() const {
+    float putter = 0.0f;
+    float gallop = 0.0f;
+    engineVolumes(m_engineRunning, m_engineMoving, m_muted, &putter, &gallop);
+    return gallop;
 }
