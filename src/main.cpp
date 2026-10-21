@@ -20,7 +20,7 @@
 // Passed by the .pro (DEFINES += OLIGARCHY_TANKS_VERSION="0.2.1"), but a
 // direct compile still needs a version to name.
 #ifndef OLIGARCHY_TANKS_VERSION
-#define OLIGARCHY_TANKS_VERSION "0.2.1"
+#define OLIGARCHY_TANKS_VERSION "0.2.2"
 #endif
 
 int main(int argc, char *argv[]) {
