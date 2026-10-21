@@ -2,11 +2,32 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-mkdir -p "$ROOT/build"
-cd "$ROOT/build"
+BUILD="$ROOT/build"
+mkdir -p "$BUILD"
+cd "$BUILD"
 
 # Extra arguments go to qmake, so a packaging build can ask for the release
 # stamp: bin/build DEFINES+=OLIGARCHY_TANKS_RELEASE
+#
+# make only recompiles a source when the file itself changed, so a change in
+# the compiler flags (a different DEFINES) would leave the old objects in
+# place and the binary would keep the old behaviour. The arguments are
+# therefore stamped, and a change of them wipes the build first.
+STAMP="$BUILD/.qmake-args"
+ARGS="$*"
+PREVIOUS=""
+[ -f "$STAMP" ] && PREVIOUS="$(cat "$STAMP")"
+
+if [ "$PREVIOUS" != "$ARGS" ]; then
+  if [ -f "$STAMP" ] || [ -n "$(ls -A "$BUILD" 2>/dev/null)" ]; then
+    echo "Build flags changed, rebuilding from clean..." >&2
+    rm -rf "$BUILD"
+    mkdir -p "$BUILD"
+    cd "$BUILD"
+  fi
+  printf '%s' "$ARGS" > "$STAMP"
+fi
+
 qmake6 "$ROOT/oligarchy-tanks.pro" "$@"
 make -j"$(nproc)"
 
@@ -14,9 +35,10 @@ make -j"$(nproc)"
 # still newer than the binary, wipe and rebuild once from clean.
 if [ -n "$(find "$ROOT/src" "$ROOT/oligarchy-tanks.pro" -newer "$ROOT/build/oligarchy-tanks" 2>/dev/null)" ]; then
   echo "Stale build detected, rebuilding from clean..." >&2
-  rm -rf "$ROOT/build"
-  mkdir -p "$ROOT/build"
-  cd "$ROOT/build"
+  rm -rf "$BUILD"
+  mkdir -p "$BUILD"
+  cd "$BUILD"
+  printf '%s' "$ARGS" > "$STAMP"
   qmake6 "$ROOT/oligarchy-tanks.pro" "$@"
   make -j"$(nproc)"
 fi
