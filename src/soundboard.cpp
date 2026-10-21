@@ -1,5 +1,7 @@
 #include "soundboard.h"
 
+#include <QAudioDevice>
+#include <QMediaDevices>
 #include <QSoundEffect>
 #include <QThread>
 #include <QUrl>
@@ -35,6 +37,13 @@ SoundWorker::SoundWorker(QObject *parent) : QObject(parent) {}
 SoundWorker::~SoundWorker() = default;
 
 void SoundWorker::initialize() {
+    // The audio device monitor is a process-wide object with the thread
+    // affinity of whoever created it. If it is born in the main thread and
+    // the effects live in this one, Qt enables its socket notifier from
+    // the wrong thread, and the game aborts when the thread is destroyed.
+    // Touching it HERE, first, gives it this thread's affinity.
+    QMediaDevices::audioOutputs();
+
     for (const SoundSpec &spec : kSounds) {
         auto *effect = new QSoundEffect(this);
         effect->setSource(QUrl(QStringLiteral("qrc:/sounds/%1").arg(QLatin1String(spec.file))));
