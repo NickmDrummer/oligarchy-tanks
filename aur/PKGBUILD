@@ -1,0 +1,33 @@
+# Maintainer: NickmDrummer <https://github.com/NickmDrummer>
+# Co-Maintainer: none
+
+pkgname=oligarchy-tanks
+pkgver=0.2.0
+pkgrel=1
+pkgdesc='Retro 2-player local tank battle vs AI (Battle City style, Qt 6)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/NickmDrummer/oligarchy-tanks'
+license=('MIT' 'OFL')
+depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'qt6-multimedia' 'xdg-desktop-portal')
+makedepends=('gcc' 'make')
+install=oligarchy-tanks.install
+source=("$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('a254a7e823fbb260a88d02a1e1bbe631dd2aac04333a880b8f52d2a7495aedd0')
+
+build() {
+  cd "$pkgname-$pkgver"
+  qmake6 oligarchy-tanks.pro
+  make -j"$(nproc)"
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 oligarchy-tanks "$pkgdir/usr/bin/oligarchy-tanks"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # The bundled pixel fonts are redistributed with them, so their licences travel too.
+  install -Dm644 src/fonts/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL-Silkscreen.txt"
+  install -Dm644 src/fonts/OFL-DepartureMono.txt "$pkgdir/usr/share/licenses/$pkgname/OFL-DepartureMono.txt"
+  install -Dm644 src/fonts/OmarchyFont-LICENSE.txt "$pkgdir/usr/share/licenses/$pkgname/OmarchyFont-MIT.txt"
+  install -Dm644 pkgbuild/oligarchy-tanks.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/oligarchy-tanks.svg"
+  install -Dm644 pkgbuild/oligarchy-tanks.desktop "$pkgdir/usr/share/applications/oligarchy-tanks.desktop"
+}

@@ -1,5 +1,5 @@
 pkgname=oligarchy-tanks
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Retro 2-player local tank battle vs AI'
 arch=('x86_64' 'aarch64')
@@ -23,6 +23,6 @@ package() {
   install -Dm644 src/fonts/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/OFL-Silkscreen.txt"
   install -Dm644 src/fonts/OFL-DepartureMono.txt "$pkgdir/usr/share/licenses/$pkgname/OFL-DepartureMono.txt"
   install -Dm644 src/fonts/OmarchyFont-LICENSE.txt "$pkgdir/usr/share/licenses/$pkgname/OmarchyFont-MIT.txt"
-  install -Dm644 "$startdir/oligarchy-tanks.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/tanks.svg"
+  install -Dm644 "$startdir/oligarchy-tanks.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/oligarchy-tanks.svg"
   install -Dm644 "$startdir/oligarchy-tanks.desktop" "$pkgdir/usr/share/applications/oligarchy-tanks.desktop"
 }
