@@ -16,6 +16,6 @@ pkgbase = oligarchy-tanks
 	depends = qt6-multimedia
 	depends = xdg-desktop-portal
 	source = https://github.com/NickmDrummer/oligarchy-tanks/archive/refs/tags/v0.2.1.tar.gz
-	sha256sums = ad39207d2bb0ffa50a25dcf58a9f74bbc8635f9f9419433bf750a3fe2cee249b
+	sha256sums = 512f9588f3ab4827bbd0ef11571ffd0c8c5bac05a61744f61254444921e1207a
 
 pkgname = oligarchy-tanks
