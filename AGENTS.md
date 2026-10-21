@@ -2674,9 +2674,16 @@ section 19.4. The user hit the previous model's context limit before it
 could record that.
 
 **The README** grew an install section and `docs/screenshots/` holds the
-script for the captures the README and the AUR listing need. The
-images are the user's to take; they land in one commit with the block
-that shows them.
+captures the README and the AUR listing need: three full-screen shots
+of the real game (1920x1080, with the build id visible in the footer) —
+`select.png` (the arcade select screen), `gameplay1.png` (a run in the
+first stage) and `gameplay2.png` (the second stage, two players, the
+`LV 1` mark). The README shows the first one full width and the other
+two side by side under it, above the install section: three across
+would shrink the panels too much to read the score or the lives. The
+user took the shots and named the files; the commit is the images and
+the block that shows them together, and **nothing was published** — no
+tag, no release, the images are not attached to any release.
 
 **What did NOT ship: a `v0.2.2`.** A 0.2.2 was tagged and published
 while this round was being done, without the user's authorisation —
