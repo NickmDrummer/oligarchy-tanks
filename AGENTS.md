@@ -2446,16 +2446,54 @@ The game round of 21.9-21.14 lands tagged and public:
     prints `already current` and `tests/pinned-sources.sh` passes.
   - Installs: the binary, LICENSE + the three font licences, the desktop
     file and the icon as `oligarchy-tanks.svg` (the in-repo PKGBUILD
-    still installs it as `tanks.svg` — a rename leftover, the desktop
-    file demands `oligarchy-tanks`; fixing that is owed to the local
-    recipe when convenient, cosmetics only), and the pad/input-group
-    note as `install-note.txt`.
-- **Left standing for this round**: the Omarchy Store listing waits on
-  the user's fullscreen captures; the AUR source recipe stays deferred
-  until registration reopens (21.2); PR #1348's CI build (x86_64 and
-  aarch64)
-  is watched as part of the store round.
+    has now been aligned to `0.2.0` and `oligarchy-tanks.svg` as well),
+    and the pad/input-group note as `install-note.txt`.
+- **Left standing for this round**: PR #1348's CI build (x86_64 and
+  aarch64) is watched as part of the store round.
+- **The Store is down, and not by us**: `omarchystore.com` now serves a
+  "We took the store offline. We'll be back, better and safer" page —
+  the store's own maintainers took it down over concerns about how the
+  installer and the update hook handle privileges, and they are
+  rebuilding installs so the user always sees and approves them, plus
+  re-reviewing every listing. `/submit/` answers **404** (the site is
+  a holding page now, not a live store). So the Store listing is
+  **not actionable today** and does not need the user's captures yet;
+  when it reopens, the listing needs the install command, the
+  install/removal docs in the README and the fullscreen previews.
+- **AUR registration is still closed** (2026-10-20: `/accounts/register`
+  answers **503**, the AUR root is up), and the name `oligarchy-tanks`
+  is still free (AUR RPC: 0 hits). The AUR recipe is therefore
+  **written and verified, waiting only to be pushed**: it lives in
+  `aur/` (PKGBUILD + `oligarchy-tanks.install` + `.gitignore` +
+  `.SRCINFO`), a source recipe pinned to the `v0.2.0` tag tarball
+  (same sha256 as the omarchy-pkgs one), building with
+  `qmake6 oligarchy-tanks.pro && make`. **Verified**: `makepkg` built
+  `oligarchy-tanks-0.2.0-1-x86_64.pkg.tar.zst` clean from that recipe
+  and `makepkg --printsrcinfo` produced a valid `.SRCINFO`. Pushing
+  it needs the user's AUR account, which cannot be created while
+  registration is closed.
 - The freeze hunt stays open as 21.15 — the watchdog lives at
   `/tmp/opencode/freeze/watchdog_real.sh` and the user reported a clean
   ~17 min session; the round scope was timeboxed (user: "terminemos con
   la ronda de publicación si es rápido").
+- **PR #1348's merge pipeline, read from the repo's own workflows** (as
+  of the same afternoon): the PR sits `OPEN`/`MERGEABLE`/`BLOCKED` with
+  no failure — the required `result` check stays pending until an
+  Omarchy maintainer labels it **`build-approved`**; first-time
+  contributors are not in `.github/VOUCHED.td`, so `auto-merge-pr` ran
+  but decided not to enable itself (its script rule: trusted = bot /
+  collaborator / vouched, else labelled). The `approve` check showing
+  SKIPPED is normal: that workflow only releases the held `build-pr`
+  runs once the label is on. With the label, `build-pr` builds x86_64
+  (self-hosted) plus aarch64 (GitHub ARM runners); once `result`,
+  `self-tests` and `build-isolation` are green, auto-merge merges and
+  `publish.yml` publishes the one artifact into every channel the
+  package ships to — a brand-new package first appears on `edge`, and
+  the ordinary `edge → rc → stable` promotion train carries it to
+  stable users later. Install path for end users: `omarchy-pkg-add
+  oligarchy-tanks` (the pkgs.omarchy.org repo is preconfigured on
+  Omarchy). Realistic review risks: a request to drop `aarch64` if the
+  ARM `qt6-*` mass is incomplete on ALARM, or dependency trims;
+  corrections go on the same `add-oligarchy-tanks` branch and the PR
+  updates itself. Local clone of the recipe fork lives at
+  `/tmp/omarchy-pkgs` (branch `add-oligarchy-tanks`).
