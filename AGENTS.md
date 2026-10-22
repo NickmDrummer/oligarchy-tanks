@@ -2590,6 +2590,34 @@ the sink does not work on this machine (the dongle has no
 `hwC3D0` device, and the pipewire monitor records silence even for
 `paplay`). **For the volume, the user's ears are the check.**
 
+### 21.24 The blanks-while-playing cursor round (Oct 22, user-built)
+
+The mouse pointer used to float over the board mid-run ("se sigue
+mostrando... en el medio de la pantalla"); now the window cursor is
+blanked while the game is on the board and back to the arrow in every
+other state.
+
+- **The QML way does not exist here**: `Item.cursorShape`, the natural
+  property, is gone from the type in this Qt — **Quick 6.12 dropped it
+  from Item** (it survives on MouseArea and PointerHandler; the game's
+  binary lib ships no Item-side registration at all). Assigning it
+  failed the whole load: `QQmlApplicationEngine` aborts on such an
+  error, so Main.qml must never mention it.
+- **The working path (main.cpp)**: after the engine loads, `QWindow::
+  setCursor` decides the shape — `Qt::BlankCursor` while
+  `state == "playing"`, `Qt::ArrowCursor` otherwise — re-set on every
+  `stateChanged`, so the pointer reappears on the pause overlay and
+  the menus the instant the state moves. The hand-shaped buttons
+  (`cursorShape: Qt.PointingHandCursor` on a *MouseArea*) keep working:
+  QML's window cursor control still lets hovered items claim the
+  shape.
+- `bin/test` is **84/84** and the offscreen smoke is clean.
+
+**What the user checked**: the pointer vanishes over the board and is
+back on pause and the menus ("funciona bien"). Commit ordered.
+
+
+
 ### 21.23 The fire rate round (Oct 22, user-built)
 
 `FIRE_GAP` went **0.35 → 0.20 s** (about five shots a second): the

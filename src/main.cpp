@@ -10,6 +10,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QUrl>
 
 #include "backend.h"
@@ -113,6 +114,23 @@ int main(int argc, char *argv[]) {
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())
         return 1;
+
+    // The mouse has no business in a run (the user's report): the
+    // pointer floats in the middle of the screen and takes the eyes
+    // with it. While the game is on the board, the window's cursor is
+    // blanked from here — Main.qml's Items have no cursorShape in this
+    // Qt (Quick 6.12 dropped it), and a full-window MouseArea would
+    // eat the hover the menu buttons want. The arrow is back for every
+    // other state: the menus and the pause overlay are mouse-territory.
+    QQuickWindow *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    if (window) {
+        const auto shape = [window, &backend] {
+            window->setCursor(QCursor(backend.state() == QStringLiteral("playing")
+                    ? Qt::BlankCursor : Qt::ArrowCursor));
+        };
+        shape();
+        QObject::connect(&backend, &Backend::stateChanged, window, shape);
+    }
 
     return app.exec();
 }
