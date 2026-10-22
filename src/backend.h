@@ -266,7 +266,15 @@ private:
     bool spawnEnemy();
     bool cellBusy(double x, double y) const;
     void fireBullet(double x, double y, int dir, int owner, double speed, bool playSnd = true);
-    double enemySpeedMult() const { return 1.0 + 0.1 * (m_level - 1); }
+    // The special pace now breathes across the whole run: a gentle ramp
+    // that touches its 1.6x ceiling exactly at the last band's start,
+    // sector 20 (the user's retune, 21.23) — the endgame band is where
+    // the clock peaks. Enemy bullets ride the same number.
+    double enemySpeedMult() const {
+        constexpr double kTop = 1.6, kTopSector = 20;
+        return m_level >= kTopSector ? kTop
+            : 1.0 + (kTop - 1.0) * (m_level - 1) / (kTopSector - 1);
+    }
     bool solidAt(double x, double y, double size) const;
     // Solid terrain test for a single point. Brick is special: under half
     // destroyed the tile blocks as a whole block, from the halfway mark on
@@ -414,6 +422,7 @@ private:
     bool m_rumbleEnabled = true;
     // Debug: OLIGARCHY_TANKS_TIER=N starts the player at that tier (air support testing).
     int m_debugTier = -1;
+    int m_debugSector = 0;
     QTimer m_timer;
     std::mt19937 m_rng{std::random_device{}()};
 };

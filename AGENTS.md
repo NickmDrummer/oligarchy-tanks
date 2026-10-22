@@ -64,7 +64,8 @@ with `qmake6` + `make`.
   pastel-metallic-yellow wheeled fast, armored (pastel purple ->
   cyan -> gray as it takes hits, with treads) and the red-flashing carrier.
 - **16 enemies per sector, always**; what changes with the sector is the mix
-  (more fast and more armored). See section 17.
+  (the user's difficulty table: basic leads, the specials take over late). See
+  section 17.
 - 7 bonuses, dropping only from carriers (the red-flashing basics).
 - Defend the base, which renders the official Omarchy pixel wordmark `omarchy`;
   it becomes rubble when destroyed.
@@ -1439,9 +1440,18 @@ section is the record of what shipped.
 
 - **16 tanks a stage, always.** `TOTAL_ENEMIES = 16` and `totalForLevel()` is
   that constant: later sectors do **not** add tanks. What changes is the mix.
-- **Mix by level** (in `spawnEnemy()`): levels 1-3 = 8 basic + 4 fast + 4
-  armored; 4-6 = 6 fast + 6 basic + 4 armored; 7+ = 4 basic + 6 fast + 6
-  armored. Armored is the remainder, so the three always sum to 16.
+- **Mix by level** (in `spawnEnemy()`): the user's difficulty table —
+  1-3 = 12 basic + 2 fast (no armoured tank at all); 4-6 = 10 basic + 2 fast
+  + 2 armoured; 7-10 = 8 basic + 3 fast + 3 armoured; 11-13 = 6 basic + 4
+  fast + 4 armoured; 14-16 = 4 basic + 6 fast + 4 armoured; 17+ = 2 basic
+  + 6 fast + 6 armoured. Carriers are always two and ride the opening
+  stretch (a third and two thirds through), so every band sums to 16.
+- **The specials' speed tops out**: `enemySpeedMult()` ramps gently
+  across the whole run and touches **1.6x exactly at sector 20** (the
+  user's retune, 21.23 — the endgame band is where the clock peaks);
+  the mix, not the clock, is what keeps the late pressure. Enemy
+  bullets ride the same number. `OLIGARCHY_TANKS_SECTOR=N` starts a
+  run at sector N (debug, like `OLIGARCHY_TANKS_TIER`).
 - **Four kinds.** `0` basic gray, treads (hp 1, `ENEMY_SPEED`); `1` fast, a
   wheeled chassis (hp 1, `ENEMY_SPEED * 1.35 * mult`), recoloured from the basic
   tank's grey to a pastel metallic yellow in section 18.3; `2`
@@ -2579,6 +2589,45 @@ Qt, so it does not show up on the pipewire stream either. Capturing
 the sink does not work on this machine (the dongle has no
 `hwC3D0` device, and the pipewire monitor records silence even for
 `paplay`). **For the volume, the user's ears are the check.**
+
+### 21.22 The difficulty table round (Oct 22, user-built)
+
+The sector curve is now the user's own table, and the speed clock
+stops climbing where the pressure needs to stay fair.
+
+- **The mix** (`spawnEnemy()`): 1-3 = 12 basic + 2 fast, **no armoured
+  tank at all**; 4-6 = 10 + 2 + 2; 7-10 = 8 + 3 + 3; 11-13 = 6 + 4 + 4;
+  14-16 = 4 + 6 + 4; 17+ = 2 + 6 + 6. Carriers are always two and ride
+  the opening stretch (a third and two thirds through it), so each
+  band sums to 16 exactly and the armoured count is explicit, no
+  longer "the remainder". The first band's carriers sit at spawns 4
+  and 9, past the thinnest band (17+) they sit at 1 and 2 — never the
+  first tank.
+- **The speed cap**: the retune settled on **1.6x first reached at the
+  last band's start, sector 20** — a gentle ramp across the whole run
+  (`1.0 + 0.6 * (sector-1) / 19`). The user's first pick was a cap
+  hit at sector 7; playing it felt too flat after that, so the clock
+  now breathes until the endgame band and stays there. Untreated, the
+  linear +10% curve would have had sector 20 specials at 2.9x,
+  bullets included. Basics and carriers never speed up; that was
+  already true.
+- **The debug sector**: `OLIGARCHY_TANKS_SECTOR=N` starts a run at
+  sector N, next to the tier debug hook (`OLIGARCHY_TANKS_TIER`) —
+  the bands live further in than a hand can reach by playing alone.
+- The sector banner became "more fast and armoured tanks" (the old
+  "specials are faster and tougher" stops being true past the cap),
+  and the manual's sector line follows the new curve.
+- `bin/test` is **84/84** (`stageFieldsSixteenTanksWithInterleavedCarriers`
+  now walks every band and the 13 positions in it, plus a new
+  `theSpecialsSpeedTopsOutAtSixteenPercent`) and the offscreen smoke
+  is clean.
+
+**What the user checked**: the numbers are theirs; the run itself is
+theirs to play — the bands are reachable at once with the sector
+hook. Committed with the rumble round uncluttered; no tag yet, so the
+bump that answers "does this reach v0.2.3?" is still open.
+
+
 
 ### 21.21 The gamepad rumble round (Oct 22, pending release)
 

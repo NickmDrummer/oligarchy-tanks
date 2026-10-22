@@ -43,6 +43,10 @@ Backend::Backend(QObject *parent) : QObject(parent), m_grid(COLS * ROWS, Empty) 
     // Debug tier for testing air support: OLIGARCHY_TANKS_TIER=4 starts at tier 4.
     if (const char *t = std::getenv("OLIGARCHY_TANKS_TIER"))
         m_debugTier = std::atoi(t);
+    // Debug sector for the difficulty bands: OLIGARCHY_TANKS_SECTOR=7
+    // starts the run at sector 7 (see AGENTS.md section 17).
+    if (const char *s = std::getenv("OLIGARCHY_TANKS_SECTOR"))
+        m_debugSector = std::atoi(s);
     generateMap();
     resetTanks(true);
     // The select screen is up, so no tank is on the board yet: startGame()
@@ -493,6 +497,10 @@ void Backend::padSelect(int pad) {
 
 void Backend::startGame() {
     m_level = 1;
+    // Debug: a run may start deeper in, to reach the later bands of the
+    // difficulty table without playing there first (OLIGARCHY_TANKS_SECTOR).
+    if (m_debugSector >= 1)
+        m_level = m_debugSector;
     m_freezeUntil = -1;
     generateMap();
     resetTanks(true);
@@ -557,7 +565,7 @@ void Backend::nextLevel() {
     m_spawnTimer = 1.0;
     m_p1Up = m_p1Down = m_p1Left = m_p1Right = false;
     m_p2Up = m_p2Down = m_p2Left = m_p2Right = false;
-    setState("playing", QString("Sector %1 — specials are faster and tougher").arg(m_level));
+    setState("playing", QString("Sector %1 — more fast and armoured tanks").arg(m_level));
 }
 
 void Backend::togglePause() {
@@ -1340,13 +1348,18 @@ void Backend::updateBullets(double dt) {
 }
 
 bool Backend::spawnEnemy() {
-    // 16 tanks per stage, composition by wave (see AGENTS.md section 17).
-    // Carriers are 2 of the basic tanks: slightly faster, flashing, drop a
-    // power-up. Armored tanks take 3 hits.
-    int basic, fast;
-    if (m_level <= 3) { basic = 8; fast = 4; }
-    else if (m_level <= 6) { basic = 6; fast = 6; }
-    else { basic = 4; fast = 6; }
+    // 16 tanks per stage (see AGENTS.md section 17): the mix walks the
+    // user's difficulty table, basic leading the early sectors and the
+    // specials taking over late. Carriers are always two and ride the
+    // opening stretch, interleaved; the first three sectors field no
+    // armoured tank at all. Armored tanks take 3 hits.
+    int basic, fast, armored;
+    if (m_level <= 3) { basic = 12; fast = 2; armored = 0; }
+    else if (m_level <= 6) { basic = 10; fast = 2; armored = 2; }
+    else if (m_level <= 10) { basic = 8; fast = 3; armored = 3; }
+    else if (m_level <= 13) { basic = 6; fast = 4; armored = 4; }
+    else if (m_level <= 16) { basic = 4; fast = 6; armored = 4; }
+    else { basic = 2; fast = 6; armored = 6; }
     // Enter through a lane no living tank is using. Stacking a tank on top of
     // another used to leave the pair shoved into the wall by separateTanks()
     // and unable to move for the rest of the stage.
@@ -1370,18 +1383,24 @@ bool Backend::spawnEnemy() {
         e.dir = 2;
         e.cooldown = 1.0;
         e.think = 1.0;
-        // Carriers are 2 of the basic tanks, interleaved (not at the start).
-        const int carrierPos1 = basic / 3;
-        const int carrierPos2 = (2 * basic) / 3;
+        // The opening stretch (basic + the two carriers) holds the red
+        // flashing carriers at a third and two thirds through: never the
+        // first tank, never the pair of them at the very start. The
+        // wheeled fast chassis follows, the armoured hull closes.
+        const int opening = basic + 2;
+        const int carrierPos1 = opening / 3;
+        const int carrierPos2 = (2 * opening) / 3;
         int kind;
         if (m_spawned == carrierPos1 || m_spawned == carrierPos2) {
             kind = 3; // carrier
-        } else if (m_spawned < basic) {
+        } else if (m_spawned < opening) {
             kind = 0; // basic
-        } else if (m_spawned < basic + fast) {
+        } else if (m_spawned < opening + fast) {
             kind = 1; // fast (wheeled chassis)
-        } else {
+        } else if (m_spawned < opening + fast + armored) {
             kind = 2; // armored
+        } else {
+            kind = 2; // armored again: past the table, never in a 16-tank stage
         }
         e.kind = kind;
         e.hp = (kind == 2) ? 3 : 1;

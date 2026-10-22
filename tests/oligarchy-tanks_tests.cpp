@@ -151,6 +151,8 @@ struct TanksTestAccess {
     }
     static int enemiesPerStage(const Backend &b) { return b.totalForLevel(); }
     static void setLevel(Backend &b, int level) { b.m_level = level; }
+    // The specials' speed multiplier for the sector b is parked at.
+    static double enemySpeedMult(const Backend &b) { return b.enemySpeedMult(); }
     // A cleared square, so an input test measures input and not the random map.
     static void clearArea(Backend &b, int x0, int y0, int x1, int y1) {
         for (int y = y0; y <= y1; ++y)
@@ -306,52 +308,75 @@ private slots:
         QCOMPARE(b.enemiesLeft(), 16);
     }
 
-    // Phase C: 16 tanks a stage whatever the level, with the mix of kinds
-    // changing by level and the two carriers taken from the basic pool,
-    // interleaved rather than both at the start.
+    // Phase C: 16 tanks a stage whatever the level, the mix of kinds on
+    // the user's difficulty table (AGENTS.md section 17), and the two
+    // carriers riding the opening stretch interleaved rather than both
+    // at the start.
     void stageFieldsSixteenTanksWithInterleavedCarriers() {
         Backend b;
         b.startGame();
         QCOMPARE(TanksTestAccess::enemiesPerStage(b), 16);
 
-        int carriers = 0, basics = 0, fast = 0, armored = 0;
-        for (int i = 0; i < 16; ++i) {
-            const int k = TanksTestAccess::spawnKindAt(b, i);
-            if (k == 3) ++carriers;
-            else if (k == 0) ++basics;
-            else if (k == 1) ++fast;
-            else if (k == 2) ++armored;
+        // Every band of the table, including past the last one (the
+        // 17+ row is the endgame band and holds from 21 on).
+        struct Band { int level, basic, fast, armored; };
+        const Band bands[] = {
+            {1, 12, 2, 0}, {3, 12, 2, 0}, {4, 10, 2, 2},
+            {6, 10, 2, 2}, {7, 8, 3, 3}, {10, 8, 3, 3},
+            {11, 6, 4, 4}, {13, 6, 4, 4}, {14, 4, 6, 4},
+            {16, 4, 6, 4}, {17, 2, 6, 6}, {20, 2, 6, 6}, {21, 2, 6, 6},
+        };
+        for (const Band &band : bands) {
+            TanksTestAccess::setLevel(b, band.level);
+            int carriers = 0, basics = 0, fast = 0, armored = 0;
+            for (int i = 0; i < 16; ++i) {
+                const int k = TanksTestAccess::spawnKindAt(b, i);
+                if (k == 3) ++carriers;
+                else if (k == 0) ++basics;
+                else if (k == 1) ++fast;
+                else if (k == 2) ++armored;
+            }
+            QCOMPARE(basics, band.basic);
+            QCOMPARE(carriers, 2);
+            QCOMPARE(fast, band.fast);
+            QCOMPARE(armored, band.armored);
         }
-        QCOMPARE(carriers, 2);
-        QCOMPARE(basics, 6); // the basic pool is 8, two of them carriers
-        QCOMPARE(fast, 4);
-        QCOMPARE(armored, 4);
 
-        // Carriers are interleaved: never the first tank, never both early.
+        // Carriers ride the opening stretch, interleaved: never the first
+        // tank, and never (past the thinnest band) back to back at the
+        // very start.
+        TanksTestAccess::setLevel(b, 1);
         QCOMPARE(TanksTestAccess::spawnKindAt(b, 0), 0);
-        QCOMPARE(TanksTestAccess::spawnKindAt(b, 2), 3);
-        QCOMPARE(TanksTestAccess::spawnKindAt(b, 5), 3);
-        QCOMPARE(TanksTestAccess::spawnKindAt(b, 8), 1);
-        QCOMPARE(TanksTestAccess::spawnKindAt(b, 12), 2);
-        // Armour is a fixed three hits, whatever the sector.
-        QCOMPARE(TanksTestAccess::spawnHpAt(b, 12), 3);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 4), 3);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 9), 3);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 13), 0);
+        QCOMPARE(TanksTestAccess::spawnKindAt(b, 14), 1); // fast closes in
+        // The first three sectors field no armoured tank at all.
+        for (int i = 0; i < 16; ++i)
+            QVERIFY(TanksTestAccess::spawnKindAt(b, i) != 2);
+        // Armour is a fixed three hits wherever it exists.
+        TanksTestAccess::setLevel(b, 4);
+        QCOMPARE(TanksTestAccess::spawnHpAt(b, 15), 3);
         QCOMPARE(TanksTestAccess::spawnHpAt(b, 0), 1);
+    }
 
-        // A later sector keeps 16 tanks but fields more armour.
-        TanksTestAccess::setLevel(b, 7);
-        carriers = basics = fast = armored = 0;
-        for (int i = 0; i < 16; ++i) {
-            const int k = TanksTestAccess::spawnKindAt(b, i);
-            if (k == 3) ++carriers;
-            else if (k == 0) ++basics;
-            else if (k == 1) ++fast;
-            else if (k == 2) ++armored;
-        }
-        QCOMPARE(TanksTestAccess::enemiesPerStage(b), 16);
-        QCOMPARE(carriers, 2);
-        QCOMPARE(basics, 2);
-        QCOMPARE(fast, 6);
-        QCOMPARE(armored, 6);
+    // The specials' pace ramps gently across the whole run and touches
+    // 1.6x exactly at the endgame band's start, sector 20 (the user's
+    // retune): the clock peaks where the mix is thickest.
+    void theSpecialsSpeedRampsToSixteenPercentAtSectorTwenty() {
+        Backend b;
+        TanksTestAccess::setLevel(b, 1);
+        QCOMPARE(TanksTestAccess::enemySpeedMult(b), 1.0);
+        TanksTestAccess::setLevel(b, 10);
+        QCOMPARE(TanksTestAccess::enemySpeedMult(b), 1.0 + 0.6 * 9 / 19);
+        TanksTestAccess::setLevel(b, 19);
+        QCOMPARE(TanksTestAccess::enemySpeedMult(b), 1.0 + 0.6 * 18 / 19);
+        TanksTestAccess::setLevel(b, 20);
+        QCOMPARE(TanksTestAccess::enemySpeedMult(b), 1.6);
+        TanksTestAccess::setLevel(b, 21);
+        QCOMPARE(TanksTestAccess::enemySpeedMult(b), 1.6);
+        TanksTestAccess::setLevel(b, 30);
+        QCOMPARE(TanksTestAccess::enemySpeedMult(b), 1.6);
     }
 
     // The int queries QML drives its tiles with.
