@@ -2590,6 +2590,24 @@ the sink does not work on this machine (the dongle has no
 `hwC3D0` device, and the pipewire monitor records silence even for
 `paplay`). **For the volume, the user's ears are the check.**
 
+### 21.23 The fire rate round (Oct 22, user-built)
+
+`FIRE_GAP` went **0.35 → 0.20 s** (about five shots a second): the
+user's felt report was "tengo que esperar demasiado a que salga otra
+bala" — the two-bullet cap was never the throttle they hit, the gap
+between shots was. Battle City's own pace stays out on purpose
+(there the gun is "a bit OP", the user's words); this is a nudge, and
+it strengthens the player only, so the new difficulty table of 21.22
+shows up with the lever untouched on the enemy side. The in-flight
+bullet cap stays at two.
+
+`bin/test` is **84/84** (no test asserts the gap) and the offscreen
+smoke is clean.
+
+**What the user checked**: the feel itself ("me gusta"), at 0.20 s
+alive — the first pick had been 0.35; 0.22 and a third bullet were on
+the table and never needed.
+
 ### 21.22 The difficulty table round (Oct 22, user-built)
 
 The sector curve is now the user's own table, and the speed clock

@@ -10,7 +10,7 @@ constexpr double TANK_SIZE = 0.8;
 constexpr double PLAYER_SPEED = 3.62;
 constexpr double ENEMY_SPEED = 2.07;
 constexpr double BULLET_SPEED = 8.0;
-constexpr double FIRE_GAP = 0.35;
+constexpr double FIRE_GAP = 0.20;
 // A shot never advances more than this in one frame, so it cannot jump
 // clean over the quarter-cell gap of a damaged brick tile.
 constexpr double BULLET_MAX_STEP = 0.2;
