@@ -113,6 +113,15 @@ group, or with no pad plugged in, the game simply runs on the keyboard as
 before. To diagnose a pad that does not work, run `OLIGARCHY_TANKS_PAD_DEBUG=1 ./build/oligarchy-tanks`
 and watch the `[pad]` lines.
 
+## Rumble
+
+DualSense pads vibrate with the game's own sounds (shoots, hits,
+explosions, power-ups) over hidraw, on USB. Bluetooth pads and Xbox
+pads are out of scope for now. Sound and vibration are separate
+switches: `M` toggles the sound only, `V` toggles the pad vibration
+only — the footer keeps an icon for each. To disable rumble entirely,
+run `OLIGARCHY_TANKS_RUMBLE=0 ./build/oligarchy-tanks`.
+
 ## Build
 
 ```

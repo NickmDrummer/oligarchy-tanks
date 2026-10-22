@@ -20,8 +20,8 @@ SOURCES += \
 # The pad reader is evdev/sysfs on Linux; other platforms compile without it
 # and play on the keyboard (main.cpp guards the Gamepad use).
 linux {
-    SOURCES += src/gamepad.cpp
-    HEADERS += src/gamepad.h
+    SOURCES += src/gamepad.cpp src/rumble.cpp
+    HEADERS += src/gamepad.h src/rumble.h
 }
 
 RESOURCES += src/resources.qrc

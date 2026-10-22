@@ -129,6 +129,9 @@ ApplicationWindow {
     Shortcut { sequence: "P"; context: Qt.ApplicationShortcut; onActivated: backend.togglePause() }
     Shortcut { sequence: "R"; context: Qt.ApplicationShortcut; onActivated: { if (backend.state === "select") backend.menuConfirm(); else if (backend.state === "victory") backend.nextLevel(); else backend.toSelect(); keys.forceActiveFocus() } }
     Shortcut { sequence: "M"; context: Qt.ApplicationShortcut; onActivated: backend.soundEnabled = !backend.soundEnabled }
+    // Vibration is a switch of its own (the user's call): M leaves the
+    // pad's rumble alone, V is the one that touches it.
+    Shortcut { sequence: "V"; context: Qt.ApplicationShortcut; onActivated: backend.toggleRumble() }
 
     // The sounds live in the C++ SoundBoard, on a thread of their own:
     // when the audio device dies, Qt's handling can wedge the thread
@@ -1759,6 +1762,73 @@ ApplicationWindow {
             id: footerRow
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
+            // The two state icons: sound and vibration are separate
+            // switches (M and V). Both icons take the footer text's own
+            // grey on purpose (the user's request): the states are told
+            // by the shape — the speaker gains its waves when the sound
+            // is on and the cross when it is muted, the device does the
+            // same for the pad's rumble.
+            component StateIcon: Item {
+                id: icon
+                property string kind: "sound"
+                property bool on: true
+                width: 18
+                height: 16
+                anchors.verticalCenter: parent.verticalCenter
+                onOnChanged: art.requestPaint()
+                Component.onCompleted: art.requestPaint()
+                Canvas {
+                    id: art
+                    anchors.fill: parent
+                    onPaint: {
+                        const ctx = art.getContext("2d")
+                        ctx.clearRect(0, 0, art.width, art.height)
+                        const c = "#5a5e68"
+                        ctx.lineWidth = 2
+                        ctx.lineCap = "round"
+                        if (kind === "sound") {
+                            // The speaker: box and horn opening right, in
+                            // both states. The waves are only there while
+                            // the sound is on; muted takes the cross.
+                            ctx.fillStyle = c
+                            ctx.fillRect(0, 6, 2, 4)
+                            ctx.beginPath()
+                            ctx.moveTo(2, 8); ctx.lineTo(7, 3); ctx.lineTo(7, 13); ctx.lineTo(2, 8)
+                            ctx.fill()
+                            if (on) {
+                                ctx.strokeStyle = c
+                                ctx.beginPath(); ctx.arc(8, 8, 3.5, -1.0, 1.0); ctx.stroke()
+                                ctx.beginPath(); ctx.arc(8, 8, 6.5, -1.0, 1.0); ctx.stroke()
+                            } else {
+                                ctx.strokeStyle = c
+                                ctx.beginPath()
+                                ctx.moveTo(2, 2); ctx.lineTo(16, 14)
+                                ctx.moveTo(16, 2); ctx.lineTo(2, 14)
+                                ctx.stroke()
+                            }
+                        } else {
+                            // The vibration: a small device with the motion
+                            // marks on both sides, and the same cross when
+                            // the rumble is off.
+                            ctx.fillStyle = c
+                            ctx.fillRect(6, 3, 5, 10)
+                            ctx.strokeStyle = c
+                            ctx.beginPath()
+                            ctx.moveTo(4, 4); ctx.lineTo(1, 8); ctx.lineTo(4, 12)
+                            ctx.stroke()
+                            ctx.beginPath()
+                            ctx.moveTo(13, 4); ctx.lineTo(16, 8); ctx.lineTo(13, 12)
+                            ctx.stroke()
+                            if (!on) {
+                                ctx.beginPath()
+                                ctx.moveTo(2, 1); ctx.lineTo(16, 15)
+                                ctx.moveTo(16, 1); ctx.lineTo(2, 15)
+                                ctx.stroke()
+                            }
+                        }
+                    }
+                }
+            }
             KeyCap { unit: 20; label: "P" }
             Text { text: "PAUSE"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
             Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
@@ -1767,6 +1837,11 @@ ApplicationWindow {
             Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
             KeyCap { unit: 20; label: "M" }
             Text { text: "TOGGLE SOUND"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            StateIcon { kind: "sound"; on: backend.soundEnabled }
+            Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            KeyCap { unit: 20; label: "V" }
+            Text { text: "TOGGLE VIBRATION"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
+            StateIcon { kind: "vibe"; on: backend.rumbleEnabled }
             Text { text: "-"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
             KeyCap { unit: 20; label: "?" }
             Text { text: "HELP"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 13; color: "#5a5e68"; anchors.verticalCenter: parent.verticalCenter }
@@ -1865,6 +1940,7 @@ ApplicationWindow {
                     Text { text: "1 PLAYER: KEYBOARD UNLESS A PAD PRESSES START"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                     Text { text: "2 PLAYERS: KEYBOARD P1, FIRST PAD P2, 2ND PAD P1"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                     Text { text: "GAME OVER: START, SPACE OR ENTER GOES BACK TO THE SELECT SCREEN"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
+                    Text { text: "M: SOUND ON/OFF - V: PAD VIBRATION (SEPARATE SWITCHES, SEE THE FOOTER)"; font.family: "Departure Mono"; font.bold: true; font.pixelSize: 12; color: "#8a8f98" }
                 }
                 // ---- GAME ----
                 Text {

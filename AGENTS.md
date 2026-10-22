@@ -2580,6 +2580,61 @@ the sink does not work on this machine (the dongle has no
 `hwC3D0` device, and the pipewire monitor records silence even for
 `paplay`). **For the volume, the user's ears are the check.**
 
+### 21.21 The gamepad rumble round (Oct 22, pending release)
+
+The DualSense now vibrates with the sounds, and sound and vibration
+are two separate switches.
+
+- **The protocol** (`src/rumble.{h,cpp}`): hidraw output report 0x02
+  (63 bytes), written from the kernel's `drivers/hid/hid-playstation.c`
+  layout — motor_right [2] is the weak/high-frequency motor (right
+  hand), motor_left [3] the strong/low-frequency one; valid_flag0 =
+  HAPTICS_SELECT|COMPATIBLE_VIBRATION for v1, v2 also sets
+  valid_flag2 = 0x04. v2 is chosen when the feature report 0x20's
+  update_version (le16 at offset 44) is >= 2.21. Bluetooth pads (bus
+  0x0005) are skipped: their report needs a CRC. The kernel exposes no
+  evdev FF for this pad (no `ff/` nodes) — hidraw is the only path —
+  and adaptive triggers have no kernel support at all: normal rumble
+  only, by decision. Xbox pads are out of scope too (none on the
+  bench; noted in rumble.h).
+- **The wiring**: the player listens to `Backend::playSound`, so zero
+  Backend sound-code changed; `rumbleFor()` maps each sound to
+  (left, right, ms) by hand (shoot 0/0x40/60, blast-shoot 0x30/0x50/90,
+  hit 0x50/0x30/90, explode 0x90/0x40/200, blast-hit 0x80/0x50/180,
+  power 0/0x50/100, levelup 0x60/0x60/150, nuke 0xff/0x80/450,
+  air-support 0x70/0x50/300; enemy fire and menu steps stay silent).
+  Motors run until a zero report; a settle timer stops them. Writes
+  are O_NONBLOCK so a dead pad cannot wedge the GUI thread (the
+  lesson of 21.15); an error drops the link and the scan finds
+  replacements. `OLIGARCHY_TANKS_RUMBLE=0` is the global off switch.
+- **The QDir::System trap**: `/dev/hidraw/*` nodes are symlinks whose
+  *type is a directory*, so `QDir::System` alone lists none of them —
+  the scan uses `QDir::AllEntries|NoDotAndDotDot` and filters by the
+  HID_ID in uevent (`0003:054c:0ce6`), USB only. The node number
+  changes per session; the scan is what keeps it true.
+- **The switches** (the user's call: "sonido es una cosa aparte de la
+  vibracion"): `M` is sound only, `V` is vibration only —
+  `Backend::rumbleEnabled` + `toggleRumble()` + `rumbleChanged`, and
+  the C++ rumble mutes on `!soundEnabled() || !rumbleEnabled()`.
+- **The footer icons** (rewritten once after the user's review): both
+  take the footer text's own grey (#5a5e68), never the accent green.
+  The speaker is the same shape in both states — waves only while the
+  sound is on, a cross when muted; the vibration one is a device with
+  motion marks on both sides, crossed when off. The first attempt
+  (accent-green icons, a pad that shook itself on the 90 ms tread
+  clock) was rejected ("no entiendo que icono es") — the shape has to
+  name the toggle, and the colour has to match the text it sits with.
+- `bin/test` is **83/83** (four rumble-protocol tests plus
+  `theRumbleSwitchIsSeparateFromTheSound`) and the offscreen smoke is
+  clean.
+
+**What the user checked**: the rumble in the hand ("funciona perfecto...
+incluso hay diferencias de vibracion depende del powerup... me gusta")
+and both switches on screen. Not yet released — this round rides no
+tag; whether it becomes v0.2.3 is a later call.
+
+
+
 ### 21.20 The 0.2.2 release (Oct 21, shipped)
 
 The round closed the freeze and shipped it.

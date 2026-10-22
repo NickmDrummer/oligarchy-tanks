@@ -14,6 +14,7 @@
 
 #include "backend.h"
 #include "gamepad.h"
+#include "rumble.h"
 #include "soundboard.h"
 #include "theme.h"
 
@@ -80,6 +81,18 @@ int main(int argc, char *argv[]) {
 #if defined(Q_OS_LINUX) && !defined(Q_OS_WASM)
     Gamepad gamepad(&backend);
     gamepad.start();
+    // Rumble on DualSense pads (rumble.h). It listens to the same play
+    // events the sounds do, so no Backend change was needed. Two switches:
+    // M is sound only, V is rumble only (the user's felt preference), and
+    // OLIGARCHY_TANKS_RUMBLE=0 backs both up.
+    Rumble rumble;
+    const auto hush = [&rumble, &backend] {
+        rumble.setMuted(!backend.soundEnabled() || !backend.rumbleEnabled());
+    };
+    QObject::connect(&backend, &Backend::playSound, &rumble, &Rumble::play);
+    QObject::connect(&backend, &Backend::soundChanged, &rumble, hush);
+    QObject::connect(&backend, &Backend::rumbleChanged, &rumble, hush);
+    rumble.start();
 #endif
 
     QQmlApplicationEngine engine;

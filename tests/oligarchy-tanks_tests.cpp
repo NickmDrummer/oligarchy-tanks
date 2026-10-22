@@ -8,8 +8,11 @@
 
 #include "backend.h"
 #include "padmap.h"
+#include "rumble.h"
 #include "soundboard.h"
 #include "theme.h"
+
+#include <cstring>
 
 // Deterministic access to Backend internals so bonus behaviour and block
 // damage can be asserted without rigging the map at runtime.
@@ -1651,6 +1654,110 @@ private slots:
         QVERIFY(qAbs(board.gallopVolume() - 0.0) < 0.001);
         board.setMuted(false);
         QVERIFY(qAbs(board.putterVolume() - 0.40) < 0.001);
+    }
+
+    // ---- The rumble round (21.21) ----
+    //
+    // Everything here is byte-level: a DualSense rumble is a hidraw
+    // report, and building it wrong shows up on the pad, not in a test
+    // run. The protocol lives in rumble.h next to the player, so these
+    // run with no pad connected.
+
+    void theRumbleReportCarriesTheMotors() {
+        using namespace RumbleProtocol;
+        unsigned char buf[kReportSize];
+        std::memset(buf, 0xee, sizeof(buf));    // catch a half-written buffer
+        // Old firmware: the haptics select plus the compatible-vibration
+        // bit of flag0, the motors in their slots. motor_right is the
+        // small high-freq one (weak), motor_left the big one (strong).
+        buildReport(buf, kReportSize, false, 0x90, 0x40);
+        QCOMPARE(int(buf[0]), 0x02);
+        QCOMPARE(int(buf[kValidFlag0]), 0x03);
+        QCOMPARE(int(buf[kMotorRight]), 0x40);
+        QCOMPARE(int(buf[kMotorLeft]), 0x90);
+        QCOMPARE(int(buf[kValidFlag2]), 0);
+        for (int i = 5; i < kReportSize; ++i)
+            QCOMPARE(int(buf[i]), 0);
+        // New firmware (2.21+): the same motors, the enable bit moves for
+        // to flag2 as COMPATIBLE_VIBRATION2.
+        buildReport(buf, kReportSize, true, 0x90, 0x40);
+        QCOMPARE(int(buf[kValidFlag0]), 0x02);
+        QCOMPARE(int(buf[kMotorRight]), 0x40);
+        QCOMPARE(int(buf[kMotorLeft]), 0x90);
+        QCOMPARE(int(buf[kValidFlag2]), 0x04);
+        // A full-strength report, and the stop is the same report at zero.
+        buildReport(buf, kReportSize, true, 0, 0);
+        QCOMPARE(int(buf[kMotorRight]), 0);
+        QCOMPARE(int(buf[kMotorLeft]), 0);
+    }
+
+    void theRumbleFirmwareVersionChoosesTheMethod() {
+        using namespace RumbleProtocol;
+        // Bytes 44-45 of feature report 0x20 are the update version,
+        // little endian: the kernel turns v2 on from 2.21. The bench pad
+        // reports 6.48, which is v2 — it was felt working (round 21.21).
+        const unsigned char empty[64] = {};
+        unsigned char pad[64] = {};
+        pad[44] = 0x30; pad[45] = 0x06;
+        QCOMPARE(featureVersion(pad, 64), (6 << 8) | 48);
+        QVERIFY(usesV2(featureVersion(pad, 64)));
+        QVERIFY(!usesV2(featureVersion(empty, 0)));     // unknown is never v2
+        // A firmware just under 2.21, and an all-zero buffer: old method.
+        unsigned char old[64] = {};
+        old[44] = 0x00; old[45] = 0x02;                 // 2.00
+        QVERIFY(!usesV2(featureVersion(old, 64)));
+        QCOMPARE(featureVersion(nullptr, 0), 0);
+        QVERIFY(!usesV2(0));
+    }
+
+    void theRumbleCoversTheEventsThePadShouldFeel() {
+        // Every sound the pad should answer has a pattern; a menu step
+        // and the enemy's own fire do not (the pad would never rest).
+        QCOMPARE(int(rumbleFor("shoot").ms), 60);
+        QVERIFY(rumbleFor("explode").strong > rumbleFor("shoot").strong);
+        QVERIFY(rumbleFor("nuke").strong > rumbleFor("explode").strong);
+        QVERIFY(rumbleFor("nuke").ms > rumbleFor("explode").ms);
+        QCOMPARE(rumbleFor("levelup").strong > 0, true);
+        QCOMPARE(int(rumbleFor("menu").ms), 0);
+        QCOMPARE(int(rumbleFor(QString()).ms), 0);
+        QCOMPARE(int(rumbleFor("eshoot").ms), 0);
+    }
+
+    void theRumblePlayerIsQmlCallableWithoutAPad() {
+        // The same lesson as the sound board: a plain method from QML is
+        // a silent TypeError. These two must exist as invokables (the
+        // annotations are what the Q_OBJECT metatable reads).
+        Rumble rumble;
+        rumble.play("explode");     // no pad here: a no-op, never a crash
+        rumble.setMuted(true);
+        rumble.play("nuke");
+        rumble.setMuted(false);
+    }
+
+    // The two switches are separate (the user's call): M is sound, V is
+    // rumble, and one must never drag the other along.
+    void theRumbleSwitchIsSeparateFromTheSound() {
+        Backend game;
+        QCOMPARE(game.soundEnabled(), true);
+        QCOMPARE(game.rumbleEnabled(), true);
+        QSignalSpy rumble(&game, &Backend::rumbleChanged);
+        QSignalSpy sound(&game, &Backend::soundChanged);
+        // Toggle the vibration: the sound does not move.
+        game.toggleRumble();
+        QCOMPARE(game.rumbleEnabled(), false);
+        QCOMPARE(game.soundEnabled(), true);
+        QCOMPARE(rumble.count(), 1);
+        QCOMPARE(sound.count(), 0);
+        // Muting only the sound leaves the rumble on.
+        game.setSoundEnabled(false);
+        QCOMPARE(game.soundEnabled(), false);
+        QCOMPARE(game.rumbleEnabled(), false);
+        QCOMPARE(sound.count(), 1);
+        QCOMPARE(rumble.count(), 1);
+        // A set that changes nothing notifies nothing.
+        QSignalSpy none(&game, &Backend::rumbleChanged);
+        game.setRumbleEnabled(false);
+        QCOMPARE(none.count(), 0);
     }
 
     // ---- The freeze round (21.15) ----

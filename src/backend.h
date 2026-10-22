@@ -48,6 +48,9 @@ class Backend : public QObject {
     // strike spot, 1 s after the sound starts. {x, y, progress, active}.
     Q_PROPERTY(QVariantMap airSupportImpact READ airSupportImpact NOTIFY frameChanged)
     Q_PROPERTY(bool soundEnabled READ soundEnabled WRITE setSoundEnabled NOTIFY soundChanged)
+    // Vibration is its own switch (the user's call: sound and rumble are
+    // separate things). V toggles it; the footer keeps an icon for each.
+    Q_PROPERTY(bool rumbleEnabled READ rumbleEnabled WRITE setRumbleEnabled NOTIFY rumbleChanged)
     // Connected pads and the player each one drives (-1 until it joins).
     Q_PROPERTY(QVariantList pads READ pads NOTIFY padsChanged)
     // How many tanks are in the game, picked on the select screen: 1 or 2.
@@ -109,6 +112,9 @@ public:
     Q_INVOKABLE QVariantMap pickupAt(int tick) const;
     bool soundEnabled() const { return m_soundEnabled; }
     void setSoundEnabled(bool v);
+    bool rumbleEnabled() const { return m_rumbleEnabled; }
+    void setRumbleEnabled(bool v);
+    Q_INVOKABLE void toggleRumble();
 
     // Movement flags from held keys. dx/dy is -1/0/1, pressed tracks key state.
     Q_INVOKABLE void setP1Move(int dx, int dy, bool pressed);
@@ -152,6 +158,7 @@ signals:
     void boardChanged();
     void soundChanged();
     void playSound(const QString &name);
+    void rumbleChanged();
     // A pad asked for the manual (SELECT / Share).
     void menuRequested();
     void padsChanged();
@@ -404,6 +411,7 @@ private:
     int m_spawned = 0;
     double m_spawnTimer = 0;
     bool m_soundEnabled = true;
+    bool m_rumbleEnabled = true;
     // Debug: OLIGARCHY_TANKS_TIER=N starts the player at that tier (air support testing).
     int m_debugTier = -1;
     QTimer m_timer;

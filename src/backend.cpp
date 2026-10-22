@@ -223,6 +223,17 @@ void Backend::setSoundEnabled(bool v) {
     emit soundChanged();
 }
 
+void Backend::setRumbleEnabled(bool v) {
+    if (v == m_rumbleEnabled)
+        return;
+    m_rumbleEnabled = v;
+    emit rumbleChanged();
+}
+
+void Backend::toggleRumble() {
+    setRumbleEnabled(!m_rumbleEnabled);
+}
+
 void Backend::setP1Move(int dx, int dy, bool pressed) {
     // QML forwards every key blindly: before the mode is picked those same keys
     // drive the select screen, which is why menuMove() is reachable from here.
