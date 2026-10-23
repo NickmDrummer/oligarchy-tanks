@@ -2590,7 +2590,7 @@ the sink does not work on this machine (the dongle has no
 `hwC3D0` device, and the pipewire monitor records silence even for
 `paplay`). **For the volume, the user's ears are the check.**
 
-### 21.25 The endings round (Oct 22, pending the user's screen check)
+### 21.25 The endings round (Oct 22-23, shipped in 0.2.3)
 
 The game over and the victory now land like arcade screens: the run
 decided, a beat of board left standing, then the takeover with its
@@ -2709,6 +2709,43 @@ jingles and a score that counts up.
 
 **What the user checked**: the C++ round landed; the screens and the
 jingles await the user's ears and eyes (commit after that).
+
+### 21.27 The 0.2.3 release (Oct 23, shipped)
+
+The endings round, the stage music and the HUD fix ship together.
+
+- **Commits**: `714bf0b` (the cue wavs and the in-repo generator),
+  `7d60db3` (the scheduled endings, final score and the uiSound door),
+  `75e96c3` (jingle levels and the rumble patterns), `5f12264` (the
+  ending screens and the count-up), `3a4f623` (their docs), `ba497de`
+  (the stage loop), `97c460e` (the loop wired, after the overture, with
+  the 3.8 s gap), `f4e2b69` (its docs), `1aa1ff2` (the tally gate),
+  `321339c` (the loop at 0.6), `59f0b3c` (their docs), `7ce2e69` (the
+  HUD: stacked LV, five lives inside the panel), plus this release
+  commit (version, README, docs).
+- **Tag `v0.2.3`** and the GitHub release
+  (https://github.com/NickmDrummer/oligarchy-tanks/releases/tag/v0.2.3),
+  notes in English per the project rule.
+- **The recipes** follow the v0.2.3 tag in `pkgbuild/PKGBUILD` and
+  `aur/PKGBUILD`, the AUR one with the tarball's sha256.
+- **The README** gained what the release needed: the ending behaviour
+  (GAME OVER total; SECTOR N CLEAR, count, then NEXT SECTOR), the `V`
+  row in the controls table, the exact macOS (Homebrew) and Windows
+  (Qt installer and MSYS2) dependency commands with `macdeployqt` /
+  `windeployqt`, and the platform limits — the pad reader and the
+  rumble are Linux-only, so Mac and Windows play on the shared keyboard.
+- `bin/test` is **91/91** and the release build's offscreen smoke is
+  clean.
+
+**What the user checked**: the endings in play (game over jingle at 40%
+less, victory jingle then the count, START blocked until the tally), the
+stage overture and the loop after it, the loop at 0.6, and the HUD with
+five lives.
+
+**Still open**: gamepad support on macOS and Windows (SDL2 is the
+candidate path: the PadMapper is already platform-free), the AUR push
+(the registration is closed), and the omarchy-pkgs PR #1348, which
+still points at 0.2.2.
 
 ### 21.24 The blanks-while-playing cursor round (Oct 22, user-built)
 

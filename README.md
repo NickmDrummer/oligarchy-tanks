@@ -3,7 +3,8 @@
 Retro local tank battle vs AI, in the style of classic Battle City on Sega.
 
 Defend the star base alone or with a friend. 16 enemies per sector, random map
-every game.
+every game. Every sector opens with a short overture and plays to its own
+loop — `M` silences all of it.
 
 <p align="center">
   <img src="docs/screenshots/gameplay1.png" alt="A run in the first stage" width="100%">
@@ -49,12 +50,17 @@ Each mode shows its own keys under its name, drawn as key caps: player 1 on
 in, a row of pad pictures appears below them (`L2` / `R2` / `X` to fire).
 
 In a **one-player game there is a single tank**: when it runs out of lives the
-run is over. Either way the run ends on a **`GAME OVER`** screen with the score
-(`BASE DESTROYED` if the base was lost), and `START`, `Space` or `Enter` carries
-on to the select screen with the last mode still highlighted.
+run is over. A defeat ends on a **`GAME OVER`** screen with the run's total, and
+`START`, `Space` or `Enter` carries on to the select screen with the last mode
+still highlighted.
 
-`R` during a game also returns to the select screen; on `victory` it goes
-straight to the next sector.
+Clear a sector and the screen reads **`SECTOR N CLEAR`**, then counts the score
+up from zero with its own blips. Only when the count is spent does
+**`NEXT SECTOR`** appear, on `START` or `R`: the game waits for the tally, so a
+stray press cannot skip it. A victory with nothing to count shows the total at
+once.
+
+`R` during a game also returns to the select screen.
 
 ## Controls
 
@@ -65,8 +71,9 @@ straight to the next sector.
 | P2 Arrow keys | Move player 2 |
 | `Enter` | Fire player 2 |
 | `P` | Pause / resume |
-| `R` | Back to the select screen (next sector on `victory`) |
+| `R` | Back to the select screen (next sector on `victory`, after the count) |
 | `M` | Sound on / off |
+| `V` | Pad vibration on / off |
 | `?` | Help overlay |
 | `Q` | Quit |
 
@@ -137,13 +144,53 @@ The game is a plain Qt 6 app: everything it needs (fonts, sounds, the engine)
 ships inside the binary, and the desktop theme has a hard-coded fallback, so it
 runs wherever Qt 6 runs:
 
-- **Windows / macOS**: build with `qmake6 oligarchy-tanks.pro && make` (plus
-  `windeployqt` / `macdeployqt` to bundle the Qt libraries), then run
-  `build/oligarchy-tanks`. Both players share one keyboard (`W A S D` +
-  `Space`, arrows + `Enter`) — the intended 2-player setup.
-- The **gamepad reader is Linux only** (it reads `/dev/input` directly), so
-  outside Linux pads are not supported; the game falls back to the keyboard
-  with no other change.
+### macOS
+
+```sh
+brew install qt
+# Homebrew keeps Qt keg-only, so qmake is not on the PATH by default.
+export PATH="$(brew --prefix qt)/bin:$PATH"
+qmake oligarchy-tanks.pro
+make -j"$(sysctl -n hw.ncpu)"
+macdeployqt oligarchy-tanks.app   # bundles Qt inside the app
+```
+
+The Homebrew `qt` formula ships everything the game needs: Qt Quick, Quick
+Controls 2 and Qt Multimedia. The app lands in `build/`; run it with
+`open build/oligarchy-tanks.app` or copy it to `/Applications`.
+
+### Windows
+
+**Qt Online Installer** (MSVC or MinGW, 64-bit): install *Qt 6.x → Desktop*,
+which brings Qt Quick, Quick Controls 2 and Qt Multimedia. Then, from the
+**Qt 6.x.x (MinGW)** or **x64 Native Tools** prompt:
+
+```bat
+qmake oligarchy-tanks.pro
+mingw32-make -j%NUMBER_OF_PROCESSORS%      rem nmake with MSVC
+windeployqt build\oligarchy-tanks.exe
+```
+
+**MSYS2** is the lighter route, from its UCRT64 shell:
+
+```sh
+pacman -S mingw-w64-ucrt-x86_64-qt6-base mingw-w64-ucrt-x86_64-qt6-declarative \
+          mingw-w64-ucrt-x86_64-qt6-multimedia mingw-w64-ucrt-x86_64-tools
+qmake6 oligarchy-tanks.pro
+make -j"$(nproc)"
+windeployqt build/oligarchy-tanks.exe
+```
+
+`windeployqt` is not optional: it copies the Qt libraries, the QML modules and
+the platform plugin next to the executable, which is what lets it run outside
+the build shell.
+
+### Platform limits
+
+- The **gamepad reader is Linux only**: it reads `/dev/input` directly, and so
+  does the rumble (hidraw). On macOS and Windows the game runs on the keyboard
+  with no other change — two players share it (`W A S D` + `Space`, arrows +
+  `Enter`), which is the intended setup anyway.
 - There is no WebAssembly build (Qt multimedia and pad input do not fit it).
 
 ## Development

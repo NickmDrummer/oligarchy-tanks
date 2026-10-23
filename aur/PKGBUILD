@@ -2,7 +2,7 @@
 # Co-Maintainer: none
 
 pkgname=oligarchy-tanks
-pkgver=0.2.2
+pkgver=0.2.3
 pkgrel=1
 pkgdesc='Retro 2-player local tank battle vs AI (Battle City style, Qt 6)'
 arch=('x86_64' 'aarch64')
