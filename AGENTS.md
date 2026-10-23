@@ -2710,6 +2710,45 @@ jingles and a score that counts up.
 **What the user checked**: the C++ round landed; the screens and the
 jingles await the user's ears and eyes (commit after that).
 
+### 21.28 The cross-platform pad round (Oct 23, pending the user's pad check)
+
+The pad reader was evdev-only, so macOS and Windows played on the keyboard.
+
+- **SDL2 is the reader** (`src/padsdl.{h,cpp}`) on macOS, Windows and —
+  when installed — Linux. It has the same shape as the evdev `Gamepad`:
+  it builds a `PadState` and hands it to the already-tested `PadMapper`,
+  so the meaning of every control is shared. Buttons are read by position
+  (`SDL_CONTROLLER_BUTTON_X` is the west face button, Square on a
+  PlayStation pad), sticks −1..1, triggers 0..1, hotplug through
+  `SDL_CONTROLLERDEVICEADDED/REMOVED`, and `mapper.release()` on unplug so
+  no direction stays stuck. Polled at 16 ms from the GUI thread, which is
+  where SDL_Init and the handles live.
+- **The evdev reader stays** as the Linux fallback: `CONFIG+=nosdl` forces
+  it, and a Linux box without SDL2 builds exactly as before. `CONFIG+=sdlpad`
+  forces `-lSDL2` for the Qt Installer route on Windows, where there is no
+  pkg-config to detect it.
+- **The build scripts stopped assuming GNU** (`bin/build`, `bin/test`):
+  `nproc` does not exist on macOS (it now falls back to
+  `sysctl -n hw.ncpu`, then to 1) and Qt from Homebrew may only answer to
+  `qmake`, so the scripts resolve `qmake6` → `qmake`. Without this a tester
+  on a Mac could not follow the README's own `./bin/build`.
+- **`TESTING.md`** is the guide for the two testers: step by step from
+  installing Homebrew or MSYS2 to the checklist and how to report, written
+  for someone who has never opened a terminal. It is linked from the
+  `v0.2.4-rc1` pre-release.
+- **A trap worth remembering**: SDL_Init installs SIGINT/SIGTERM handlers
+  of its own and turns them into SDL_QUIT events. With nothing handling
+  those, the process ignored Ctrl+C and `timeout` (a headless run hung).
+  `SDL_HINT_NO_SIGNAL_HANDLERS` is now set before the init; Qt owns the
+  event loop.
+- **Untested hardware**: the round was built and exercised on Linux with a
+  DualSense (SDL2 via sdl2-compat, index 0, hotplug path in place). The
+  macOS bundle (`macdeployqt -libpath`, Input Monitoring permission), the
+  Windows DLL copy and the MSYS2/MSVC routes are documented in the README
+  but have not run on those machines.
+- **Rumble stays Linux-only** (hidraw): SDL `SDL_GameControllerRumble` is
+  the natural follow-up, not part of this round.
+
 ### 21.27 The 0.2.3 release (Oct 23, shipped)
 
 The endings round, the stage music and the HUD fix ship together.
