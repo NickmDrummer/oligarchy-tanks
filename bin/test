@@ -2,11 +2,33 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+# Parallel build jobs, without assuming GNU coreutils: macOS has no nproc,
+# and this script is the one the README tells every platform to run.
+if command -v nproc >/dev/null 2>&1; then
+  JOBS="$(nproc)"
+elif command -v sysctl >/dev/null 2>&1; then
+  JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 1)"
+else
+  JOBS=1
+fi
+
+# Qt 6 installs both names; Homebrew keeps qmake on a keg-only PATH, and some
+# packages ship only qmake6.
+if command -v qmake6 >/dev/null 2>&1; then
+  QMAKE=qmake6
+elif command -v qmake >/dev/null 2>&1; then
+  QMAKE=qmake
+else
+  echo "Neither qmake6 nor qmake is on the PATH." >&2
+  exit 1
+fi
+
 mkdir -p "$ROOT/build/tests"
 cd "$ROOT/build/tests"
 
-qmake6 "$ROOT/tests/oligarchy-tanks_tests.pro"
-make -j"$(nproc)"
+"$QMAKE" "$ROOT/tests/oligarchy-tanks_tests.pro"
+make -j"$JOBS"
 
 # Same stale-binary guard as bin/build: rebuild once from clean if needed.
 if [ -n "$(find "$ROOT/src" "$ROOT/tests" -newer "$ROOT/build/tests/oligarchy-tanks_tests" 2>/dev/null)" ]; then
@@ -14,8 +36,8 @@ if [ -n "$(find "$ROOT/src" "$ROOT/tests" -newer "$ROOT/build/tests/oligarchy-ta
   rm -rf "$ROOT/build/tests"
   mkdir -p "$ROOT/build/tests"
   cd "$ROOT/build/tests"
-  qmake6 "$ROOT/tests/oligarchy-tanks_tests.pro"
-  make -j"$(nproc)"
+  "$QMAKE" "$ROOT/tests/oligarchy-tanks_tests.pro"
+  make -j"$JOBS"
 fi
 
 # Fixed map seed so the quarter-chipping test is deterministic.

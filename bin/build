@@ -3,6 +3,28 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 BUILD="$ROOT/build"
+
+# Parallel build jobs, without assuming GNU coreutils: macOS has no nproc,
+# and this script is the one the README tells every platform to run.
+if command -v nproc >/dev/null 2>&1; then
+  JOBS="$(nproc)"
+elif command -v sysctl >/dev/null 2>&1; then
+  JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 1)"
+else
+  JOBS=1
+fi
+
+# Qt 6 installs both names; Homebrew keeps qmake on a keg-only PATH, and some
+# packages ship only qmake6.
+if command -v qmake6 >/dev/null 2>&1; then
+  QMAKE=qmake6
+elif command -v qmake >/dev/null 2>&1; then
+  QMAKE=qmake
+else
+  echo "Neither qmake6 nor qmake is on the PATH." >&2
+  exit 1
+fi
+
 mkdir -p "$BUILD"
 cd "$BUILD"
 
@@ -28,8 +50,8 @@ if [ "$PREVIOUS" != "$ARGS" ]; then
   printf '%s' "$ARGS" > "$STAMP"
 fi
 
-qmake6 "$ROOT/oligarchy-tanks.pro" "$@"
-make -j"$(nproc)"
+"$QMAKE" "$ROOT/oligarchy-tanks.pro" "$@"
+make -j"$JOBS"
 
 # make can miss a change and leave a stale binary behind. If any input is
 # still newer than the binary, wipe and rebuild once from clean.
@@ -39,8 +61,8 @@ if [ -n "$(find "$ROOT/src" "$ROOT/oligarchy-tanks.pro" -newer "$ROOT/build/olig
   mkdir -p "$BUILD"
   cd "$BUILD"
   printf '%s' "$ARGS" > "$STAMP"
-  qmake6 "$ROOT/oligarchy-tanks.pro" "$@"
-  make -j"$(nproc)"
+  "$QMAKE" "$ROOT/oligarchy-tanks.pro" "$@"
+  make -j"$JOBS"
 fi
 
 echo "Built $ROOT/build/oligarchy-tanks"
