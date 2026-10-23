@@ -20,6 +20,11 @@ class Backend : public QObject {
     // The score the run added up when it ended, for the count-up on the
     // victory screen.
     Q_PROPERTY(int finalScore READ finalScore NOTIFY stateChanged)
+    // The victory tally (21.26): the view counts the total up and reports
+    // when it is spent. Until then START (pad, key or mouse) must not move
+    // on to the next sector, and the prompt stays hidden.
+    Q_PROPERTY(bool tallyDone READ tallyDone WRITE setTallyDone
+               NOTIFY tallyDoneChanged)
     // Board state has its own notification: tile queries must only re-run
     // when the map really changes. Wired to frameChanged they re-evaluated
     // 60 times a second, and reading a QString property that often is what
@@ -74,6 +79,8 @@ public:
     QString message() const { return m_message; }
     QString ending() const { return m_ending; }
     int finalScore() const { return m_finalScore; }
+    bool tallyDone() const { return m_tallyDone; }
+    void setTallyDone(bool done);
     bool endPending() const { return m_endPending; }
     QString board() const;
     int boardRev() const { return m_boardRev; }
@@ -175,6 +182,7 @@ signals:
     // between those two ticks (the engine keeps purring over the
     // frozen board otherwise — the user's round).
     void endPendingChanged();
+    void tallyDoneChanged();
     void rumbleChanged();
     // A pad asked for the manual (SELECT / Share).
     void menuRequested();
@@ -393,6 +401,7 @@ private:
     QString m_message;
     QString m_ending;
     int m_finalScore = 0;
+    bool m_tallyDone = true;
     // The scheduled end: checkEnd() does not flip the state right away —
     // the last explosion wins its beat on the board first (see tick()).
     bool m_endPending = false;

@@ -1620,6 +1620,9 @@ ApplicationWindow {
                                 // would never count).
                                 if (value >= backend.finalScore) {
                                     endingScreen.countUpArmed = false
+                                    // The tally is spent: only now may START
+                                    // move on (backend.nextLevel guards it).
+                                    backend.tallyDone = true
                                     return
                                 }
                                 const tone = 1 + Math.min(3,
@@ -1635,11 +1638,6 @@ ApplicationWindow {
                             repeat: false
                             onTriggered: endingScreen.countUpArmed = true
                         }
-                        // The tally read once spent, for the publish gate of
-                        // the next-sector button.
-                        property bool tallyDone: backend.state === "gameover"
-                                || !countUp.running || countUp.value >= backend.finalScore
-
                         Item {
                             id: endingWrap
                             anchors.centerIn: parent
@@ -1693,7 +1691,10 @@ ApplicationWindow {
                                     text: backend.state === "victory"
                                           ? (backend.pads.length > 0 ? ">> NEXT SECTOR (START) <<" : ">> NEXT SECTOR (R) <<")
                                           : ">> CONTINUE <<"
-                                    opacity: endingScreen.tallyDone ? 1 : 0
+                                    // The backend owns the gate: hidden through
+                                    // the jingle and the count, out when the
+                                    // tally is spent (the user's round).
+                                    opacity: backend.tallyDone ? 1 : 0
                                     onClicked: {
                                         if (backend.state === "victory")
                                             backend.nextLevel()

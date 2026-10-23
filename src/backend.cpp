@@ -556,6 +556,10 @@ void Backend::startGame() {
 }
 
 void Backend::nextLevel() {
+    // The tally owns the victory screen: no START, key or click moves on
+    // until the view says the count is spent (21.26).
+    if (m_state == QStringLiteral("victory") && !m_tallyDone)
+        return;
     ++m_level;
     m_freezeUntil = -1;
     // The new sector opens with its overture: a longer jingle that says
@@ -617,6 +621,13 @@ void Backend::menuChoose(int mode) {
 
 // A sound straight from the view layer: the count-up ticks on the
 // victory screen, the select screen's steps when the pad drives them.
+void Backend::setTallyDone(bool done) {
+    if (done == m_tallyDone)
+        return;
+    m_tallyDone = done;
+    emit tallyDoneChanged();
+}
+
 void Backend::uiSound(const QString &name) {
     emit playSound(name);
 }
@@ -1963,6 +1974,9 @@ void Backend::finishEnd() {
     m_endPending = false;
     emit endPendingChanged();
     setState(m_endState, m_endMessage);
+    // A victory with something to count stays shut until the view finishes
+    // the tally; every other ending is out at once.
+    setTallyDone(!(m_endState == QStringLiteral("victory") && m_finalScore > 0));
     if (m_endState == "victory")
         emit playSound("victory");
     else

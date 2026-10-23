@@ -1056,6 +1056,47 @@ private slots:
         QCOMPARE(b.finalScore(), 670);
     }
 
+    // The tally owns the victory screen (21.26): the prompt and the way out
+    // stay shut until the view reports the count spent, and a victory worth
+    // nothing charges no waiting.
+    void theVictoryWaitsForTheTallyBeforeMovingOn() {
+        Backend b;
+        b.menuChoose(1);
+        b.padConnected(0, "Pad");
+        TanksTestAccess::setPlayerScore(b, 0, 350);
+        TanksTestAccess::clearAllEnemies(b);
+        TanksTestAccess::setSpawned(b, TanksTestAccess::enemiesPerStage(b));
+        TanksTestAccess::endCheck(b);
+        TanksTestAccess::landEnd(b);
+        QCOMPARE(b.state(), QString("victory"));
+        QCOMPARE(b.tallyDone(), false);
+        const int level = b.level();
+        // START before the count: nothing moves, and the prompt stays down.
+        b.padStart(0);
+        QCOMPARE(b.state(), QString("victory"));
+        QCOMPARE(b.level(), level);
+        b.nextLevel();              // the mouse path is the same gate
+        QCOMPARE(b.state(), QString("victory"));
+        QCOMPARE(b.level(), level);
+        // The view finishes the count: now it moves on.
+        b.setTallyDone(true);
+        b.padStart(0);
+        QCOMPARE(b.state(), QString("playing"));
+        QCOMPARE(b.level(), level + 1);
+    }
+
+    void theZeroScoreVictoryNeedsNoWait() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::clearAllEnemies(b);
+        TanksTestAccess::setSpawned(b, TanksTestAccess::enemiesPerStage(b));
+        TanksTestAccess::endCheck(b);
+        TanksTestAccess::landEnd(b);
+        QCOMPARE(b.state(), QString("victory"));
+        QCOMPARE(b.finalScore(), 0);
+        QCOMPARE(b.tallyDone(), true);
+    }
+
     // The game over lands the same way: still playing first, jingle on.
     void theGameOverLandsWithItsJingleToo() {
         Backend b;
@@ -1774,9 +1815,9 @@ private slots:
     void theStageMusicOnlyRunsWhileASectorIsPlayed() {
         SoundBoard board;
         board.setMusic(true);
-        QVERIFY(qAbs(board.musicVolume() - 0.4) < 0.001);
-        // The user's final ear: level with the motor's putter (0.40).
-        QVERIFY(board.musicVolume() <= 0.40 + 0.001);
+        QVERIFY(qAbs(board.musicVolume() - 0.5) < 0.001);
+        // The user's final ear: over the motor's putter (0.40).
+        QVERIFY(board.musicVolume() > 0.40);
         // The end beat, the pause and the menus all report "off".
         board.setMusic(false);
         QVERIFY(qAbs(board.musicVolume() - 0.0) < 0.001);
@@ -1785,7 +1826,7 @@ private slots:
         board.setMuted(true);
         QVERIFY(qAbs(board.musicVolume() - 0.0) < 0.001);
         board.setMuted(false);
-        QVERIFY(qAbs(board.musicVolume() - 0.4) < 0.001);
+        QVERIFY(qAbs(board.musicVolume() - 0.5) < 0.001);
     }
 
     // ---- The rumble round (21.21) ----
