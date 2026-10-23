@@ -152,8 +152,11 @@ ApplicationWindow {
             var anyAlive = (backend.players.length > 0 && backend.players[0].alive)
                            || (backend.players.length > 1 && backend.players[1].alive)
             var playing = backend.state === "playing" && anyAlive
-            var moving = playing && ((backend.players.length > 0 && backend.players[0].moving) || (backend.players.length > 1 && backend.players[1].moving))
-            sounds.setEngine(playing, moving)
+            // The scheduled end freezes the board for its last beat: the
+            // motor hushes with everything else (the user's round).
+            var endPending = backend.endPending
+            var moving = playing && !endPending && ((backend.players.length > 0 && backend.players[0].moving) || (backend.players.length > 1 && backend.players[1].moving))
+            sounds.setEngine(playing && !endPending, moving)
         }
     }
 
@@ -1556,13 +1559,183 @@ ApplicationWindow {
                 // straight picture is not replaced.
 
 
-                // State overlay: pixel panel, no Material.
+                // State overlay: the arcade display dims under the paused
+                // screens. Select and pause keep the pixel panel; the
+                // endings take the whole display with a giant centred
+                // word (the user's round, 21.25).
                 Rectangle {
                     anchors.fill: parent
                     visible: backend.state !== "playing"
-                    color: "#d8050507"
+                    color: backend.state === "gameover" || backend.state === "victory"
+                            ? "#e8050507" : "#d8050507"
                     z: 20
+
+                    // ---- the endings ----
+                    Item {
+                        id: endingScreen
+                        anchors.fill: parent
+                        visible: backend.state === "gameover" || backend.state === "victory"
+                        // The count-up only starts after the victory jingle
+                        // has had its moment — otherwise the two sounds
+                        // step on each other (the user's round).
+                        property bool countUpArmed: false
+
+                        // The count-up: the run total climbs from zero with
+                        // the arcade blip rising in tone, one clean blip
+                        // every stride — each stops the moment the total is
+                        // read out (the tick never purrs on).
+                        Timer {
+                            id: countUp
+                            interval: 80
+                            repeat: true
+                            running: backend.state === "victory" && backend.finalScore > 0 && endingScreen.countUpArmed
+                            property int value: 0
+                            // Reset the tally only when the count-up
+                            // starts, never when it stops: the state
+                            // flips to "playing" between sectors and
+                            // would otherwise read back SCORE 0
+                            // (the user's round).
+                            onRunningChanged: if (running) value = 0
+                            onTriggered: {
+                                value = Math.min(backend.finalScore,
+                                        value + Math.max(1, Math.ceil(backend.finalScore / 20)))
+                                // Reaching the total disarms the timer: the
+                                // binding stops it (calling stop() would
+                                // break that binding and the next victory
+                                // would never count).
+                                if (value >= backend.finalScore) {
+                                    endingScreen.countUpArmed = false
+                                    return
+                                }
+                                const tone = 1 + Math.min(3,
+                                        Math.floor(4 * value / Math.max(1, backend.finalScore)))
+                                backend.uiSound("score-tick-" + tone)
+                            }
+                        }
+                        // The delay before the count-up starts: lets the
+                        // victory jingle play on its own first.
+                        Timer {
+                            id: countUpDelay
+                            interval: 1550   // the victory jingle is 1.4 s
+                            repeat: false
+                            onTriggered: endingScreen.countUpArmed = true
+                        }
+                        // The tally read once spent, for the publish gate of
+                        // the next-sector button.
+                        property bool tallyDone: backend.state === "gameover"
+                                || !countUp.running || countUp.value >= backend.finalScore
+
+                        Item {
+                            id: endingWrap
+                            anchors.centerIn: parent
+                            width: endingCol.implicitWidth
+                            height: endingCol.implicitHeight
+                            transform: Translate { id: endingShake }
+                            Column {
+                                id: endingCol
+                                spacing: 20
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: backend.state === "gameover" ? "GAME OVER"
+                                          : "SECTOR " + backend.level + " CLEAR"
+                                    font.bold: true
+                                    font.pixelSize: backend.state === "gameover" ? 64 : 44
+                                    font.letterSpacing: 4
+                                    color: backend.state === "gameover" ? "#e0403c" : theme.accent
+                                    style: Text.Outline
+                                    styleColor: "black"
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    // Defeat shows the total at once; victory
+                                    // counts it up (the whole point).
+                                    text: backend.state === "gameover"
+                                          ? "SCORE " + backend.finalScore
+                                          : "SCORE " + countUp.value
+                                    font.bold: true
+                                    font.pixelSize: backend.state === "gameover" ? 26 : 40
+                                    font.letterSpacing: 2
+                                    color: "#f2f4f8"
+                                }
+                                // Game over: one way out, and it is the arcade one.
+                                Row {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    visible: backend.state === "gameover"
+                                    spacing: 8
+                                    KeyCap { unit: 26; label: "START"; face: theme.accent }
+                                    KeyCap { unit: 26; label: "SPACE"; face: theme.accent }
+                                    KeyCap { unit: 26; label: "ENTER"; face: theme.accent }
+                                    SequentialAnimation on opacity {
+                                        loops: Animation.Infinite
+                                        NumberAnimation { to: 0.25; duration: 550 }
+                                        NumberAnimation { to: 1.0; duration: 550 }
+                                    }
+                                }
+                                // The mouse needs a way out of the ending.
+                                PixelButton {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    accent: backend.state === "gameover" ? "#e0403c" : theme.accent
+                                    text: backend.state === "victory"
+                                          ? (backend.pads.length > 0 ? ">> NEXT SECTOR (START) <<" : ">> NEXT SECTOR (R) <<")
+                                          : ">> CONTINUE <<"
+                                    opacity: endingScreen.tallyDone ? 1 : 0
+                                    onClicked: {
+                                        if (backend.state === "victory")
+                                            backend.nextLevel()
+                                        else
+                                            backend.toSelect()
+                                        keys.forceActiveFocus()
+                                    }
+                                }
+                            }
+                        }
+
+                        // The slam: the word lands big and shrinks to size;
+                        // the game over shakes under it, the victory does not.
+                        SequentialAnimation {
+                            id: endingSlam
+                            NumberAnimation { target: endingWrap; property: "scale"; from: 1.3; to: 1.0; duration: 150; easing.type: Easing.InQuad }
+                        }
+                        SequentialAnimation {
+                            id: endingShakeAnim
+                            PauseAnimation { duration: 150 }
+                            NumberAnimation { target: endingShake; property: "x"; to: 7; duration: 45; easing.type: Easing.OutQuad }
+                            NumberAnimation { target: endingShake; property: "x"; to: -7; duration: 70; easing.type: Easing.OutQuad }
+                            NumberAnimation { target: endingShake; property: "x"; to: 4; duration: 50; easing.type: Easing.OutQuad }
+                            NumberAnimation { target: endingShake; property: "x"; to: -2; duration: 40; easing.type: Easing.OutQuad }
+                            NumberAnimation { target: endingShake; property: "x"; to: 0; duration: 40; easing.type: Easing.OutQuad }
+                        }
+                        onVisibleChanged: {
+                            if (!visible)
+                                return
+                            endingWrap.scale = 1.3
+                            endingSlam.restart()
+                            if (backend.state === "gameover")
+                                endingShakeAnim.restart()
+                        }
+                        // Drop the arm when the ending screen is left: the
+                        // count-up must not pre-load for the next victory.
+                        Connections {
+                            target: backend
+                            function onStateChanged() {
+                                countUp.value = 0
+                                // A victory worth nothing does not count: no
+                                // jingle delay, no ticks, the total reads 0
+                                // and the button is out at once.
+                                if (backend.state !== "victory"
+                                        || backend.finalScore <= 0) {
+                                    endingScreen.countUpArmed = false
+                                    countUpDelay.stop()
+                                    return
+                                }
+                                countUpDelay.restart()
+                            }
+                        }
+                    }
+
+                    // ---- the pixel panel: select and pause ----
                     Rectangle {
+                        visible: backend.state === "select" || backend.state === "paused"
                         anchors.centerIn: parent
                         width: panelCol.implicitWidth + 56
                         height: panelCol.implicitHeight + 44
@@ -1583,9 +1756,7 @@ ApplicationWindow {
                             spacing: backend.state === "select" ? 22 : 12
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: backend.state === "select" ? "OLIGARCHY TANKS"
-                                      : backend.state === "gameover" ? (backend.ending === "base" ? "BASE DESTROYED" : "GAME OVER")
-                                      : backend.state === "paused" ? "PAUSED" : "VICTORY"
+                                text: backend.state === "select" ? "OLIGARCHY TANKS" : "PAUSED"
                                 font.bold: true
                                 // The long name takes a smaller face than the
                                 // short state words, so the panel never fights
@@ -1602,16 +1773,6 @@ ApplicationWindow {
                                 text: "1 OR 2 PLAYERS - CO-OP VS AI - DEFEND THE BASE"
                                 font.bold: true
                                 font.pixelSize: 14; font.letterSpacing: 1
-                                color: "#f2f4f8"
-                            }
-                            // What the run was worth, on the game over screen.
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                visible: backend.message.length > 0
-                                text: backend.message.toUpperCase()
-                                font.bold: true
-                                font.pixelSize: backend.state === "gameover" ? 22 : 14
-                                font.letterSpacing: 2
                                 color: "#f2f4f8"
                             }
                             // Mode select, the arcade 1 PLAYER / 2 PLAYERS
@@ -1721,34 +1882,14 @@ ApplicationWindow {
                                 PadIcon { kind: "trigger"; label: "R2"; unit: 24; face: "#8a8f98" }
                                 PadIcon { kind: "face"; label: "X"; unit: 24; face: "#8a8f98" }
                             }
-                            // Game over: one way out, and it is the arcade one.
-                            Row {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                visible: backend.state === "gameover"
-                                spacing: 8
-                                KeyCap { unit: 26; label: "START"; face: theme.accent }
-                                KeyCap { unit: 26; label: "SPACE"; face: theme.accent }
-                                KeyCap { unit: 26; label: "ENTER"; face: theme.accent }
-                                SequentialAnimation on opacity {
-                                    loops: Animation.Infinite
-                                    NumberAnimation { to: 0.25; duration: 550 }
-                                    NumberAnimation { to: 1.0; duration: 550 }
-                                }
-                            }
-                            // The mouse needs a way out of every overlay.
+                            // The mouse needs a way out of the pause.
                             PixelButton {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                visible: backend.state !== "select"
+                                visible: backend.state === "paused"
                                 accent: theme.accent
-                                text: backend.state === "victory" ? (backend.pads.length > 0 ? ">> NEXT SECTOR (START) <<" : ">> NEXT SECTOR (R) <<")
-                                      : backend.state === "gameover" ? ">> CONTINUE <<" : (backend.pads.length > 0 ? ">> RESUME (START) <<" : ">> RESUME (P) <<")
+                                text: backend.pads.length > 0 ? ">> RESUME (START) <<" : ">> RESUME (P) <<"
                                 onClicked: {
-                                    if (backend.state === "victory")
-                                        backend.nextLevel()
-                                    else if (backend.state === "gameover")
-                                        backend.toSelect()
-                                    else
-                                        backend.togglePause()
+                                    backend.togglePause()
                                     keys.forceActiveFocus()
                                 }
                             }
