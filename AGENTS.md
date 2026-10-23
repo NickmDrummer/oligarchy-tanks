@@ -2644,8 +2644,8 @@ jingles and a score that counts up.
   The sound board owns a third endless `QSoundEffect` and treats it
   exactly like the motor: created once, never stopped (Qt 6.12 does not
   bring a stopped loop back with play()), carried by volume —
-  `musicVolume()` in soundboard.cpp, 0.4 in a stage (the user's final
-  ear: level with the motor's 0.40) and 0 with the mute
+  `musicVolume()` in soundboard.cpp, 0.6 in a stage (the user's final
+  ear: over the motor's 0.40) and 0 with the mute
   or out of it. The QML polling timer sets it from `playing &&
   !endPending`, so the loop dies with the motor on the end beat (the
   jingle lands clean), on the pause and on every menu.
@@ -2663,6 +2663,15 @@ jingles and a score that counts up.
   the frozen board). **The rumble** feeds through `rumbleFor()`: a
   grounded thud on the game over, a short buzz on the victory, nothing
   on the ticks, clicks or the overture.
+- **The tally gate (21.26)**: the victory prompt and the way out are shut
+  until the score count is spent. `Backend::tallyDone` is the gate: it
+  goes false in `finishEnd()` for a victory with something to count true
+  otherwise (game over, or a victory worth nothing) and `nextLevel()`
+  returns early while it is false, so pad START, the R key, the mouse and
+  any future caller hit the same wall. The count-up sets it true when it
+  reaches the total. Before this the NEXT SECTOR prompt appeared during
+  the jingle wait and again after the count (user report: the message
+  showed twice and START skipped the tally).
 - **The uiSound door**: `Backend::uiSound(name)` is the view layer's
   own sound API — it rides the same `playSound` signal, so the sound
   board and the rumble both receive it. The count-up and (later) any
