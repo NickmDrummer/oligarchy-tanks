@@ -14,7 +14,11 @@
 #include <QUrl>
 
 #include "backend.h"
+#if defined(OLIGARCHY_TANKS_SDL)
+#include "padsdl.h"
+#else
 #include "gamepad.h"
+#endif
 #include "rumble.h"
 #include "soundboard.h"
 #include "theme.h"
@@ -75,13 +79,19 @@ int main(int argc, char *argv[]) {
     // dies, Qt's own handling can wedge the thread that owns the sound
     // (see soundboard.h). In the GUI thread that freeze is the game.
     SoundBoard sounds;
-    // Pads are read straight from /dev/input/event* (Linux only: evdev). A pad
-    // joins a player by pressing START; with none connected nothing changes.
-    // The reader writes to stderr when OLIGARCHY_TANKS_PAD_DEBUG is set.
-    // Other platforms build without it and play on the keyboard.
-#if defined(Q_OS_LINUX) && !defined(Q_OS_WASM)
+    // A pad joins a player by pressing START; with none connected nothing
+    // changes. SDL2 is the reader whenever it is built in (macOS, Windows,
+    // and Linux when it is installed); Linux without SDL falls back to evdev.
+    // Both write to stderr when OLIGARCHY_TANKS_PAD_DEBUG is set.
+#if defined(OLIGARCHY_TANKS_SDL)
+    PadSdl pad(&backend);
+    pad.start();
+#elif defined(Q_OS_LINUX) && !defined(Q_OS_WASM)
     Gamepad gamepad(&backend);
     gamepad.start();
+#endif
+
+#if defined(Q_OS_LINUX) && !defined(Q_OS_WASM)
     // Rumble on DualSense pads (rumble.h). It listens to the same play
     // events the sounds do, so no Backend change was needed. Two switches:
     // M is sound only, V is rumble only (the user's felt preference), and
