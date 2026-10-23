@@ -33,6 +33,18 @@
         <file alias="sounds/blast_missile-shoot.wav">sounds/blast_missile-shoot.wav</file>
         <file alias="sounds/blast_missile-hit.wav">sounds/blast_missile-hit.wav</file>
         <file alias="sounds/air-support.wav">sounds/air-support.wav</file>
+        <!-- The endings and the UI: the jingles, the stage-start overture,
+             the count-up ticks (four rising pitches), and the select
+             screen's menu pair. -->
+        <file alias="sounds/gameover.wav">sounds/gameover.wav</file>
+        <file alias="sounds/victory.wav">sounds/victory.wav</file>
+        <file alias="sounds/stage-start.wav">sounds/stage-start.wav</file>
+        <file alias="sounds/score-tick-1.wav">sounds/score-tick-1.wav</file>
+        <file alias="sounds/score-tick-2.wav">sounds/score-tick-2.wav</file>
+        <file alias="sounds/score-tick-3.wav">sounds/score-tick-3.wav</file>
+        <file alias="sounds/score-tick-4.wav">sounds/score-tick-4.wav</file>
+        <file alias="sounds/menu-move.wav">sounds/menu-move.wav</file>
+        <file alias="sounds/menu-confirm.wav">sounds/menu-confirm.wav</file>
         <!-- The application icon, embedded so the window carries it even when
              the package is not installed. Generated from the same drawing as
              pkgbuild/oligarchy-tanks.svg by tools/make-icon.py. -->
