@@ -375,13 +375,26 @@ ApplicationWindow {
                             // The LEVELUP tier mark rides at the left of the
                             // tank instead of in the effects line (user spec):
                             // it is rank, not a temporary effect.
-                            Text {
+                            // Rank stacks instead of running long: the
+                            // number sits under its label, which keeps the
+                            // HUD row inside the 240 px panel even with
+                            // five lives beside it (user report).
+                            Column {
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: backend.players.length > 0
                                          && backend.players[0].tier > 0
-                                text: "LV " + backend.players[0].tier
-                                font.bold: true; font.pixelSize: 13; font.letterSpacing: 1
-                                color: "#ffd60a"
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "LV"
+                                    font.bold: true; font.pixelSize: 9; font.letterSpacing: 1
+                                    color: "#ffd60a"
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: backend.players[0].tier
+                                    font.bold: true; font.pixelSize: 17
+                                    color: "#ffd60a"
+                                }
                             }
                             TankSprite {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -399,7 +412,7 @@ ApplicationWindow {
                             Item { width: 8; height: 1 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 10
+                                spacing: 4
                                 Repeater {
                                     model: 5
                                     TankSprite {
@@ -502,13 +515,26 @@ ApplicationWindow {
                         Row {
                             anchors.horizontalCenter: parent.horizontalCenter
                             spacing: 10
-                            Text {
+                            // Rank stacks instead of running long: the
+                            // number sits under its label, which keeps the
+                            // HUD row inside the 240 px panel even with
+                            // five lives beside it (user report).
+                            Column {
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: backend.players.length > 1
                                          && backend.players[1].tier > 0
-                                text: "LV " + backend.players[1].tier
-                                font.bold: true; font.pixelSize: 13; font.letterSpacing: 1
-                                color: "#ffd60a"
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: "LV"
+                                    font.bold: true; font.pixelSize: 9; font.letterSpacing: 1
+                                    color: "#ffd60a"
+                                }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: backend.players[1].tier
+                                    font.bold: true; font.pixelSize: 17
+                                    color: "#ffd60a"
+                                }
                             }
                             TankSprite {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -526,7 +552,7 @@ ApplicationWindow {
                             Item { width: 8; height: 1 }
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 10
+                                spacing: 4
                                 Repeater {
                                     model: 5
                                     TankSprite {
