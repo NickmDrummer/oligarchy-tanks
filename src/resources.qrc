@@ -39,6 +39,9 @@
         <file alias="sounds/gameover.wav">sounds/gameover.wav</file>
         <file alias="sounds/victory.wav">sounds/victory.wav</file>
         <file alias="sounds/stage-start.wav">sounds/stage-start.wav</file>
+        <!-- The in-game loop: four bars, sample-exact, wrapping on the
+             downbeat. -->
+        <file alias="sounds/stage-loop.wav">sounds/stage-loop.wav</file>
         <file alias="sounds/score-tick-1.wav">sounds/score-tick-1.wav</file>
         <file alias="sounds/score-tick-2.wav">sounds/score-tick-2.wav</file>
         <file alias="sounds/score-tick-3.wav">sounds/score-tick-3.wav</file>

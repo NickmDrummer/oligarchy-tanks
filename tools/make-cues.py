@@ -217,6 +217,66 @@ def stage_start():
     return mix(mel, bass), 0.63   # +15% over the approved take (the user's last ask)
 
 
+def stage_loop():
+    # The in-game loop: 4 bars at 125 bpm = 7.68 s, sample-exact so it wraps
+    # on the downbeat with no gap. It is the overture's own figure carried
+    # on — the same chord loop, the same rising sixteenths and the same
+    # register — with the rests the user asked for: the lead plays two
+    # bursts and then leaves the bar to the bass and the noise tick, so the
+    # stage has space instead of a wall of notes.
+    BQ = 60.0 / 125.0    # 150 less the user's 25
+    S16 = BQ / 4.0       # the sixteenth: the lead's slot
+    S8 = BQ / 2.0        # the eighth: the bass's slot
+    BARS = 4
+
+    # Per bar: run up (4), insist on the top (2), rest (2), answer down
+    # (4), breath (4). The same shape on every chord, so it reads as one
+    # piece with the overture and never settles.
+    def bar(up, top, down):
+        return list(up) + [top, top, 0, 0] + list(down) + [0, 0, 0, 0]
+
+    notes = (
+        bar([196.00, 261.63, 349.23, 392.00], 392.00,
+            [349.23, 261.63, 196.00, 261.63])                     # Csus4
+        + bar([220.00, 293.66, 392.00, 440.00], 440.00,
+              [392.00, 293.66, 220.00, 293.66])                   # Dsus4
+        + bar([233.08, 261.63, 311.13, 349.23], 349.23,
+              [311.13, 261.63, 233.08, 261.63])                   # F7sus4
+        + bar([261.63, 293.66, 349.23, 392.00], 392.00,
+              [349.23, 293.66, 261.63, 293.66])                   # G7sus4
+    )
+    mel = []
+    melody(mel, [(f, 1) for f in notes], S16, duty=0.25, fill=0.62)
+
+    # Bass: a syncopated eighth line — root, root, fifth, root, octave —
+    # with holes in it, so it drives without droning. (root, fifth) per bar.
+    chords = [(130.81, 196.00),    # Csus4
+              (146.83, 220.00),    # Dsus4
+              (174.61, 261.63),    # F7sus4
+              (196.00, 293.66)]    # G7sus4
+    pattern = [(0, 0), (2, 0), (3, 1), (5, 0), (7, 2)]
+    bass = [0.0] * len(mel)
+    for i, (root, fifth) in enumerate(chords):
+        t0 = i * 4 * BQ
+        for slot, which in pattern:
+            f = root if which == 0 else (fifth if which == 1 else root * 2.0)
+            tri_at(bass, t0 + slot * S8, f, S8 * 0.8, decay=2.2)
+    bass = [v * 1.8 for v in bass]
+
+    # A hair of noise on the backbeats for air; it must never read as a
+    # drum kit.
+    drums = [0.0] * len(mel)
+    for bar_i in range(BARS):
+        for beat in (1, 3):
+            snare_hit(drums, bar_i * 4 * BQ + beat * BQ, 0.03,
+                      dur=0.02, decay=90.0)
+
+    n = int(round(RATE * BARS * 4 * BQ))
+    out = mix(mel, bass, drums)
+    out = out[:n] + [0.0] * max(0, n - len(out))
+    return out, 0.55
+
+
 CUES = {
     "gameover": gameover,
     "victory": victory,
@@ -227,6 +287,7 @@ CUES = {
     "menu-move": menu_move,
     "menu-confirm": menu_confirm,
     "stage-start": stage_start,
+    "stage-loop": stage_loop,
 }
 
 
