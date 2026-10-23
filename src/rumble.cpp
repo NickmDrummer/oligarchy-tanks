@@ -93,6 +93,11 @@ RumbleSpec rumbleFor(const QString &name) {
     if (name == QStringLiteral("levelup"))             return {0x60, 0x60, 150};
     if (name == QStringLiteral("nuke"))                return {0xff, 0x80, 450};
     if (name == QStringLiteral("air-support"))         return {0x70, 0x50, 300};
+    // The endings: the game over is a last grounded thud, the victory
+    // a short satisfied buzz. The count-up ticks and the menu clicks
+    // stay silent — the hand must not purr at every number.
+    if (name == QStringLiteral("gameover"))            return {0xaa, 0x20, 350};
+    if (name == QStringLiteral("victory"))             return {0x40, 0x50, 260};
     return {0, 0, 0};
 }
 

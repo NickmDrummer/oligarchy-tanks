@@ -25,6 +25,20 @@ const SoundSpec kSounds[] = {
     {"air-support", "air-support.wav", 1.0f},
     {"blast_missile-shoot", "blast_missile-shoot.wav", 0.805f},
     {"blast_missile-hit", "blast_missile-hit.wav", 0.96f},
+    // The endings and the UI: the jingles sound when the screens take
+    // over, the ticks ride the victory count-up, the menu pair drives
+    // the select screen's feedback. Quieter than the fight sounds:
+    // they must talk over nothing. The game over sits 40% below its
+    // first take — it was the loudest thing in the room (user report).
+    {"gameover", "gameover.wav", 0.43f},
+    {"victory", "victory.wav", 0.65f},
+    {"stage-start", "stage-start.wav", 0.7f},
+    {"score-tick-1", "score-tick-1.wav", 0.4f},
+    {"score-tick-2", "score-tick-2.wav", 0.4f},
+    {"score-tick-3", "score-tick-3.wav", 0.4f},
+    {"score-tick-4", "score-tick-4.wav", 0.4f},
+    {"menu-move", "menu-move.wav", 0.3f},
+    {"menu-confirm", "menu-confirm.wav", 0.38f},
 };
 
 } // namespace
