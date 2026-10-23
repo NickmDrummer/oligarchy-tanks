@@ -1705,6 +1705,7 @@ private slots:
         // the game is silent.
         QVERIFY(QMetaObject::invokeMethod(&board, "setEngine", Q_ARG(bool, true), Q_ARG(bool, false)));
         QVERIFY(QMetaObject::invokeMethod(&board, "setMuted", Q_ARG(bool, true)));
+        QVERIFY(QMetaObject::invokeMethod(&board, "setMusic", Q_ARG(bool, true)));
         QVERIFY(QMetaObject::invokeMethod(&board, "play", Q_ARG(QString, "shoot")));
     }
 
@@ -1712,10 +1713,12 @@ private slots:
         SoundBoard board;
         QSignalSpy engine(&board, &SoundBoard::engineChanged);
         QSignalSpy muted(&board, &SoundBoard::mutedChanged);
+        QSignalSpy music(&board, &SoundBoard::musicChanged);
         QSignalSpy played(&board, &SoundBoard::soundPlayed);
 
         board.setEngine(true, true);
         board.setMuted(true);
+        board.setMusic(true);
         board.play("air-support");
 
         QVERIFY(engine.count() >= 1);
@@ -1727,6 +1730,8 @@ private slots:
         QCOMPARE(engineArgs.at(0).toBool(), true);
         QCOMPARE(engineArgs.at(1).toBool(), true);
         QCOMPARE(muted.takeFirst().at(0).toBool(), true);
+        QCOMPARE(music.count(), 1);
+        QCOMPARE(music.last().at(0).toBool(), true);
         QCOMPARE(played.takeFirst().at(0).toString(), QString("air-support"));
     }
 
@@ -1760,6 +1765,27 @@ private slots:
         QVERIFY(qAbs(board.gallopVolume() - 0.0) < 0.001);
         board.setMuted(false);
         QVERIFY(qAbs(board.putterVolume() - 0.40) < 0.001);
+    }
+
+    // The stage loop is company, not the show: audible only while a sector
+    // is being played, gone on the end beat (the view reports it as "not
+    // playing"), and gone with the mute. It never plays at the motor's
+    // level.
+    void theStageMusicOnlyRunsWhileASectorIsPlayed() {
+        SoundBoard board;
+        board.setMusic(true);
+        QVERIFY(qAbs(board.musicVolume() - 0.4) < 0.001);
+        // The user's final ear: level with the motor's putter (0.40).
+        QVERIFY(board.musicVolume() <= 0.40 + 0.001);
+        // The end beat, the pause and the menus all report "off".
+        board.setMusic(false);
+        QVERIFY(qAbs(board.musicVolume() - 0.0) < 0.001);
+        // Mute silences it, and unmuting brings it back on the same call.
+        board.setMusic(true);
+        board.setMuted(true);
+        QVERIFY(qAbs(board.musicVolume() - 0.0) < 0.001);
+        board.setMuted(false);
+        QVERIFY(qAbs(board.musicVolume() - 0.4) < 0.001);
     }
 
     // ---- The rumble round (21.21) ----

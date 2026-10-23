@@ -44,6 +44,11 @@ class QSoundEffect;
 // the board uses it to report the state, the worker to apply it.
 void engineVolumes(bool running, bool moving, bool muted, float *putter, float *gallop);
 
+// The stage music: it runs through the whole sector under the motor and
+// is silenced by the same mute switch (and by the end beat, which the view
+// reports as "not in a stage").
+float musicVolume(bool inStage, bool muted);
+
 // The worker: it owns the QSoundEffects and lives in its own thread.
 class SoundWorker : public QObject {
     Q_OBJECT
@@ -58,19 +63,23 @@ public slots:
     void initialize();
     void setEngine(bool running, bool moving, bool muted);
     void setMuted(bool muted);
+    void setMusic(bool on);
     void play(const QString &name);
 
 private:
     QSoundEffect *effect(const QString &name);
     // Brings the two engine loops in line with the state and the mute.
     void applyEngine();
+    void applyMusic();
     QHash<QString, QSoundEffect *> m_effects;
     // The sounds asked for while their source was still loading.
     QSet<QString> m_pending;
     QSoundEffect *m_engine = nullptr;
     QSoundEffect *m_engineMove = nullptr;
+    QSoundEffect *m_music = nullptr;
     bool m_engineRunning = false;
     bool m_engineMoving = false;
+    bool m_musicOn = false;
     bool m_muted = false;
 };
 
@@ -97,6 +106,9 @@ public:
     // the game is silent.
     Q_INVOKABLE void setEngine(bool running, bool moving);
     Q_INVOKABLE void setMuted(bool muted);
+    // The stage loop: on while a sector is being played (never while the
+    // end beat runs, the pause holds or a menu is up).
+    Q_INVOKABLE void setMusic(bool on);
 
     // One-shot sounds: "shoot", "hit", "explode", "power", "levelup",
     // "nuke", "air-support", "blast_missile-shoot", "blast_missile-hit".
@@ -107,6 +119,7 @@ public:
     // supposed to be sounding at this moment?".
     Q_INVOKABLE double putterVolume() const;
     Q_INVOKABLE double gallopVolume() const;
+    Q_INVOKABLE double musicVolume() const;
 
 signals:
     // The calls to the worker. They travel as signals on purpose: a
@@ -116,6 +129,7 @@ signals:
     // that could not be muted.
     void engineChanged(bool running, bool moving, bool muted);
     void mutedChanged(bool muted);
+    void musicChanged(bool on);
     void soundPlayed(const QString &name);
 
 private:
@@ -125,6 +139,7 @@ private:
     // without asking the worker (which may be busy).
     bool m_engineRunning = false;
     bool m_engineMoving = false;
+    bool m_musicOn = false;
     bool m_muted = false;
 };
 

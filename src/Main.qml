@@ -19,6 +19,12 @@ ApplicationWindow {
 
     property bool helpVisible: false
     property bool helpPausedGame: false
+    // When the last stage overture started (ms). The loop waits 3.8 s from
+    // there — the 3.2 s of stage-start plus a 0.6 s breath — so the two
+    // never overlap. It is stamped where the overture is actually asked
+    // for, not on the state change, so a pause/resume does not restart
+    // the count.
+    property double overtureAt: 0
     // The display is one centred block: board plus side panel, like the
     // screen of an arcade cabinet. The cell is sized from what that block
     // really has (the area minus the panel, the gap between them, the
@@ -157,12 +163,21 @@ ApplicationWindow {
             var endPending = backend.endPending
             var moving = playing && !endPending && ((backend.players.length > 0 && backend.players[0].moving) || (backend.players.length > 1 && backend.players[1].moving))
             sounds.setEngine(playing && !endPending, moving)
+            // The stage loop runs through the sector and goes quiet with
+            // the motor the moment the end is decided (the jingle lands
+            // clean), on the pause, and on every menu.
+            sounds.setMusic(playing && !endPending && win.overtureAt > 0
+                            && Date.now() - win.overtureAt >= 3800)
         }
     }
 
     Connections {
         target: backend
         function onPlaySound(name) {
+            // The loop is timed from the overture itself, so it never
+            // plays on top of it (the user's report).
+            if (name === "stage-start")
+                win.overtureAt = Date.now()
             if (!backend.soundEnabled)
                 return
             // The board knows the sounds; it plays them on its own thread.

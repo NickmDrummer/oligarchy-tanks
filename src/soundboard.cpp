@@ -57,6 +57,12 @@ void engineVolumes(bool running, bool moving, bool muted, float *putter, float *
     *gallop = moving ? 0.50f : 0.0f;
 }
 
+float musicVolume(bool inStage, bool muted) {
+    // 0.4 by the user's final ear: level with the motor's putter, with the
+    // lead now carrying the loop at 125 bpm.
+    return (inStage && !muted) ? 0.4f : 0.0f;
+}
+
 // ---- the worker: it owns the QSoundEffects and lives in its own thread.
 
 SoundWorker::SoundWorker(QObject *parent) : QObject(parent) {}
@@ -101,6 +107,13 @@ void SoundWorker::initialize() {
     m_engineMove->setVolume(0.0f);
     m_engineMove->setLoopCount(QSoundEffect::Infinite);
 
+    // The stage loop: a third endless effect, kept alive the same way as
+    // the motor and carried by its volume.
+    m_music = new QSoundEffect(this);
+    m_music->setSource(QUrl(QStringLiteral("qrc:/sounds/stage-loop.wav")));
+    m_music->setVolume(0.0f);
+    m_music->setLoopCount(QSoundEffect::Infinite);
+
     // The loops have the same loading story: they cannot be played before
     // their source is ready, and the first run begins right away.
     for (QSoundEffect *effect : {m_engine, m_engineMove}) {
@@ -109,6 +122,10 @@ void SoundWorker::initialize() {
                 applyEngine();
         });
     }
+    connect(m_music, &QSoundEffect::statusChanged, this, [this]() {
+        if (m_music->status() == QSoundEffect::Ready)
+            applyMusic();
+    });
 }
 
 QSoundEffect *SoundWorker::effect(const QString &name) {
@@ -125,6 +142,22 @@ void SoundWorker::setEngine(bool running, bool moving, bool muted) {
 void SoundWorker::setMuted(bool muted) {
     m_muted = muted;
     applyEngine();
+    applyMusic();
+}
+
+void SoundWorker::setMusic(bool on) {
+    m_musicOn = on;
+    applyMusic();
+}
+
+void SoundWorker::applyMusic() {
+    // Same rule as the motor: an infinite QSoundEffect that is stopped does
+    // not come back with play() in Qt 6.12, so the loop is never stopped —
+    // the volume carries the state. It is also what keeps the loop in phase
+    // when a pause or an ending interrupts it.
+    if (m_music->status() == QSoundEffect::Ready && !m_music->isPlaying())
+        m_music->play();
+    m_music->setVolume(musicVolume(m_musicOn, m_muted));
 }
 
 void SoundWorker::applyEngine() {
@@ -178,6 +211,7 @@ SoundBoard::SoundBoard(QObject *parent) : QObject(parent) {
     // an invokeMethod by name does.
     connect(this, &SoundBoard::engineChanged, m_worker, &SoundWorker::setEngine);
     connect(this, &SoundBoard::mutedChanged, m_worker, &SoundWorker::setMuted);
+    connect(this, &SoundBoard::musicChanged, m_worker, &SoundWorker::setMusic);
     connect(this, &SoundBoard::soundPlayed, m_worker, &SoundWorker::play);
     // The effects are created in the worker thread, where they live.
     if (!QMetaObject::invokeMethod(m_worker, "initialize", Qt::BlockingQueuedConnection))
@@ -206,6 +240,11 @@ void SoundBoard::setMuted(bool muted) {
     emit engineChanged(m_engineRunning, m_engineMoving, m_muted);
 }
 
+void SoundBoard::setMusic(bool on) {
+    m_musicOn = on;
+    emit musicChanged(on);
+}
+
 void SoundBoard::play(const QString &name) {
     emit soundPlayed(name);
 }
@@ -222,4 +261,8 @@ double SoundBoard::gallopVolume() const {
     float gallop = 0.0f;
     engineVolumes(m_engineRunning, m_engineMoving, m_muted, &putter, &gallop);
     return gallop;
+}
+
+double SoundBoard::musicVolume() const {
+    return ::musicVolume(m_musicOn, m_muted);
 }
