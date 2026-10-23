@@ -2631,6 +2631,31 @@ jingles and a score that counts up.
   **`tools/make-cues.py`** (in-repo since the /tmp script was wiped;
   rerunning it with no arguments rebuilds every cue — the approved
   takes reproduce byte-identical, checked against the shipped wavs).
+- **The stage loop**: `stage-loop.wav` is the in-game music — four bars
+  at 125 bpm (7.68 s, sample-exact so the wrap lands on the downbeat with
+  no gap), built from the overture's own figure: the same chords, the
+  same rising sixteenths in the same register, with the rests the user
+  asked for (each bar plays two bursts and then leaves the bar to the
+  bass; without them it read as "only half notes", sleep-inducing). The
+  bass is a syncopated eighth line (root, root, fifth, root, octave)
+  with holes and +4 dB over the lead, plus a hair of noise on the
+  backbeats. It ends on a breath,
+  never on a cadence, so it can run for minutes.
+  The sound board owns a third endless `QSoundEffect` and treats it
+  exactly like the motor: created once, never stopped (Qt 6.12 does not
+  bring a stopped loop back with play()), carried by volume —
+  `musicVolume()` in soundboard.cpp, 0.4 in a stage (the user's final
+  ear: level with the motor's 0.40) and 0 with the mute
+  or out of it. The QML polling timer sets it from `playing &&
+  !endPending`, so the loop dies with the motor on the end beat (the
+  jingle lands clean), on the pause and on every menu.
+  **The gap**: the user heard the loop start on top of the overture.
+  The stamp is taken where the overture is actually asked for —
+  `onPlaySound("stage-start")` sets `win.overtureAt = Date.now()` — and
+  the loop only starts 3800 ms later (3.2 s of overture plus a 0.6 s
+  breath). Timing it from the sound rather than the state change means a
+  pause/resume does not restart the count. `bin/test` covers the volume
+  rule; the gap was verified at runtime (3884 ms measured).
 - **The motor hush**: the engine loops read the new
   `Backend::endPending` property from the 100 ms polling timer in
   Main.qml — when the run is decided, the putter/gallop goes silent
