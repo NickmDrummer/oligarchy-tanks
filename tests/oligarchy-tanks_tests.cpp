@@ -1815,7 +1815,7 @@ private slots:
     void theStageMusicOnlyRunsWhileASectorIsPlayed() {
         SoundBoard board;
         board.setMusic(true);
-        QVERIFY(qAbs(board.musicVolume() - 0.5) < 0.001);
+        QVERIFY(qAbs(board.musicVolume() - 0.6) < 0.001);
         // The user's final ear: over the motor's putter (0.40).
         QVERIFY(board.musicVolume() > 0.40);
         // The end beat, the pause and the menus all report "off".
@@ -1826,7 +1826,7 @@ private slots:
         board.setMuted(true);
         QVERIFY(qAbs(board.musicVolume() - 0.0) < 0.001);
         board.setMuted(false);
-        QVERIFY(qAbs(board.musicVolume() - 0.5) < 0.001);
+        QVERIFY(qAbs(board.musicVolume() - 0.6) < 0.001);
     }
 
     // ---- The rumble round (21.21) ----

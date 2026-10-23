@@ -58,9 +58,9 @@ void engineVolumes(bool running, bool moving, bool muted, float *putter, float *
 }
 
 float musicVolume(bool inStage, bool muted) {
-    // 0.4 by the user's final ear: level with the motor's putter, with the
-    // lead now carrying the loop at 125 bpm.
-    return (inStage && !muted) ? 0.4f : 0.0f;
+    // 0.6 by the user's final ear: the loop leads the mix over the motor's
+    // 0.40, with the bass carrying it at 125 bpm.
+    return (inStage && !muted) ? 0.6f : 0.0f;
 }
 
 // ---- the worker: it owns the QSoundEffects and lives in its own thread.
