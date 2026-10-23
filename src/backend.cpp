@@ -281,7 +281,8 @@ void Backend::fireP1() {
     }
     if (m_state == "playing")
         markJoined(0);
-    if (m_state != "playing" || !m_p[0].alive || m_p[0].cooldown > 0)
+    // The scheduled beat also holds the trigger: the run is decided.
+    if (m_state != "playing" || m_endPending || !m_p[0].alive || m_p[0].cooldown > 0)
         return;
     m_p[0].cooldown = FIRE_GAP;
     // Was the main shot a BLAST missile? fireBullet() burns the shot count
@@ -315,7 +316,7 @@ void Backend::fireP2() {
     }
     if (m_state == "playing")
         markJoined(1);
-    if (m_state != "playing" || !m_p[1].alive || m_p[1].cooldown > 0)
+    if (m_state != "playing" || m_endPending || !m_p[1].alive || m_p[1].cooldown > 0)
         return;
     m_p[1].cooldown = FIRE_GAP;
     // Same as fireP1: the tier-2 gate must know whether the main shot was
@@ -502,6 +503,14 @@ void Backend::startGame() {
     if (m_debugSector >= 1)
         m_level = m_debugSector;
     m_freezeUntil = -1;
+    if (m_endPending) {
+        m_endPending = false;
+        emit endPendingChanged();
+    }
+    m_finalScore = 0;
+    // The first sector opens with the same overture (nextLevel carries it
+    // for the later ones).
+    emit playSound("stage-start");
     generateMap();
     resetTanks(true);
     // Debug: start at a given tier for testing air support etc.
@@ -549,6 +558,9 @@ void Backend::startGame() {
 void Backend::nextLevel() {
     ++m_level;
     m_freezeUntil = -1;
+    // The new sector opens with its overture: a longer jingle that says
+    // a fresh adventure is beginning (the user's round).
+    emit playSound("stage-start");
     generateMap();
     resetTanks(false);
     m_bullets.clear();
@@ -586,9 +598,11 @@ void Backend::menuMove(int delta) {
     // Two options in a row: wrap, so the highlight never gets stuck at an end.
     m_menuIndex = (m_menuIndex + (delta > 0 ? 1 : -1) + 2) % 2;
     emit menuChanged();
+    emit playSound("menu-move");
 }
 
 void Backend::menuConfirm() {
+    emit playSound("menu-confirm");
     confirmSelect(-1);
 }
 
@@ -597,7 +611,14 @@ void Backend::menuChoose(int mode) {
         return;
     m_menuIndex = mode == 0 ? 0 : 1;
     emit menuChanged();
+    emit playSound("menu-confirm");
     confirmSelect(-1);
+}
+
+// A sound straight from the view layer: the count-up ticks on the
+// victory screen, the select screen's steps when the pad drives them.
+void Backend::uiSound(const QString &name) {
+    emit playSound(name);
 }
 
 void Backend::confirmSelect(int pad) {
@@ -620,6 +641,10 @@ void Backend::confirmSelect(int pad) {
 void Backend::toSelect() {
     if (m_state == "select")
         return;
+    if (m_endPending) {
+        m_endPending = false;
+        emit endPendingChanged();
+    }
     m_ending.clear();
     clearRun();
     setState("select");
@@ -851,6 +876,20 @@ void Backend::tick() {
         dt = 0.05;
     m_time += dt;
     ++m_frameTick;
+
+    // The decided run: the last beat belongs to the board. The explosions
+    // decay on their own clock, the bullets in flight still fly, nothing
+    // else moves — and only when the beat is spent does the screen take
+    // over (finishEnd).
+    if (m_endPending) {
+        updateBullets(dt);
+        updateExplosions(dt);
+        updateFloaters(dt);
+        if (m_time >= m_endAt)
+            finishEnd();
+        emit frameChanged();
+        return;
+    }
 
     // Keep tanks from locking together: nudge any overlapping pair apart before
     // movement is resolved.
@@ -1875,13 +1914,15 @@ void Backend::checkEnd() {
         if (t == BaseDead)
             baseDead = true;
     // Both endings show the game over screen, which carries on to the select
-    // screen with START (so a pad can always start the next run).
+    // screen with START (so a pad can always start the next run). Neither
+    // state flips right here: the end waits out its beat first (scheduleEnd,
+    // the user's "demasiada rapida la transicion") — the last explosion
+    // owns the board while nobody shoots, moves or spawns.
     int total = 0;
     for (int i = 0; i < m_playerCount; ++i)
         total += m_p[i].score;
     if (baseDead) {
-        m_ending = "base";
-        setState("gameover", QString("SCORE %1").arg(total));
+        scheduleEnd("gameover", "base", total, 1.1);
         return;
     }
     // Game over when every tank in the game is out. With a single player that
@@ -1891,13 +1932,41 @@ void Backend::checkEnd() {
         if (m_p[i].alive || m_p[i].lives > 0)
             allOut = false;
     if (allOut) {
-        m_ending = "over";
-        setState("gameover", QString("SCORE %1").arg(total));
+        scheduleEnd("gameover", "over", total, 1.1);
         return;
     }
     if (m_spawned >= totalForLevel() && aliveEnemies() == 0) {
-        setState("victory", QString("Sector %1 Clear! Score: %2").arg(m_level).arg(total));
+        scheduleEnd("victory", QString(), total, 0.7);
     }
+}
+
+// The run is decided but the screen is not: the board keeps animating one
+// more beat — the decaying explosion, the bullets still flying — while the
+// input and the enemies hold still.
+void Backend::scheduleEnd(const QString &state, const QString &ending, int total, double delay) {
+    if (m_endPending)
+        return;
+    m_endPending = true;
+    emit endPendingChanged();
+    m_endState = state;
+    m_endMessage = state == "victory"
+            ? QString("Sector %1 Clear! Score: %2").arg(m_level).arg(total)
+            : QString("SCORE %1").arg(total);
+    m_endAt = m_time + delay;
+    m_finalScore = total;
+    m_ending = ending;
+}
+
+// The beat is over: the state flips, the screen takes over, and the
+// ending gets its jingle (the rumble rides the same playSound signal).
+void Backend::finishEnd() {
+    m_endPending = false;
+    emit endPendingChanged();
+    setState(m_endState, m_endMessage);
+    if (m_endState == "victory")
+        emit playSound("victory");
+    else
+        emit playSound("gameover");
 }
 
 int Backend::aliveEnemies() const {

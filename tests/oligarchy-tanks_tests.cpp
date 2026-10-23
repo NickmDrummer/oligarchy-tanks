@@ -127,6 +127,18 @@ struct TanksTestAccess {
         b.m_p[i].lives = 0;
     }
     static void endCheck(Backend &b) { b.checkEnd(); }
+    // The end waits out its beat on the board before taking over; the
+    // tests land it at once instead of spending real time.
+    static void landEnd(Backend &b) {
+        b.m_endAt = b.m_time;
+        b.tick(); // the pending branch spends the beat and flips the state
+    }
+    static bool endPending(const Backend &b) { return b.m_endPending; }
+    static void clearAllEnemies(Backend &b) {
+        for (auto &e : b.m_foes)
+            e.alive = false;
+    }
+    static void setPlayerScore(Backend &b, int i, int score) { b.m_p[i].score = score; }
     static double playerX(const Backend &b, int i) { return b.m_p[i].x; }
     // Spawn composition: the kind/hp spawnEnemy() picks for a given spawn index.
     static int spawnKindAt(Backend &b, int index) {
@@ -980,11 +992,17 @@ private slots:
     }
 
     // Losing the only player ends the run; with two, the other one carries on.
+    // The state does not flip at once: the last explosion owns the board
+    // until the scheduled beat is spent (21.25).
     void dyingAsASinglePlayerEndsTheRun() {
         Backend b;
         b.menuChoose(0);
         TanksTestAccess::outPlayer(b, 0);
         TanksTestAccess::endCheck(b);
+        QCOMPARE(b.state(), QString("playing"));
+        QCOMPARE(TanksTestAccess::endPending(b), true);
+        QCOMPARE(b.endPending(), true); // the view hushes the motor on this
+        TanksTestAccess::landEnd(b);
         QCOMPARE(b.state(), QString("gameover"));
         QCOMPARE(b.ending(), QString("over"));
         // START, Space or Enter carries on to the select screen.
@@ -998,6 +1016,7 @@ private slots:
         QCOMPARE(two.state(), QString("playing"));
         TanksTestAccess::outPlayer(two, 1);
         TanksTestAccess::endCheck(two);
+        TanksTestAccess::landEnd(two);
         QCOMPARE(two.state(), QString("gameover"));
         QCOMPARE(two.ending(), QString("over"));
     }
@@ -1008,11 +1027,71 @@ private slots:
         b.menuChoose(1);
         TanksTestAccess::putTile(b, 7, 14, TanksTestAccess::BaseDead);
         TanksTestAccess::endCheck(b);
+        TanksTestAccess::landEnd(b);
         QCOMPARE(b.state(), QString("gameover"));
         QCOMPARE(b.ending(), QString("base"));
         b.padConnected(0, "Pad");
         b.padStart(0); // any pad carries on, joined or not
         QCOMPARE(b.state(), QString("select"));
+    }
+
+    // The scheduled "victory" lands with its jingle and the run's total
+    // score (the count-up reads that number, and the sounds ride the
+    // same playSound signal so the pad feels them too).
+    void theVictoryLandsWithItsJingleAndFinalScore() {
+        Backend b;
+        b.menuChoose(1);
+        TanksTestAccess::setPlayerScore(b, 0, 350);
+        TanksTestAccess::setPlayerScore(b, 1, 320);
+        TanksTestAccess::clearAllEnemies(b);
+        TanksTestAccess::setSpawned(b, TanksTestAccess::enemiesPerStage(b));
+        TanksTestAccess::endCheck(b);
+        QCOMPARE(b.state(), QString("playing")); // scheduled, not flipped
+        QSignalSpy sounds(&b, &Backend::playSound);
+        TanksTestAccess::landEnd(b);
+        QCOMPARE(b.state(), QString("victory"));
+        QVERIFY(sounds.count() >= 1);
+        for (const auto &call : sounds)
+            QCOMPARE(call.at(0).toString(), QString("victory"));
+        QCOMPARE(b.finalScore(), 670);
+    }
+
+    // The game over lands the same way: still playing first, jingle on.
+    void theGameOverLandsWithItsJingleToo() {
+        Backend b;
+        b.menuChoose(0);
+        TanksTestAccess::outPlayer(b, 0);
+        TanksTestAccess::endCheck(b);
+        QCOMPARE(TanksTestAccess::endPending(b), true);
+        QSignalSpy sounds(&b, &Backend::playSound);
+        TanksTestAccess::landEnd(b);
+        QCOMPARE(b.state(), QString("gameover"));
+        QVERIFY(sounds.count() >= 1);
+        for (const auto &call : sounds)
+            QCOMPARE(call.at(0).toString(), QString("gameover"));
+    }
+
+    // The view layer has a sound door of its own: the count-up ticks
+    // ride backend.uiSound and land in the same playSound signal.
+    void uiSoundRidesThePlaySignal() {
+        Backend b;
+        QSignalSpy sounds(&b, &Backend::playSound);
+        b.uiSound("score-tick-3");
+        QCOMPARE(sounds.count(), 1);
+        QCOMPARE(sounds.takeFirst().at(0).toString(), QString("score-tick-3"));
+    }
+
+    // The select screen talks: a step blip when the highlight moves, a
+    // confirming pair when a mode is picked.
+    void theMenuStepsCarryTheirSounds() {
+        Backend b;
+        QSignalSpy sounds(&b, &Backend::playSound);
+        b.menuMove(1); // highlight 2 PLAYERS
+        QCOMPARE(sounds.count(), 1);
+        QCOMPARE(sounds.takeFirst().at(0).toString(), QString("menu-move"));
+        b.menuConfirm();
+        QVERIFY(sounds.count() >= 1);
+        QCOMPARE(sounds.takeFirst().at(0).toString(), QString("menu-confirm"));
     }
 
     // The game over screen is the only way back, and it leaves an empty board.
@@ -1021,6 +1100,7 @@ private slots:
         b.menuChoose(0);
         TanksTestAccess::outPlayer(b, 0);
         TanksTestAccess::endCheck(b);
+        TanksTestAccess::landEnd(b);
         QCOMPARE(b.state(), QString("gameover"));
         b.toSelect();
         QCOMPARE(b.state(), QString("select"));
@@ -1130,6 +1210,7 @@ private slots:
         TanksTestAccess::outPlayer(b, 0);
         TanksTestAccess::outPlayer(b, 1);
         TanksTestAccess::endCheck(b); // game over, then on to the select screen
+        TanksTestAccess::landEnd(b);
         QCOMPARE(b.state(), QString("gameover"));
         b.toSelect();
         QCOMPARE(b.state(), QString("select"));

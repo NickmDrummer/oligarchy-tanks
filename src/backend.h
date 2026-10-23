@@ -17,6 +17,9 @@ class Backend : public QObject {
     Q_PROPERTY(QString message READ message NOTIFY stateChanged)
     // Why the last run ended, for the game over screen: "over" or "base".
     Q_PROPERTY(QString ending READ ending NOTIFY stateChanged)
+    // The score the run added up when it ended, for the count-up on the
+    // victory screen.
+    Q_PROPERTY(int finalScore READ finalScore NOTIFY stateChanged)
     // Board state has its own notification: tile queries must only re-run
     // when the map really changes. Wired to frameChanged they re-evaluated
     // 60 times a second, and reading a QString property that often is what
@@ -70,6 +73,8 @@ public:
     QString state() const { return m_state; }
     QString message() const { return m_message; }
     QString ending() const { return m_ending; }
+    int finalScore() const { return m_finalScore; }
+    bool endPending() const { return m_endPending; }
     QString board() const;
     int boardRev() const { return m_boardRev; }
     // Tile kind at (x, y), matching the Tile enum: 0 empty, 1 brick,
@@ -133,6 +138,14 @@ public:
     // forwarding input blindly (see setP1Move / fireP1 below).
     Q_INVOKABLE void menuMove(int delta);
     Q_INVOKABLE void menuConfirm();
+    // A sound straight from the view layer: menu steps, the victory
+    // count-up ticks. It rides the same playSound signal the game
+    // events use, so the sound board and the rumble both receive it.
+    Q_INVOKABLE void uiSound(const QString &name);
+    // True while the run is decided and the board is spending its last
+    // beat (21.25): the view reads it to hush the motor and the input
+    // while the ending waits its landing.
+    Q_PROPERTY(bool endPending READ endPending NOTIFY endPendingChanged)
     Q_INVOKABLE void menuChoose(int mode);
 
     // Gamepads, driven by the reader in gamepad.cpp. The keyboard stays live
@@ -158,6 +171,10 @@ signals:
     void boardChanged();
     void soundChanged();
     void playSound(const QString &name);
+    // The scheduled end arms and lands: the view hushes the motor
+    // between those two ticks (the engine keeps purring over the
+    // frozen board otherwise — the user's round).
+    void endPendingChanged();
     void rumbleChanged();
     // A pad asked for the manual (SELECT / Share).
     void menuRequested();
@@ -320,6 +337,10 @@ private:
     // with the usual 3 s grace. Used by the LIFE bonus on a partner.
     void revivePlayer(int idx);
     void checkEnd();
+    // The scheduled ending (21.25): the run decided, the screen waits
+    // out the last explosion before taking over.
+    void scheduleEnd(const QString &state, const QString &ending, int total, double delay);
+    void finishEnd();
     int aliveEnemies() const;
     void spawnPickupAt(double x, double y);
     void applyPickup(int player);
@@ -371,6 +392,12 @@ private:
     QString m_state = "select";
     QString m_message;
     QString m_ending;
+    int m_finalScore = 0;
+    // The scheduled end: checkEnd() does not flip the state right away —
+    // the last explosion wins its beat on the board first (see tick()).
+    bool m_endPending = false;
+    double m_endAt = 0;
+    QString m_endState, m_endMessage;
     // 1 or 2 tanks, picked on the select screen.
     int m_playerCount = 2;
     int m_menuIndex = 0;
