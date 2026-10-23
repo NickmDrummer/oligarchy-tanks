@@ -2590,6 +2590,92 @@ the sink does not work on this machine (the dongle has no
 `hwC3D0` device, and the pipewire monitor records silence even for
 `paplay`). **For the volume, the user's ears are the check.**
 
+### 21.25 The endings round (Oct 22, pending the user's screen check)
+
+The game over and the victory now land like arcade screens: the run
+decided, a beat of board left standing, then the takeover with its
+jingles and a score that counts up.
+
+- **The wait**: `checkEnd()` no longer flips the state on the spot —
+  it *schedules* the end (`scheduleEnd`, 1.1 s game over / 0.7 s
+  victory, counted on `m_time`). During that beat the state is still
+  "playing", but tick() branches into a survivors-only loop (bullets,
+  explosions, floaters) while nobody moves, shoots or spawns — the
+  user's felt complaint was that the takeover used to interrupt the
+  last explosion. `finishEnd()` flips the state and plays the jingle;
+  fireP1/fireP2 hold their trigger while the beat runs.
+- **The jingles**: `gameover.wav` (4.0 s, two phrases stepping down an
+  octave apart over a triangle-bass walk — the user kept the walk but
+  cut the two closing pulses, so it ends on the held floor alone) and
+  `victory.wav` (1.3 s, a flagpole run up — the user's approved pick).
+  `score-tick-1..4.wav` (~42 ms) rise in tone so the count-up
+  climbs, and `menu-move.wav` / `menu-confirm.wav` back the select
+  screen. New for the openings: **`stage-start.wav`** (3.2 s at
+  **150 bpm, an octave down** — the user's final pick — two voices
+  only, the user's brief: a 25% square lead running sixteenths through
+  the user's chord loop **Csus4 -> Dsus4 -> F7sus4 -> G7sus4** (two
+  beats each, one pass, so it repeats cleanly; the sus4 fourths carry
+  the character), and a triangle bass line of four eighths per chord
+  (root, root, fifth, octave), finally an octave up at **C3-G4** with
+  +3.5 dB (0.059 against the lead's 0.020). The first octave-down pass
+  left it at 33-73 Hz — present in the wav but silent on the speakers;
+  the user then wanted it higher, not louder (report; measured, not
+  assumed). No drums, no held final note, ends on a staccato
+  return to G4/C. The long marches and fanfares before it were rejected
+  for dragging). Played from
+  `startGame()` and `nextLevel()` so every
+  sector begins like one. The recipes are
+  NES-flavoured: pulse duty 25%/50% with staccato gaps, a triangle
+  voice for the bass, **no lowpass** — the softened batch came out
+  flute-like (user report). All synthesized at 22050 Hz/16-bit by
+  **`tools/make-cues.py`** (in-repo since the /tmp script was wiped;
+  rerunning it with no arguments rebuilds every cue — the approved
+  takes reproduce byte-identical, checked against the shipped wavs).
+- **The motor hush**: the engine loops read the new
+  `Backend::endPending` property from the 100 ms polling timer in
+  Main.qml — when the run is decided, the putter/gallop goes silent
+  along with everything else (the user heard the motor purring over
+  the frozen board). **The rumble** feeds through `rumbleFor()`: a
+  grounded thud on the game over, a short buzz on the victory, nothing
+  on the ticks, clicks or the overture.
+- **The uiSound door**: `Backend::uiSound(name)` is the view layer's
+  own sound API — it rides the same `playSound` signal, so the sound
+  board and the rumble both receive it. The count-up and (later) any
+  UI feedback go through it.
+- **The screens**: inside the arcade display only (the user was
+  explicit: not the whole window — the mural and the footer stay) —
+  the state overlay's scrim deepens to `#e8050507` and a centred
+  column takes over: **GAME OVER** in `#e0403c`, 64 px, entering with
+  a slam (scale 1.3 → 1.0 in 150 ms) plus a shake; **BASE DESTROYED
+  is gone** (the `ending` field still distinguishes, in case a
+  subtitled variant ever comes). The victory reads **SECTOR N CLEAR**
+  in the accent green and counts the total from zero once the jingle
+  is over (a one-shot 1550 ms delay — `victory.wav` is 1.4 s, and the
+  user heard the two step on each other otherwise), ~80 ms a stride,
+  tone rising with the progress; the NEXT SECTOR button waits for the
+  tally. **A victory worth 0 does not count**: the state handler
+  checks `finalScore <= 0` and skips both the delay and the ticks (the
+  total reads 0 and the button is out at once). The arm is a plain
+  property on the overlay Item
+  (`endingScreen.countUpArmed`): QML resolves unqualified names
+  against the component root, not the parent Item, so inside the
+  count-up Timer it must be spelled with its id or the binding
+  silently fails (that was the count-up never running). Its `running`
+  is left to the binding — `stop()` breaks it and the second victory
+  would never count; reaching the total disarms it instead. The pixel panel remains select/pause only, its PAUSE
+  button now paused-only, and the shared message line is gone (the
+  run's total reads through the new `Backend::finalScore` property).
+- The select menu talks now: `menuMove` plays `menu-move`, `menuConfirm`
+  and `menuChoose` play `menu-confirm`, from the backend so the pad
+  paths speak too.
+- `bin/test` is **88/88** (the scheduled end, the two jingles, the
+  uiSound door, and the menu sounds — with the older ending tests
+  calling `landEnd` to spend the beat) and the offscreen smoke is
+  clean.
+
+**What the user checked**: the C++ round landed; the screens and the
+jingles await the user's ears and eyes (commit after that).
+
 ### 21.24 The blanks-while-playing cursor round (Oct 22, user-built)
 
 The mouse pointer used to float over the board mid-run ("se sigue
