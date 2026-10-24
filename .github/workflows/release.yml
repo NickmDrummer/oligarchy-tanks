@@ -122,6 +122,28 @@ jobs:
           windeployqt --release --qmldir "$PWD/src" dist/app/oligarchy-tanks.exe
           # windeployqt knows Qt only: SDL2 travels by hand.
           cp /ucrt64/bin/SDL2.dll dist/app/
+
+          # An MSYS2 Qt also links the MinGW runtime (libstdc++, libgcc,
+          # libwinpthread) and libraries such as libb2, libicu and zlib, and
+          # windeployqt deploys none of them. Walk the imports and copy every
+          # DLL that exists in the toolchain; whatever is left is a Windows
+          # DLL and belongs to the system.
+          copy_deps() {
+            local pending=("$@")
+            while [ ${#pending[@]} -gt 0 ]; do
+              local file="${pending[0]}"
+              pending=("${pending[@]:1}")
+              for dll in $(objdump -p "$file" | awk '/DLL Name:/ {print $3}'); do
+                [ -f "dist/app/$dll" ] && continue
+                if [ -f "/ucrt64/bin/$dll" ]; then
+                  cp "/ucrt64/bin/$dll" dist/app/
+                  pending+=("dist/app/$dll")
+                fi
+              done
+            done
+          }
+          copy_deps dist/app/oligarchy-tanks.exe dist/app/SDL2.dll
+
           cp packaging/README-Windows.txt dist/app/README.txt
           (cd dist/app && zip -r "../OligarchyTanks-${VER}-Windows-x64.zip" .)
 
@@ -132,6 +154,10 @@ jobs:
           test -f dist/app/SDL2.dll || { echo "SDL2.dll missing"; exit 1; }
           test -d dist/app/qml/QtQuick || { echo "QML modules missing"; exit 1; }
           test -f dist/app/oligarchy-tanks.exe || { echo "the executable is missing"; exit 1; }
+          # The MinGW runtime was the other silent hole in the first zip.
+          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            test -f "dist/app/$dll" || { echo "$dll missing"; exit 1; }
+          done
           du -sh dist/app
 
       - name: Keep the zip
