@@ -13,6 +13,13 @@
 #include <QQuickWindow>
 #include <QUrl>
 
+#if defined(OLIGARCHY_TANKS_SDL)
+// SDL's header renames main() to SDL_main on Windows, which is what the
+// SDL2main object that MinGW links expects (otherwise: "undefined reference
+// to SDL_main"). It does nothing on the other platforms.
+#include <SDL.h>
+#endif
+
 #include "backend.h"
 #if defined(OLIGARCHY_TANKS_SDL)
 #include "padsdl.h"
