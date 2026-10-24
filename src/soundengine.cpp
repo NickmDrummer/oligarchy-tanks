@@ -212,12 +212,15 @@ void SoundEngine::Impl::open() {
         qWarning("SoundEngine: no audio device: %s", SDL_GetError());
         return;
     }
-    if (!loadClips()) {
-        close();
-        return;
-    }
     {
+        // The clips are rebuilt while the pump may be mixing: the same mutex
+        // covers both, or a device change frees PCM under the mixer's feet
+        // (a SIGSEGV seen in the field).
         std::lock_guard<std::mutex> lock(mutex);
+        if (!loadClips()) {
+            close();
+            return;
+        }
         for (Voice &v : voices)
             v = Voice{};
         for (int i = 0; i < 3; ++i) {
