@@ -2782,10 +2782,14 @@ stacked, and both are now impossible to reproduce silently.
 
 **Verified here**: the log is written with the startup line and Qt warnings;
 the 0.2.5 Windows zip carries `qt.conf`, its QML modules, SDL2 and the MinGW
-runtime, and every non-system import resolves. **Not verifiable here**: the
-actual start on Windows — the user's friend has to confirm.
+runtime, and every non-system import resolves.
 
-Version 0.2.5: 0.2.4 stays published with its broken Windows zip.
+**Confirmed on Windows 11** by the user, on a real boot: the 0.2.5 zip opens
+first time, the keyboard works, a DualSense joins with START, M silences and
+Q closes with no process left behind.
+
+Version 0.2.5: 0.2.4 stays published without its Windows asset — the broken
+zip was deleted from the release, whose notes now point at 0.2.5.
 
 ### 21.31 The 0.2.4 release (Oct 24, shipped)
 
