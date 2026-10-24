@@ -66,8 +66,20 @@ jobs:
           # -qmldir is not optional: the QML lives inside the binary's qrc,
           # so macdeployqt cannot discover the imports on its own and the
           # bundle would start with "module QtQuick is not installed".
-          macdeployqt "$APP" -qmldir="$PWD/src" -libpath="$(brew --prefix)/lib" \
+          # The SDL2 built here installs with an @rpath install name, so its
+          # directory has to be one of macdeployqt's search paths.
+          macdeployqt "$APP" -qmldir="$PWD/src" \
+                      -libpath="$PWD/sdl2/lib" -libpath="$(brew --prefix)/lib" \
                       -always-overwrite
+          # Belt and braces: if macdeployqt still skipped it, place the dylib
+          # and point the executable at it.
+          if [ ! -f "$APP/Contents/Frameworks/libSDL2-2.0.0.dylib" ]; then
+            cp "$PWD/sdl2/lib/libSDL2-2.0.0.dylib" "$APP/Contents/Frameworks/"
+            install_name_tool -id "@rpath/libSDL2-2.0.0.dylib" \
+              "$APP/Contents/Frameworks/libSDL2-2.0.0.dylib"
+            install_name_tool -add_rpath "@executable_path/../Frameworks" \
+              "$APP/Contents/MacOS/oligarchy-tanks" 2>/dev/null || true
+          fi
           # arm64 refuses to run an unsigned bundle, so it is signed here even
           # though there is no Developer ID: the Gatekeeper prompt is answered
           # by the user with right-click -> Open (see the README in the zip).
