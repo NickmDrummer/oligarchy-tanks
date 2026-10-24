@@ -26,13 +26,16 @@
 #ifndef SOUNDBOARD_H
 #define SOUNDBOARD_H
 
+#include <atomic>
 #include <QHash>
 #include <QObject>
 #include <QSet>
 #include <QString>
 #include <QThread>
 
+class QMediaDevices;
 class QSoundEffect;
+class QTimer;
 
 // The volumes of the two engine loops, given the state of the game.
 //
@@ -65,12 +68,31 @@ public slots:
     void setMuted(bool muted);
     void setMusic(bool on);
     void play(const QString &name);
+    // The device list changed (headphones, suspend, PipeWire): the long
+    // loops have to be nudged back. This runs in the worker thread, because
+    // every QtMultimedia object must belong to one thread.
+    void devicesChanged();
+    // Recreates every effect inside this thread. The audio device monitor is
+    // global and belongs to the thread that created it, so it must not be
+    // abandoned: killing this thread and starting another crashes Qt in
+    // QSocketNotifier::setEnabled (seen in a core dump).
+    void rebuild();
+    // The board's heartbeat. Answering proves this thread's event loop still
+    // runs: a wedged Qt audio backend stops answering, and the board can
+    // then rebuild the sound without restarting the game.
+    void ping(int token);
+
+signals:
+    void pong(int token);
+    // Any effect that fails (the device went away) asks for a rebuild.
+    void audioFailed();
 
 private:
     QSoundEffect *effect(const QString &name);
     // Brings the two engine loops in line with the state and the mute.
     void applyEngine();
     void applyMusic();
+    void createEffects();
     QHash<QString, QSoundEffect *> m_effects;
     // The sounds asked for while their source was still loading.
     QSet<QString> m_pending;
@@ -81,6 +103,8 @@ private:
     bool m_engineMoving = false;
     bool m_musicOn = false;
     bool m_muted = false;
+    bool m_debug = false;
+    QMediaDevices *m_devices = nullptr;
 };
 
 // The board: the game's front door to the sounds. It forwards every call
@@ -121,6 +145,11 @@ public:
     Q_INVOKABLE double gallopVolume() const;
     Q_INVOKABLE double musicVolume() const;
 
+    // Called from the Qt message handler when the audio fd goes bad; only
+    // touches an atomic, the board's polling timer does the work. It can be
+    // called from any thread.
+    void noteAudioTrouble() { m_audioTrouble.fetch_add(1, std::memory_order_relaxed); }
+
 signals:
     // The calls to the worker. They travel as signals on purpose: a
     // QMetaObject::invokeMethod by name only finds slots and
@@ -131,10 +160,29 @@ signals:
     void mutedChanged(bool muted);
     void musicChanged(bool on);
     void soundPlayed(const QString &name);
+    void pingSent(int token);
+    void rebuildRequested();
 
 private:
-    QThread m_thread;
+    void startWorker();
+    void stopWorker();
+    void scheduleRestart();
+    void onPong(int token);
+
+    // The audio lives behind a pointer so a wedged worker can be abandoned
+    // and replaced: a QThread that a stuck Qt audio backend will not let go
+    // must never be the one thread the game depends on.
+    QThread *m_thread = nullptr;
     SoundWorker *m_worker = nullptr;
+    QTimer *m_watchdog = nullptr;
+    QTimer *m_restart = nullptr;
+    QTimer *m_troublePoll = nullptr;
+    std::atomic<int> m_audioTrouble{0};
+    int m_pingToken = 0;
+    qint64 m_pingAt = 0;
+    bool m_pingPending = false;
+    int m_rebuilds = 0;
+    bool m_soundDead = false;
     // The state of the game, kept here so the volumes can be reported
     // without asking the worker (which may be busy).
     bool m_engineRunning = false;

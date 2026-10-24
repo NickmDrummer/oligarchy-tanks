@@ -1,5 +1,6 @@
 // oligarchy-tanks — retro 2-player local tank battle vs AI.
 
+#include <cstdio>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFileInfo>
@@ -79,6 +80,34 @@ int main(int argc, char *argv[]) {
     // dies, Qt's own handling can wedge the thread that owns the sound
     // (see soundboard.h). In the GUI thread that freeze is the game.
     SoundBoard sounds;
+
+    // Qt's audio device monitor can leave an invalid socket registered: the
+    // event loop then spins on it, printing by the thousand, every sound
+    // dies and a looping QSoundEffect keeps playing (the field report). The
+    // board counts these messages and rebuilds the audio, which terminates
+    // the spinning thread. The flood itself is capped so the log stays
+    // readable.
+    static SoundBoard *troubleBoard = nullptr;
+    troubleBoard = &sounds;
+    qInstallMessageHandler([](QtMsgType, const QMessageLogContext &, const QString &message) {
+        static qint64 last = 0;
+        static int burst = 0;
+        if (message.startsWith(QStringLiteral("QSocketNotifier: Invalid socket"))) {
+            if (troubleBoard)
+                troubleBoard->noteAudioTrouble();
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (now - last > 1000) {
+                burst = 0;
+                last = now;
+            }
+            if (++burst > 3)
+                return;
+            fprintf(stderr, "[qt] %s (the rest is counted, not printed)\n",
+                    qPrintable(message));
+            return;
+        }
+        fprintf(stderr, "%s\n", qPrintable(message));
+    });
     // A pad joins a player by pressing START; with none connected nothing
     // changes. SDL2 is the reader whenever it is built in (macOS, Windows,
     // and Linux when it is installed); Linux without SDL falls back to evdev.
@@ -142,5 +171,8 @@ int main(int argc, char *argv[]) {
         QObject::connect(&backend, &Backend::stateChanged, window, shape);
     }
 
-    return app.exec();
+    const int code = app.exec();
+    troubleBoard = nullptr;
+    qInstallMessageHandler(nullptr);
+    return code;
 }
