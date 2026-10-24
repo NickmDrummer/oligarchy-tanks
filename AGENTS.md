@@ -2788,6 +2788,12 @@ runtime, and every non-system import resolves.
 first time, the keyboard works, a DualSense joins with START, M silences and
 Q closes with no process left behind.
 
+**Confirmed on macOS (Apple Silicon)** by the user's friend on the 0.2.5 zip:
+the app opens, the pad joins with START, the sound survives an audio device
+change (the reason this round exists) and Q closes. The Intel zip is
+unverified — there is no Intel Mac to hand — but it is the same code, the
+same engine and the same deployment job, only a different runner.
+
 Version 0.2.5: 0.2.4 stays published without its Windows asset — the broken
 zip was deleted from the release, whose notes now point at 0.2.5.
 
@@ -2870,8 +2876,9 @@ no loop. `bin/test` 91/91, no crash, CPU normal.
 both PKGBUILDs (replaced by `sdl2`); the Windows zip should lose the ffmpeg
 payload and the macOS bundle its multimedia plugin on the next CI run.
 
-**What is left**: a real device change on the field machines (the user's
-partner, a Mac) and the release cut. The pad events also forward SDL's audio
+**What is left**: nothing on this round. The device change was confirmed in
+the field — Linux (the user's partner) and macOS (a friend's Apple Silicon) —
+and the release shipped as 0.2.5. The pad events also forward SDL's audio
 device events to `SoundBoard::reopenAudio()` as a second trigger on platforms
 that report them.
 
