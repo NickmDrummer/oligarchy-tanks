@@ -52,8 +52,8 @@ Or from the AUR, once the package is published:
 yay -S oligarchy-tanks
 ```
 
-Building from source needs Qt 6 (`qt6-base`, `qt6-declarative`,
-`qt6-multimedia`):
+Building from source needs Qt 6 (`qt6-base`, `qt6-declarative`) and SDL2
+(`sdl2`, which plays the sound and reads the pads):
 
 ```sh
 bin/build
@@ -168,8 +168,8 @@ bin/install
 
 ## Other platforms
 
-The game is a plain Qt 6 app: everything it needs (fonts, sounds, the engine)
-ships inside the binary, and the desktop theme has a hard-coded fallback, so it
+The game is a plain Qt 6 + SDL2 app: everything it needs (fonts, sounds, the
+engine) ships inside the binary, and the desktop theme has a hard-coded fallback, so it
 runs wherever Qt 6 runs:
 
 ### macOS
@@ -183,13 +183,12 @@ make -j"$(sysctl -n hw.ncpu)"
 macdeployqt oligarchy-tanks.app -libpath="$(brew --prefix)/lib"
 ```
 
-The Homebrew `qt` formula ships everything the game needs: Qt Quick, Quick
-Controls 2 and Qt Multimedia. `sdl2` is the gamepad reader (see below), and
-`pkg-config` is how qmake finds it — without it the build still works, on the
-keyboard. Homebrew's `sdl2` is a compatibility shim that loads SDL3 at run
-time: it is fine for a local build, but if you plan to bundle the app with
-`macdeployqt`, build SDL 2.30 from source first (the release workflow does),
-or the bundle will be missing SDL3 and the app will refuse to start.
+The Homebrew `qt` formula ships Qt Quick and Quick Controls 2, and `sdl2` is
+the sound engine and the gamepad reader; `pkg-config` is how qmake finds it.
+Homebrew's `sdl2` is a compatibility shim that loads SDL3 at run time: it is
+fine for a local build, but if you bundle the app with `macdeployqt`, build
+SDL 2.30 from source first (the release workflow does), or the bundle will be
+missing SDL3 and the app will refuse to start.
 
 The app lands in `build/`; run it with `open build/oligarchy-tanks.app` or copy
 it to `/Applications`. `macdeployqt` bundles Qt and, with `-libpath`, the SDL2
