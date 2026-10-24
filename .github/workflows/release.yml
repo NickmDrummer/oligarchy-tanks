@@ -190,12 +190,17 @@ jobs:
           copy_deps
 
           cp packaging/README-Windows.txt dist/app/README.txt
+          # Without qt.conf the MSYS2 Qt looks for its plugins and QML modules
+          # under the prefix it was built with, which does not exist on a
+          # user's machine: the app then exits without a word (0.2.4).
+          cp packaging/qt.conf dist/app/qt.conf
           (cd dist/app && zip -r "../OligarchyTanks-${VER}-Windows-x64.zip" .)
 
       - name: Check the bundle is complete
         run: |
           # Same two checks as macOS, in the Windows layout: the DLLs and QML
           # modules windeployqt places next to the exe, plus SDL2.
+          test -f dist/app/qt.conf || { echo "qt.conf missing"; exit 1; }
           test -f dist/app/SDL2.dll || { echo "SDL2.dll missing"; exit 1; }
           test -d dist/app/qml/QtQuick || { echo "QML modules missing"; exit 1; }
           test -f dist/app/oligarchy-tanks.exe || { echo "the executable is missing"; exit 1; }

@@ -58,8 +58,8 @@ linux {
 RESOURCES += src/resources.qrc
 
 # The release version the footer and the manual name (round 21.10).
-DEFINES += OLIGARCHY_TANKS_VERSION=\\\"0.2.4\\\"
-VERSION = 0.2.4
+DEFINES += OLIGARCHY_TANKS_VERSION=\\\"0.2.5\\\"
+VERSION = 0.2.5
 
 # The application icons: the Windows executable and the macOS bundle carry
 # the same drawing as the Linux one (tools/make-icon.py writes all three).

@@ -2,6 +2,8 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QGuiApplication>
@@ -11,6 +13,8 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QStandardPaths>
+#include <QSysInfo>
 #include <QUrl>
 
 #if defined(OLIGARCHY_TANKS_SDL)
@@ -30,6 +34,53 @@
 #include "soundboard.h"
 #include "theme.h"
 
+namespace {
+
+// A GUI binary has no console on Windows: when the interface fails to load the
+// user sees nothing at all (0.2.4 shipped a Windows zip that died exactly that
+// way). Everything Qt says — warnings, QML import errors, the platform plugin
+// — now goes to a log next to the executable as well as to stderr.
+QFile *g_log = nullptr;
+
+void logMessage(QtMsgType type, const QMessageLogContext &, const QString &message) {
+    const char *level = "info";
+    switch (type) {
+    case QtDebugMsg: level = "debug"; break;
+    case QtInfoMsg: level = "info"; break;
+    case QtWarningMsg: level = "warning"; break;
+    case QtCriticalMsg: level = "critical"; break;
+    case QtFatalMsg: level = "fatal"; break;
+    }
+    const QString line = QStringLiteral("%1 [%2] %3")
+            .arg(QDateTime::currentDateTime().toString(Qt::ISODate), QLatin1String(level), message);
+    if (g_log && g_log->isOpen()) {
+        g_log->write(line.toUtf8());
+        g_log->write("\n");
+        g_log->flush();
+    }
+    fprintf(stderr, "%s\n", qPrintable(line));
+}
+
+void openLog() {
+    const QStringList candidates = {
+        QCoreApplication::applicationDirPath() + QStringLiteral("/oligarchy-tanks.log"),
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                + QStringLiteral("/oligarchy-tanks.log"),
+    };
+    for (const QString &path : candidates) {
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        auto *file = new QFile(path);
+        if (file->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+            g_log = file;
+            break;
+        }
+        delete file;
+    }
+    qInstallMessageHandler(logMessage);
+}
+
+} // namespace
+
 // Passed by the .pro (DEFINES += OLIGARCHY_TANKS_VERSION="0.2.1"), but a
 // direct compile still needs a version to name.
 #ifndef OLIGARCHY_TANKS_VERSION
@@ -44,6 +95,9 @@ int main(int argc, char *argv[]) {
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("oligarchy-tanks");
+    openLog();
+    qInfo("Oligarchy Tanks %s starting (%s)",
+          OLIGARCHY_TANKS_VERSION, qPrintable(QSysInfo::prettyProductName()));
 
     // Matches the window to tanks.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon.
@@ -131,8 +185,10 @@ int main(int argc, char *argv[]) {
 #endif
     engine.rootContext()->setContextProperty("buildId", build);
     engine.load(QUrl("qrc:/Main.qml"));
-    if (engine.rootObjects().isEmpty())
+    if (engine.rootObjects().isEmpty()) {
+        qCritical("the interface (qrc:/Main.qml) could not be loaded; see the messages above");
         return 1;
+    }
 
     // The mouse has no business in a run (the user's report): the
     // pointer floats in the middle of the screen and takes the eyes
