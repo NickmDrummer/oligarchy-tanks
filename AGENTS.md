@@ -2760,6 +2760,51 @@ for the pads. It removes QtMultimedia from the build (and the ffmpeg weight
 from the Windows zip) and handles device changes itself. The pad round is
 the precedent: implement it, test it hard here, leave the old path out.
 
+### 21.30 The SDL2 audio round (Oct 24, in the tree on `audio-sdl2`)
+
+Qt Multimedia is out. The user's verdict on 21.29 was blunt: "si es que Qt va
+a seguir funcionando de esta manera" — and it will, so the sound moved to
+SDL2, which the project already ships for the pads.
+
+**The engine** (`src/soundengine.{h,cpp}`): SDL2 in **queue mode**, not the
+callback. A pump thread mixes 512-frame chunks every 10 ms and queues three
+chunks of look-ahead, which gives two things Qt never had:
+
+- the queue is also a health signal: a device that stops consuming leaves it
+  full, which is exactly what a suspend, a PipeWire restart or pulled
+  headphones do. After a second of it, the engine tears the backend down and
+  reopens it — `SDL_QuitSubSystem` + `SDL_InitSubSystem`, which SDL requires
+  on the **main thread**, so the pump only raises a flag and the board's
+  250 ms timer does the rebuild;
+- the three long voices (engine, engine-move, music) survive a reopen: their
+  volumes are kept in the engine and re-applied to the new voices.
+
+The mix is 18 one-shots on 16 voices (a free voice, else the oldest) plus the
+three loops, mono clips resampled once at load to the device rate, then
+written to every channel. `OLIGARCHY_TANKS_SOUND_DEBUG=1` prints device open,
+reopen, each play and a per-second peak meter — the peak is what proved the
+mixer (0.321 with the music at 0.6).
+
+**The board** is thin again (`src/soundboard.{h,cpp}`): no worker thread, no
+QSoundEffect, no device monitor, no heartbeat, no `QThread::terminate`. The
+QML API and the three volume functions are unchanged, so Main.qml and the
+tests did not move. `engineVolumesFor(running, moving, muted, gallop)` and
+`stageMusicVolume(on, muted)` keep the old numbers (0.40 / 0.50 / 0.6).
+
+**Verified here**: PipeWire restarted with the game running; the stream leaves
+the graph, the pump notices within a second, the backend rebuilds and the
+stream is back (2 output streams before and after), one rebuild per event and
+no loop. `bin/test` 91/91, no crash, CPU normal.
+
+**Packaging**: Qt Multimedia is gone from the `.pro`, the tests' `.pro` and
+both PKGBUILDs (replaced by `sdl2`); the Windows zip should lose the ffmpeg
+payload and the macOS bundle its multimedia plugin on the next CI run.
+
+**What is left**: a real device change on the field machines (the user's
+partner, a Mac) and the release cut. The pad events also forward SDL's audio
+device events to `SoundBoard::reopenAudio()` as a second trigger on platforms
+that report them.
+
 ### 21.28 The cross-platform pad round (Oct 23, pending the user's pad check)
 
 The pad reader was evdev-only, so macOS and Windows played on the keyboard.

@@ -74,6 +74,13 @@ void PadSdl::pump() {
             addController(e.cdevice.which);   // a device index
         else if (e.type == SDL_CONTROLLERDEVICEREMOVED)
             removeController(e.cdevice.which); // an instance id
+        else if (e.type == SDL_AUDIODEVICEADDED || e.type == SDL_AUDIODEVICEREMOVED) {
+            if (m_debug)
+                fprintf(stderr, "[pad] audio device %s\n",
+                        e.type == SDL_AUDIODEVICEADDED ? "added" : "removed");
+            if (onAudioDeviceChange)
+                onAudioDeviceChange();
+        }
     }
 }
 
