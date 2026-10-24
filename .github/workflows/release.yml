@@ -129,7 +129,13 @@ jobs:
           # DLL that exists in the toolchain; whatever is left is a Windows
           # DLL and belongs to the system.
           copy_deps() {
-            local pending=("$@")
+            # Seed the queue with everything already deployed — the plugins
+            # windeployqt copied matter as much as the exe: avcodec-63.dll
+            # (the audio backend) alone links dozens of codec libraries.
+            local pending=()
+            while IFS= read -r f; do pending+=("$f"); done < <(
+              find dist/app -type f \( -name '*.dll' -o -name '*.exe' \)
+            )
             while [ ${#pending[@]} -gt 0 ]; do
               local file="${pending[0]}"
               pending=("${pending[@]:1}")
@@ -142,7 +148,7 @@ jobs:
               done
             done
           }
-          copy_deps dist/app/oligarchy-tanks.exe dist/app/SDL2.dll
+          copy_deps
 
           cp packaging/README-Windows.txt dist/app/README.txt
           (cd dist/app && zip -r "../OligarchyTanks-${VER}-Windows-x64.zip" .)
