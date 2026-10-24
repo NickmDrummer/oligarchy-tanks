@@ -2710,6 +2710,56 @@ jingles and a score that counts up.
 **What the user checked**: the C++ round landed; the screens and the
 jingles await the user's ears and eyes (commit after that).
 
+### 21.29 The field audio failure (Oct 24, fixed in the tree)
+
+The user's partner played a 0.2.4 build and, after pausing to answer a
+message, every effect went silent: the stage loop kept playing, the fans
+came up and the game would not quit with Q — it had to be killed.
+
+**What was not the cause**: our packaging. The bundle was complete, the
+journal showed nothing from the app, and the sound board had been working.
+
+**What it was**: Qt 6.12.0's audio device monitor. Changing the device (a
+laptop suspending the output, a PipeWire restart) closes its eventfd with
+the notifier still registered (QTBUG-144711): the event loop spins printing
+`QSocketNotifier: Invalid socket ...` thousands of times a second, every
+QSoundEffect dies except the loop already queued in the backend, and the
+monitor — a process-wide object owned by the thread that created it — is
+never rebuilt. QTBUG-150678 (the sink waiting for ever) is the other half
+of why the destructor hung.
+
+Two of our own mistakes made it unrecoverable:
+
+- the unused `import QtMultimedia` in Main.qml created the monitor in the
+  GUI thread while the worker used it, which is the "Socket notifiers
+  cannot be enabled or disabled from another thread" line in the report;
+- `~SoundBoard` waited for the worker with BlockingQueuedConnection without
+  a bound, so Q hung exactly when the audio was broken.
+
+**The first fix crashed** and the core dump said why: the board killed the
+worker thread and started another, and the new effects touched the monitor
+that belonged to the dead thread (`QSocketNotifier::setEnabled` → SIGSEGV).
+The monitor cannot be handed to another thread.
+
+**What ships now**: all QtMultimedia in the worker thread (no QML import,
+QMediaDevices built there); a heartbeat every second; the Qt message handler
+counts the invalid-socket flood (and caps it in the log) and turns it into
+an in-place rebuild of every effect; an effect in Error state and a device
+change ask for the same rebuild; the heartbeat nudges a silently stopped
+loop back; three failed rebuilds mean the backend is gone for that process,
+so the session goes silent but stays playable (and the CPU stops); shutdown
+is bounded (quit, wait 1.2 s, terminate, give up), so Q always closes.
+
+**Verified** by restarting PipeWire with the game running: detection,
+rebuild, give-up, no crash, no spin, `exit=0`. **Remaining limitation**:
+Qt's monitor does not come back, so sound needs a game restart after a
+device change. `OLIGARCHY_TANKS_SOUND_DEBUG=1` traces the whole path.
+
+**Next round**: move the audio to SDL2, which is already a hard dependency
+for the pads. It removes QtMultimedia from the build (and the ffmpeg weight
+from the Windows zip) and handles device changes itself. The pad round is
+the precedent: implement it, test it hard here, leave the old path out.
+
 ### 21.28 The cross-platform pad round (Oct 23, pending the user's pad check)
 
 The pad reader was evdev-only, so macOS and Windows played on the keyboard.

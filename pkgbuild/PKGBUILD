@@ -1,5 +1,5 @@
 pkgname=oligarchy-tanks
-pkgver=0.2.3
+pkgver=0.2.4
 pkgrel=1
 pkgdesc='Retro 2-player local tank battle vs AI'
 arch=('x86_64' 'aarch64')
