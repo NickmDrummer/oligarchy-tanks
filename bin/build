@@ -25,6 +25,19 @@ else
   exit 1
 fi
 
+# qmake puts the binary in the build directory on Linux and macOS, but under
+# build/release on Windows (debug_and_release), and with .exe there.
+binary() {
+  for candidate in "$BUILD/oligarchy-tanks" "$BUILD/oligarchy-tanks.exe" \
+                   "$BUILD/release/oligarchy-tanks.exe"; do
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  echo "$BUILD/oligarchy-tanks"
+}
+
 mkdir -p "$BUILD"
 cd "$BUILD"
 
@@ -55,7 +68,7 @@ make -j"$JOBS"
 
 # make can miss a change and leave a stale binary behind. If any input is
 # still newer than the binary, wipe and rebuild once from clean.
-if [ -n "$(find "$ROOT/src" "$ROOT/oligarchy-tanks.pro" -newer "$ROOT/build/oligarchy-tanks" 2>/dev/null)" ]; then
+if [ -n "$(find "$ROOT/src" "$ROOT/oligarchy-tanks.pro" -newer "$(binary)" 2>/dev/null)" ]; then
   echo "Stale build detected, rebuilding from clean..." >&2
   rm -rf "$BUILD"
   mkdir -p "$BUILD"
@@ -65,4 +78,4 @@ if [ -n "$(find "$ROOT/src" "$ROOT/oligarchy-tanks.pro" -newer "$ROOT/build/olig
   make -j"$JOBS"
 fi
 
-echo "Built $ROOT/build/oligarchy-tanks"
+echo "Built $(binary)"

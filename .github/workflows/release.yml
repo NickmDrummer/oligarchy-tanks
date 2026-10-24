@@ -45,11 +45,26 @@ jobs:
       - name: Bundle and sign (ad hoc)
         run: |
           APP="$(ls -d build/*.app | head -1)"
-          macdeployqt "$APP" -libpath="$(brew --prefix)/lib" -always-overwrite
+          # -qmldir is not optional: the QML lives inside the binary's qrc,
+          # so macdeployqt cannot discover the imports on its own and the
+          # bundle would start with "module QtQuick is not installed".
+          macdeployqt "$APP" -qmldir="$PWD/src" -libpath="$(brew --prefix)/lib" \
+                      -always-overwrite
           # arm64 refuses to run an unsigned bundle, so it is signed here even
           # though there is no Developer ID: the Gatekeeper prompt is answered
           # by the user with right-click -> Open (see the README in the zip).
           codesign --deep --force --sign - "$APP"
+
+      - name: Check the bundle is complete
+        run: |
+          APP="$(ls -d build/*.app | head -1)"
+          # The two things that broke the first bundle are checked here: the
+          # QML modules (macdeployqt cannot see them without -qmldir) and the
+          # SDL2 library (it is not a Qt library).
+          test -d "$APP/Contents/Resources/qml/QtQuick" || { echo "QML modules missing from the bundle"; exit 1; }
+          test -f "$APP/Contents/Frameworks/libSDL2-2.0.0.dylib" || { echo "SDL2 missing from the bundle"; exit 1; }
+          test -x "$APP/Contents/MacOS/oligarchy-tanks" || { echo "the executable is missing"; exit 1; }
+          echo "bundle complete: $(du -sh "$APP" | cut -f1)"
 
       - name: Package
         run: |
@@ -99,12 +114,25 @@ jobs:
           VER="${GITHUB_REF_NAME#v}"
           if [ "$GITHUB_REF_TYPE" != "tag" ]; then VER="dev-${GITHUB_SHA::7}"; fi
           mkdir -p dist/app
-          cp build/oligarchy-tanks.exe dist/app/
-          windeployqt --release dist/app/oligarchy-tanks.exe
+          # qmake puts the binary under build/release on Windows.
+          EXE="$(find build -name 'oligarchy-tanks.exe' | head -1)"
+          cp "$EXE" dist/app/
+          # Same reason as macdeployqt: the QML is in the qrc, so the imports
+          # have to be scanned from the sources.
+          windeployqt --release --qmldir "$PWD/src" dist/app/oligarchy-tanks.exe
           # windeployqt knows Qt only: SDL2 travels by hand.
           cp /ucrt64/bin/SDL2.dll dist/app/
           cp packaging/README-Windows.txt dist/app/README.txt
           (cd dist/app && zip -r "../OligarchyTanks-${VER}-Windows-x64.zip" .)
+
+      - name: Check the bundle is complete
+        run: |
+          # Same two checks as macOS, in the Windows layout: the DLLs and QML
+          # modules windeployqt places next to the exe, plus SDL2.
+          test -f dist/app/SDL2.dll || { echo "SDL2.dll missing"; exit 1; }
+          test -d dist/app/qml/QtQuick || { echo "QML modules missing"; exit 1; }
+          test -f dist/app/oligarchy-tanks.exe || { echo "the executable is missing"; exit 1; }
+          du -sh dist/app
 
       - name: Keep the zip
         uses: actions/upload-artifact@v4
