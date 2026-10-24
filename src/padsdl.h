@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <functional>
 #include <vector>
 
 #include "padmap.h"
@@ -30,6 +31,10 @@ public:
 
     // Opens the controllers already plugged in and starts polling.
     void start();
+
+    // SDL owns one event queue: this reader pumps it, so the audio device
+    // events have to leave through here too. The board reopens its device.
+    std::function<void()> onAudioDeviceChange;
 
     // PadSink: what the mapper made of a pad snapshot.
     void padMove(int pad, int dx, int dy, bool pressed) override;

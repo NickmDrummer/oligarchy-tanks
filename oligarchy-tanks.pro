@@ -1,4 +1,4 @@
-QT += core gui qml quick quickcontrols2 multimedia
+QT += core gui qml quick quickcontrols2
 
 CONFIG += c++17 release
 TARGET = oligarchy-tanks
@@ -8,6 +8,7 @@ HEADERS += \
     src/backend.h \
     src/padmap.h \
     src/soundboard.h \
+    src/soundengine.h \
     src/theme.h
 
 SOURCES += \
@@ -15,28 +16,31 @@ SOURCES += \
     src/backend.cpp \
     src/padmap.cpp \
     src/soundboard.cpp \
+    src/soundengine.cpp \
     src/theme.cpp
 
-# Gamepads: SDL2 is the reader for macOS and Windows, and it is used on Linux
-# too when it is installed (one code path for the three). The evdev reader
-# stays as the Linux fallback: without SDL the build still has pads.
+# SDL2 is a hard dependency: it plays the sound (the engine replaced Qt
+# Multimedia, whose device monitor does not survive a device change) and it
+# reads the pads outside Linux.
 #
 #   qmake CONFIG+=sdlpad   force it with -lSDL2 (the Qt Installer route on
 #                          Windows, where there is no pkg-config)
-#   qmake CONFIG+=nosdl    keep evdev on Linux
+#   qmake CONFIG+=nosdl    Linux only: read the pads with evdev instead of SDL
 CONFIG += link_pkgconfig
+SDL_FOUND = false
+packagesExist(sdl2) {
+    PKGCONFIG += sdl2
+    SDL_FOUND = true
+} else:contains(CONFIG, sdlpad) {
+    LIBS += -lSDL2
+    SDL_FOUND = true
+}
+!equals(SDL_FOUND, true) {
+    error("SDL2 is required: install libsdl2 (Arch), sdl2 (Homebrew) or SDL2 (MSYS2), or pass CONFIG+=sdlpad")
+}
 !contains(CONFIG, nosdl) {
-    packagesExist(sdl2) {
-        DEFINES += OLIGARCHY_TANKS_SDL
-        PKGCONFIG += sdl2
-        SOURCES += src/padsdl.cpp
-        HEADERS += src/padsdl.h
-    } else:contains(CONFIG, sdlpad) {
-        DEFINES += OLIGARCHY_TANKS_SDL
-        LIBS += -lSDL2
-        SOURCES += src/padsdl.cpp
-        HEADERS += src/padsdl.h
-    }
+    SOURCES += src/padsdl.cpp
+    HEADERS += src/padsdl.h
 }
 
 # The evdev reader and the rumble are Linux-only (main.cpp guards the use).
