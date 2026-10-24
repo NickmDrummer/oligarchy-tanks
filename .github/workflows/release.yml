@@ -36,10 +36,28 @@ jobs:
           modules: 'qtmultimedia'
           cache: true
 
-      - name: Install SDL2 and pkg-config
-        run: brew install sdl2 pkg-config
+      - name: Install pkg-config
+        run: brew install pkg-config
+
+      - name: Build SDL2 from source
+        # Homebrew's "sdl2" is sdl2-compat: a shim that loads SDL3 at run
+        # time. macdeployqt copies the shim and not SDL3, and the app dies on
+        # the tester's Mac ("failed to load SDL3"). A real SDL 2.30 links
+        # system frameworks only, so the bundle stays self-contained.
+        run: |
+          curl -L -o sdl2.tar.gz \
+            https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-2.30.9.tar.gz
+          tar xzf sdl2.tar.gz
+          cmake -S SDL2-2.30.9 -B sdl2-build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="$PWD/sdl2" \
+                -DSDL_TEST=OFF -DSDL_EXAMPLES=OFF
+          cmake --build sdl2-build -j"$(sysctl -n hw.ncpu)"
+          cmake --install sdl2-build
 
       - name: Build
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/sdl2/lib/pkgconfig
         run: ./bin/build
 
       - name: Bundle and sign (ad hoc)
@@ -64,6 +82,14 @@ jobs:
           test -d "$APP/Contents/Resources/qml/QtQuick" || { echo "QML modules missing from the bundle"; exit 1; }
           test -f "$APP/Contents/Frameworks/libSDL2-2.0.0.dylib" || { echo "SDL2 missing from the bundle"; exit 1; }
           test -x "$APP/Contents/MacOS/oligarchy-tanks" || { echo "the executable is missing"; exit 1; }
+          # No absolute Homebrew path may survive, and nothing may still want
+          # SDL3: that was the fatal error on the tester's Mac.
+          if otool -L "$APP/Contents/MacOS/oligarchy-tanks" | grep -qE "/opt/homebrew|/usr/local/opt"; then
+            echo "the binary still points at a Homebrew library"; exit 1
+          fi
+          if otool -L "$APP/Contents/MacOS/oligarchy-tanks" | grep -qi "SDL3"; then
+            echo "the binary still depends on SDL3"; exit 1
+          fi
           echo "bundle complete: $(du -sh "$APP" | cut -f1)"
 
       - name: Package

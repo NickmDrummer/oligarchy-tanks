@@ -30,7 +30,9 @@ Unzip it and keep the folder together; it carries its own copy of Qt and SDL2.
 Each zip has a `README.txt` with the two clicks it takes:
 
 - **macOS**: the build is signed ad hoc, not notarized (that needs a paid Apple
-  account), so the first launch is **right-click → Open**, then **Open** again.
+  account). Double-click it, let macOS refuse, then open **System Settings →
+  Privacy & Security** and choose **Open Anyway** (the right-click → Open
+  shortcut no longer exists on macOS 15 and newer).
 - **Windows**: SmartScreen shows a warning for an unsigned program — **More
   information → Run anyway**.
 
@@ -184,7 +186,10 @@ macdeployqt oligarchy-tanks.app -libpath="$(brew --prefix)/lib"
 The Homebrew `qt` formula ships everything the game needs: Qt Quick, Quick
 Controls 2 and Qt Multimedia. `sdl2` is the gamepad reader (see below), and
 `pkg-config` is how qmake finds it — without it the build still works, on the
-keyboard.
+keyboard. Homebrew's `sdl2` is a compatibility shim that loads SDL3 at run
+time: it is fine for a local build, but if you plan to bundle the app with
+`macdeployqt`, build SDL 2.30 from source first (the release workflow does),
+or the bundle will be missing SDL3 and the app will refuse to start.
 
 The app lands in `build/`; run it with `open build/oligarchy-tanks.app` or copy
 it to `/Applications`. `macdeployqt` bundles Qt and, with `-libpath`, the SDL2

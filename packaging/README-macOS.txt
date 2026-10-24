@@ -7,10 +7,13 @@ HOW TO PLAY
 
 2. The first time, macOS will refuse to open it, because this build is not
    signed by an identified developer (that needs a paid Apple account the
-   project does not have). To open it anyway:
-   - Right-click (or Control-click) the app and choose "Open".
-   - In the dialog, click "Open" again.
-   After that, a normal double-click works for ever.
+   project does not have). On macOS 15 and newer the old right-click -> Open
+   shortcut is gone; do this instead:
+   - Double-click the app and let macOS complain.
+   - Open System Settings -> Privacy & Security.
+   - Scroll down to the message about "oligarchy-tanks" and click
+     "Open Anyway", then confirm with your password or Touch ID.
+   From then on, a normal double-click works.
 
 3. If macOS says the app is damaged, open Terminal and run this once:
      xattr -cr /Applications/oligarchy-tanks.app
