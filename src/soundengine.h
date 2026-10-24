@@ -38,8 +38,8 @@ public:
     // Mute silences everything without stopping the device.
     void setMuted(bool muted);
 
-    // Reopens the device (a device change, a PipeWire restart). The voices and
-    // their volumes survive it.
+    // Asks the pump to reopen the device (a device change reported by SDL).
+    // The voices and their volumes survive it.
     void reopen();
 
     // Health: the pump asks for a full backend rebuild when the device stops

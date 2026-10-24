@@ -91,11 +91,6 @@ struct SoundEngine::Impl {
     std::thread pump;
     std::atomic<bool> running{false};
     std::atomic<bool> reopenRequested{false};
-    // A dead backend has to be torn down with SDL_QuitSubSystem, and SDL asks
-    // for that on the main thread: the pump only raises the flag, the board
-    // (GUI thread) does the work.
-    std::atomic<bool> reinitRequested{false};
-    std::recursive_mutex deviceMutex;
 
     void mix(Sint16 *out, int frames, int channels) {
         std::lock_guard<std::mutex> lock(mutex);
@@ -195,7 +190,6 @@ bool SoundEngine::Impl::loadClips() {
 }
 
 void SoundEngine::Impl::open() {
-    std::lock_guard<std::recursive_mutex> lock(deviceMutex);
     close();
     SDL_AudioSpec want{};
     want.freq = 48000;
@@ -240,7 +234,6 @@ void SoundEngine::Impl::open() {
 }
 
 void SoundEngine::Impl::close() {
-    std::lock_guard<std::recursive_mutex> lock(deviceMutex);
     if (device) {
         SDL_CloseAudioDevice(device);
         device = 0;
@@ -256,11 +249,6 @@ void SoundEngine::Impl::pumpLoop() {
     Uint32 lastQueued = 0;
     while (running.load(std::memory_order_relaxed)) {
         // Only this thread touches the device once start() has returned.
-        if (reinitRequested.load()) {
-            // The board is tearing the backend down on the GUI thread.
-            SDL_Delay(kTickMs);
-            continue;
-        }
         if (reopenRequested.exchange(false)) {
             open();
             stuckMs = 0;
@@ -277,22 +265,17 @@ void SoundEngine::Impl::pumpLoop() {
             SDL_Delay(kTickMs);
             continue;
         }
-        Uint32 queued = 0;
-        {
-            std::lock_guard<std::recursive_mutex> lock(deviceMutex);
-            queued = device ? SDL_GetQueuedAudioSize(device) : 0;
-            const Uint32 maxQueued = Uint32(kChunkFrames * int(sizeof(Sint16))
-                                            * spec.channels * kLookaheadChunks);
-            if (device && queued < maxQueued) {
-                chunk.resize(size_t(kChunkFrames) * size_t(spec.channels));
-                mix(chunk.data(), kChunkFrames, spec.channels);
-                if (debug) {
-                    for (Sint16 s : chunk)
-                        peak = std::max(peak, std::abs(float(s)) / 32768.0f);
-                }
-                SDL_QueueAudio(device, chunk.data(),
-                               Uint32(chunk.size() * sizeof(Sint16)));
+        const Uint32 queued = device ? SDL_GetQueuedAudioSize(device) : 0;
+        const Uint32 maxQueued = Uint32(kChunkFrames * int(sizeof(Sint16))
+                                        * spec.channels * kLookaheadChunks);
+        if (device && queued < maxQueued) {
+            chunk.resize(size_t(kChunkFrames) * size_t(spec.channels));
+            mix(chunk.data(), kChunkFrames, spec.channels);
+            if (debug) {
+                for (Sint16 s : chunk)
+                    peak = std::max(peak, std::abs(float(s)) / 32768.0f);
             }
+            SDL_QueueAudio(device, chunk.data(), Uint32(chunk.size() * sizeof(Sint16)));
         }
         // A device that stops consuming is gone: the queue does not drain.
         // That is the case this engine exists for (a suspend, a PipeWire
@@ -302,7 +285,17 @@ void SoundEngine::Impl::pumpLoop() {
             if (stuckMs > 1000) {
                 if (debug)
                     fprintf(stderr, "[sound] the device stopped consuming; rebuilding the backend\n");
-                reinitRequested = true;
+                // The rebuild happens here, on this thread: SDL_CloseAudioDevice
+                // and SDL_OpenAudioDevice can block while the graph switches
+                // sinks, and blocking the GUI thread is the "Terminate or
+                // Wait" the user saw. Only this thread touches the device.
+                SDL_Delay(500);
+                close();
+                SDL_QuitSubSystem(SDL_INIT_AUDIO);
+                if (SDL_InitSubSystem(SDL_INIT_AUDIO) == 0)
+                    open();
+                else
+                    qWarning("SoundEngine: SDL audio could not restart: %s", SDL_GetError());
                 stuckMs = 0;
                 lastQueued = 0;
                 continue;
@@ -364,23 +357,7 @@ void SoundEngine::reopen() {
     d->reopenRequested = true;
 }
 
-bool SoundEngine::reinitRequested() const {
-    return d->reinitRequested.load();
-}
 
-void SoundEngine::reinitNow() {
-    // SDL_QuitSubSystem / SDL_InitSubSystem: the main thread, as SDL asks.
-    std::lock_guard<std::recursive_mutex> lock(d->deviceMutex);
-    d->close();
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
-    const bool ok = SDL_InitSubSystem(SDL_INIT_AUDIO) == 0;
-    d->inited = ok;
-    if (!ok)
-        qWarning("SoundEngine: SDL audio could not restart: %s", SDL_GetError());
-    else
-        d->open();
-    d->reinitRequested = false;
-}
 
 void SoundEngine::play(const QString &name) {
     if (!d->device)

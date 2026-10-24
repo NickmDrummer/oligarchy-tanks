@@ -4,8 +4,6 @@
 
 #include "soundengine.h"
 
-class QTimer;
-
 // The volumes of the two engine loops, given the state of the game.
 //
 // The putter is the idle rumble, the gallop is the faster one while a tank
@@ -70,7 +68,6 @@ private:
     void apply();
 
     SoundEngine m_engine;
-    QTimer *m_health = nullptr;
     // The state of the game, kept here so the volumes can be reported
     // without asking the engine.
     bool m_engineRunning = false;

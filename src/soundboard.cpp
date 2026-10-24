@@ -1,6 +1,5 @@
 #include "soundboard.h"
 
-#include <QTimer>
 
 float engineVolumesFor(bool running, bool moving, bool muted, bool gallop) {
     // No run, no sound: the motor is silent on the select screen, on the
@@ -23,24 +22,10 @@ float stageMusicVolume(bool inStage, bool muted) {
 SoundBoard::SoundBoard(QObject *parent) : QObject(parent) {
     m_engine.start();
 
-    // The pump notices a device that stopped consuming; the rebuild itself
-    // happens here, on the GUI thread, because SDL requires the main thread
-    // for SDL_QuitSubSystem / SDL_InitSubSystem.
-    m_health = new QTimer(this);
-    m_health->setInterval(250);
-    connect(m_health, &QTimer::timeout, this, [this]() {
-        if (m_engine.reinitRequested()) {
-            m_engine.reinitNow();
-            apply();
-        }
-    });
-    m_health->start();
     apply();
 }
 
 SoundBoard::~SoundBoard() {
-    if (m_health)
-        m_health->stop();
     m_engine.shutdown();
 }
 
