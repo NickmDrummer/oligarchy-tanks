@@ -48,8 +48,15 @@ linux {
 RESOURCES += src/resources.qrc
 
 # The release version the footer and the manual name (round 21.10).
-DEFINES += OLIGARCHY_TANKS_VERSION=\\\"0.2.3\\\"
-VERSION = 0.2.3
+DEFINES += OLIGARCHY_TANKS_VERSION=\\\"0.2.4\\\"
+VERSION = 0.2.4
+
+# The application icons: the Windows executable and the macOS bundle carry
+# the same drawing as the Linux one (tools/make-icon.py writes all three).
+win32: RC_ICONS = pkgbuild/oligarchy-tanks.ico
+macx: ICON = pkgbuild/oligarchy-tanks.icns
+macx: QMAKE_BUNDLE = oligarchy-tanks
+macx: QMAKE_TARGET_BUNDLE_PREFIX = com.nickmdrummer
 
 # For a release build, uncomment the next line (or pass DEFINES+=OLIGARCHY_TANKS_RELEASE
 # to qmake). The footer then shows the version alone, without the build stamp.

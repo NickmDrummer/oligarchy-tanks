@@ -1,0 +1,132 @@
+name: Build and attach downloads
+
+# Push a tag (v*) and the three downloadable builds appear on that release:
+# macOS on Apple Silicon, macOS on Intel, and Windows x64. Run it by hand
+# (workflow_dispatch) to get the same zips as workflow artifacts without
+# touching any release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14   # Apple Silicon
+            arch: AppleSilicon
+          - runner: macos-13   # Intel
+            arch: Intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          modules: 'qtmultimedia'
+          cache: true
+
+      - name: Install SDL2 and pkg-config
+        run: brew install sdl2 pkg-config
+
+      - name: Build
+        run: ./bin/build
+
+      - name: Bundle and sign (ad hoc)
+        run: |
+          APP="$(ls -d build/*.app | head -1)"
+          macdeployqt "$APP" -libpath="$(brew --prefix)/lib" -always-overwrite
+          # arm64 refuses to run an unsigned bundle, so it is signed here even
+          # though there is no Developer ID: the Gatekeeper prompt is answered
+          # by the user with right-click -> Open (see the README in the zip).
+          codesign --deep --force --sign - "$APP"
+
+      - name: Package
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then VER="dev-${GITHUB_SHA::7}"; fi
+          mkdir -p dist/OligarchyTanks
+          cp -R build/*.app dist/OligarchyTanks/
+          cp packaging/README-macOS.txt dist/OligarchyTanks/README.txt
+          (cd dist && ditto -c -k --sequesterRsrc --keepParent OligarchyTanks \
+             "OligarchyTanks-${VER}-macOS-${{ matrix.arch }}.zip")
+
+      - name: Keep the zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: OligarchyTanks-macOS-${{ matrix.arch }}
+          path: dist/*.zip
+
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MSYS2 and the dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            zip
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-declarative
+            mingw-w64-ucrt-x86_64-qt6-multimedia
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-tools
+
+      - name: Build
+        run: ./bin/build
+
+      - name: Package
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then VER="dev-${GITHUB_SHA::7}"; fi
+          mkdir -p dist/app
+          cp build/oligarchy-tanks.exe dist/app/
+          windeployqt --release dist/app/oligarchy-tanks.exe
+          # windeployqt knows Qt only: SDL2 travels by hand.
+          cp /ucrt64/bin/SDL2.dll dist/app/
+          cp packaging/README-Windows.txt dist/app/README.txt
+          (cd dist/app && zip -r "../OligarchyTanks-${VER}-Windows-x64.zip" .)
+
+      - name: Keep the zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: OligarchyTanks-Windows-x64
+          path: dist/*.zip
+
+  publish:
+    name: Attach to the release
+    needs: [macos, windows]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect the three zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: OligarchyTanks-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          # A candidate (v0.2.4-rc1) is not a release: it stays marked as a
+          # pre-release so nobody downloads it by mistake.
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
+          generate_release_notes: true

@@ -15,6 +15,27 @@ loop — `M` silences all of it.
   <img src="docs/screenshots/gameplay2.png" alt="A two-player run in the second stage" width="49%">
 </p>
 
+## Download
+
+No terminal needed. Take the zip for your system from the
+[latest release](https://github.com/NickmDrummer/oligarchy-tanks/releases):
+
+| System | File |
+|--------|------|
+| macOS, Apple Silicon | `OligarchyTanks-<version>-macOS-AppleSilicon.zip` |
+| macOS, Intel | `OligarchyTanks-<version>-macOS-Intel.zip` |
+| Windows 10/11, 64-bit | `OligarchyTanks-<version>-Windows-x64.zip` |
+
+Unzip it and keep the folder together; it carries its own copy of Qt and SDL2.
+Each zip has a `README.txt` with the two clicks it takes:
+
+- **macOS**: the build is signed ad hoc, not notarized (that needs a paid Apple
+  account), so the first launch is **right-click → Open**, then **Open** again.
+- **Windows**: SmartScreen shows a warning for an unsigned program — **More
+  information → Run anyway**.
+
+Linux continues below: the package, the AUR, or building from source.
+
 ## Install
 
 On Arch and Omarchy:

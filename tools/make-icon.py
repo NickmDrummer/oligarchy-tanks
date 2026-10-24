@@ -17,9 +17,12 @@ Outputs:
   pkgbuild/oligarchy-tanks.svg      the scalable icon (hicolor theme)
   src/icons/oligarchy-tanks.png      the same picture, embedded in the binary
                                      for the window icon
+  pkgbuild/oligarchy-tanks.ico       Windows executable icon (multi-size)
+  pkgbuild/oligarchy-tanks.icns      macOS application icon
 
-The PNG needs rsvg-convert (librsvg). Without it the SVG is still written and
-the PNG is left alone.
+The PNG and the ICNS need rsvg-convert (librsvg); the ICO also needs
+ImageMagick. Without them the SVG is still written and the rest is left
+alone.
 
 Usage: python3 tools/make-icon.py
 """
@@ -192,10 +195,55 @@ def main():
     os.makedirs(icons_dir, exist_ok=True)
     window_png = os.path.join(icons_dir, "oligarchy-tanks.png")
     subprocess.run(
-        ["rsvg-convert", "-w", "256", "-h", "256", svg_path, "-o", window_png], check=True
+        ["rsvg-convert", "-w", "1024", "-h", "1024", svg_path, "-o", window_png], check=True
     )
     print(f"wrote {window_png}")
+
+    write_icns(svg_path)
+    write_ico(window_png)
     return 0
+
+
+def png_at(svg_path, size, out_path):
+    subprocess.run(
+        ["rsvg-convert", "-w", str(size), "-h", str(size), svg_path, "-o", out_path],
+        check=True,
+    )
+    with open(out_path, "rb") as handle:
+        return handle.read()
+
+
+def write_icns(svg_path):
+    # ICNS is a simple container: a magic and a length, then entries of
+    # (4-byte type, 4-byte length, PNG payload). Modern macOS reads the PNG
+    # types, so the sizes below cover every slot the Finder asks for.
+    out = os.path.join(ROOT, "pkgbuild", "oligarchy-tanks.icns")
+    slots = [(b"icp4", 16), (b"icp5", 32), (b"icp6", 64), (b"ic07", 128),
+             (b"ic08", 256), (b"ic09", 512), (b"ic10", 1024)]
+    entries = []
+    for kind, size in slots:
+        tmp = os.path.join(ROOT, "build", f"icon-{size}.png")
+        os.makedirs(os.path.dirname(tmp), exist_ok=True)
+        data = png_at(svg_path, size, tmp)
+        entries.append(kind + (8 + len(data)).to_bytes(4, "big") + data)
+        os.remove(tmp)
+    body = b"".join(entries)
+    with open(out, "wb") as handle:
+        handle.write(b"icns" + (8 + len(body)).to_bytes(4, "big") + body)
+    print(f"wrote {out}")
+
+
+def write_ico(png_path):
+    tool = shutil.which("magick") or shutil.which("convert")
+    if not tool:
+        print("ImageMagick not found: the ICO was left alone")
+        return
+    out = os.path.join(ROOT, "pkgbuild", "oligarchy-tanks.ico")
+    subprocess.run(
+        [tool, png_path, "-define", "icon:auto-resize=256,128,64,48,32,16", out],
+        check=True,
+    )
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":
