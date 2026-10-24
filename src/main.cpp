@@ -21,9 +21,9 @@
 #endif
 
 #include "backend.h"
-#if defined(OLIGARCHY_TANKS_SDL)
+#if defined(OLIGARCHY_TANKS_SDL_PADS)
 #include "padsdl.h"
-#else
+#elif defined(Q_OS_LINUX) && !defined(Q_OS_WASM)
 #include "gamepad.h"
 #endif
 #include "rumble.h"
@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
     // changes. SDL2 is the reader whenever it is built in (macOS, Windows,
     // and Linux when it is installed); Linux without SDL falls back to evdev.
     // Both write to stderr when OLIGARCHY_TANKS_PAD_DEBUG is set.
-#if defined(OLIGARCHY_TANKS_SDL)
+#if defined(OLIGARCHY_TANKS_SDL_PADS)
     PadSdl pad(&backend);
     // The audio device events travel through the same pump.
     pad.onAudioDeviceChange = [&sounds] { sounds.reopenAudio(); };

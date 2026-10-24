@@ -38,7 +38,13 @@ packagesExist(sdl2) {
 !equals(SDL_FOUND, true) {
     error("SDL2 is required: install libsdl2 (Arch), sdl2 (Homebrew) or SDL2 (MSYS2), or pass CONFIG+=sdlpad")
 }
+# main.cpp uses this to pull in SDL.h (which renames main for SDL2main on
+# Windows) and to start the SDL2 pad reader.
+DEFINES += OLIGARCHY_TANKS_SDL
 !contains(CONFIG, nosdl) {
+    # nosdl means "read the pads with evdev on Linux": SDL still plays the
+    # sound, but PadSdl is not built.
+    DEFINES += OLIGARCHY_TANKS_SDL_PADS
     SOURCES += src/padsdl.cpp
     HEADERS += src/padsdl.h
 }
