@@ -2760,6 +2760,33 @@ for the pads. It removes QtMultimedia from the build (and the ffmpeg weight
 from the Windows zip) and handles device changes itself. The pad round is
 the precedent: implement it, test it hard here, leave the old path out.
 
+### 21.32 The 0.2.5 Windows start-up fix (Oct 24, shipped)
+
+The Windows zip of 0.2.4 did nothing at all on a Windows 10 and a Windows 11
+machine: no window, no dialog, nothing even from a terminal. Two causes
+stacked, and both are now impossible to reproduce silently.
+
+- **No `qt.conf` in the package.** The MSYS2 Qt is built with the prefix
+  `D:/M/msys64/ucrt64`; without a `qt.conf` that relocates it, Qt looks for
+  `platforms/qwindows.dll` and the QML modules under that non-existent path,
+  the interface cannot load and the app exits. The deployment now ships
+  `packaging/qt.conf` (`Prefix`/`Plugins` at the app directory,
+  `Qml2Imports = qml`) and the packaging check fails without it. macOS never
+  had this problem: `macdeployqt` writes its own `qt.conf` inside the bundle.
+- **A GUI-subsystem binary has no console**, and the failure path was a
+  silent `return 1`. The app now installs a Qt message handler that writes
+  every message to `oligarchy-tanks.log` next to the executable (app-data
+  directory when that is read-only) as well as to stderr, and logs the
+  version and the OS at start-up. `qCritical` marks a failed QML load. A
+  field failure now produces a file to send.
+
+**Verified here**: the log is written with the startup line and Qt warnings;
+the 0.2.5 Windows zip carries `qt.conf`, its QML modules, SDL2 and the MinGW
+runtime, and every non-system import resolves. **Not verifiable here**: the
+actual start on Windows — the user's friend has to confirm.
+
+Version 0.2.5: 0.2.4 stays published with its broken Windows zip.
+
 ### 21.31 The 0.2.4 release (Oct 24, shipped)
 
 The SDL2 audio round landed, merged and tagged.
