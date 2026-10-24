@@ -2760,6 +2760,45 @@ for the pads. It removes QtMultimedia from the build (and the ffmpeg weight
 from the Windows zip) and handles device changes itself. The pad round is
 the precedent: implement it, test it hard here, leave the old path out.
 
+### 21.31 The 0.2.4 release (Oct 24, shipped)
+
+The SDL2 audio round landed, merged and tagged.
+
+- **Commits**: the round itself (`6aea20a` engine + board, `704a4cb` docs and
+  recipes), then the two bugs the field found: `3a722a1` (the clip reload
+  racing the mixer on a device change) and `09f55f0` (the rebuild moved off
+  the GUI thread; it deadlocked there and the compositor offered
+  "Terminate or Wait"), plus the merge `b280245`.
+- **Tag `v0.2.4`** and the GitHub release with the three downloads: macOS
+  Apple Silicon and Intel at **49 MB** (67 before), Windows at **47 MB**
+  (93 before — Qt Multimedia and its ffmpeg payload are gone).
+- **Three packaging failures surfaced on the way**, all real and all hidden
+  before the audio made SDL2 mandatory:
+  - the MSYS2 job had no **pkg-config**, so `packagesExist(sdl2)` was always
+    false: the Windows build never had the pad reader (and the packaging
+    copied SDL2.dll for nothing);
+  - MinGW links **SDL2main**, which needs `SDL_main`: the header has to be
+    included in the file that defines `main` for the rename to happen;
+  - the `.pro` rewrite lost **`DEFINES += OLIGARCHY_TANKS_SDL`**, which also
+    kept `main` from being renamed and left macOS without the pad reader.
+    The pad reader now has its own `OLIGARCHY_TANKS_SDL_PADS`, so
+    `CONFIG+=nosdl` still builds evdev.
+- **The tag moved four times** while the workflow failed; the release had no
+  assets until the last run, so nothing broken was ever published. The AUR
+  recipe carries the sha256 of the final tarball.
+- `bin/test` is **91/91**; the release build and the offscreen smoke are
+  clean; the Windows zip's imports all resolve and it has no ffmpeg left;
+  the macOS bundle has its QML modules and SDL2 with no Homebrew paths.
+
+**What the user checked**: a full session on their machine with the SDL2
+engine, the DAC ↔ EDIFIER switch while playing, and no errors in the field
+log. **Known limit**: a server-level wedge (the DualSense "Direct" sink can
+wedge WirePlumber itself) costs the sound until the game is restarted; the
+game never freezes and Q closes.
+
+**Still open**: the AUR push (registration closed) and the omarchy-pkgs PR
+#1348, which points at 0.2.2.
+
 ### 21.30 The SDL2 audio round (Oct 24, in the tree on `audio-sdl2`)
 
 Qt Multimedia is out. The user's verdict on 21.29 was blunt: "si es que Qt va
